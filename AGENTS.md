@@ -23,4 +23,4 @@ Continue the user's master request in `docs/DEVELOPMENT_LOG.md` and the roadmap 
 
 ## Current continuation point
 
-Read `docs/DEVELOPMENT_LOG.md` for the latest verified commits and active milestone. At creation of this file, the analytics foundation and CI/APK workflow are committed; an experimental Elo baseline is being integrated against same-league, locally stored results strictly before kickoff. It must be tested, documented, committed, pushed, and verified before starting the next roadmap milestone.
+Read `docs/DEVELOPMENT_LOG.md` for the latest verified commits and active milestone. The analytics foundation and the experimental Elo baseline are committed. Commit `63eedc1` passed local tests/build and GitHub Actions run `42708351125` (tests + debug APK artifact). Continue with timestamp-safe historical evaluation/import work; keep the roadmap and development log current as each milestone advances.

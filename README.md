@@ -19,7 +19,7 @@
 4. Ручной ввод прогнозов игроков с явной пометкой, что они не подтверждены реальными ставками.
 5. Виртуальные одиночные ставки с фиксацией до матча и ROI по рассчитанным ставкам.
 6. Чистые Kotlin-примитивы Poisson и Dixon–Coles, Brier score, log loss и EV с unit-тестами.
-7. Экспериментальный Elo-baseline для выбранного матча: использует только сохранённые результаты той же лиги до kickoff, скрывает вероятности при малой выборке и явно помечается как некалиброванный. На 2026-11-09 локально прошли 18 тестов и debug-сборка; GitHub Actions для Elo-изменений ожидается.
+7. Экспериментальный Elo-baseline для выбранного матча: использует только сохранённые результаты той же лиги до kickoff, скрывает вероятности при малой выборке и явно помечается как некалиброванный. На 2026-11-09 локально прошли 18 тестов и debug-сборка; для коммита `63eedc1` также прошёл GitHub Actions.
 
 Экспрессы, импорт исторических файлов и walk-forward backtest ещё не реализованы.
 
@@ -27,7 +27,7 @@
 
 В GitHub Actions открой workflow **Build Android Debug APK** и запусти сборку. После успешного выполнения скачай artifact football-intelligence-debug-apk и установи app-debug.apk на Android. APK — тестовая debug-сборка, а не релиз для Play Store.
 
-Сборка и unit tests предыдущего коммита d22f1c2 прошли в [GitHub Actions](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42706593669); workflow загрузил artifact football-intelligence-debug-apk. Для локальной проверки используй JDK 17 и команды из TESTING.md. Для нового Elo-baseline ждём отдельный CI run.
+Сборка и unit tests коммита `63eedc1` прошли в [GitHub Actions](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125); workflow загрузил artifact football-intelligence-debug-apk. Для локальной проверки используй JDK 17 и команды из TESTING.md.
 
 ## Документация
 

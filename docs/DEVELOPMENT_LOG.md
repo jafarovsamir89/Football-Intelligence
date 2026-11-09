@@ -44,7 +44,7 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 3. Add timestamped prediction logging and walk-forward tooling only when a legal historical dataset can be imported.
 4. Review a paired AGP/Gradle version update with regression build verification.
 
-## 2026-11-09 — experimental Elo baseline (CI pending)
+## 2026-11-09 — experimental Elo baseline (CI passed)
 
 ### Work completed
 
@@ -60,5 +60,6 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 
 ### Verification and next actions
 
-- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally on 2026-11-09; 18 unit tests completed and the debug APK was built. GitHub Actions for this revision is pending.
-- Next: review the full diff; commit and push this milestone; verify the GitHub Actions test/APK artifact; then record the CI run. After that, implement the next data/validation milestone from the roadmap.
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally on 2026-11-09; 18 unit tests completed and the debug APK was built.
+- Committed and pushed as `63eedc1` (`Add leakage-safe experimental Elo baseline`). GitHub Actions run [42708351125](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125) passed tests and APK build and uploaded `football-intelligence-debug-apk`. The run includes the existing Gradle 8.11.1 maintenance annotation.
+- Next: implement timestamp-safe walk-forward evaluation and a licensed historical-results import path; explicitly track date-only source data so it cannot leak same-day results into pre-match forecasts.
