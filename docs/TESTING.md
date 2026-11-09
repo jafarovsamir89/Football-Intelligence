@@ -16,7 +16,7 @@ Run with:
 ./gradlew :app:assembleDebug
 ~~~
 
-The repository includes the Gradle 8.11.1 wrapper with the distribution SHA-256 pinned. On 2026-11-09, JDK 17 and the installed Android SDK were used to run both commands above successfully: all 11 unit tests passed and the debug APK built locally. GitHub Actions now runs the same wrapper tasks before uploading the APK.
+The repository includes the Gradle 8.11.1 wrapper with the distribution SHA-256 pinned. On 2026-11-09, JDK 17 and the installed Android SDK were used to run both commands above successfully: all 11 unit tests passed and the debug APK built locally. GitHub Actions run 42704812973 also passed unit tests, built the APK, and uploaded football-intelligence-debug-apk. CI uses the same wrapper tasks.
 
 ## Not yet covered
 

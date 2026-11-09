@@ -26,7 +26,7 @@
 
 В GitHub Actions открой workflow **Build Android Debug APK** и запусти сборку. После успешного выполнения скачай artifact football-intelligence-debug-apk и установи app-debug.apk на Android. APK — тестовая debug-сборка, а не релиз для Play Store.
 
-Последняя сборка исходной ревизии прошла 2026-11-09: [GitHub Actions run](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42698704826). Новая ревизия включает Gradle Wrapper, unit-test workflow и локально собранный APK; её GitHub Actions результат появится после push в main. Для локальной проверки используй JDK 17 и команды из TESTING.md.
+Сборка и unit tests коммита d4b4c38 прошли в [GitHub Actions](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42704812973); workflow загрузил artifact football-intelligence-debug-apk. Для локальной проверки используй JDK 17 и команды из TESTING.md.
 
 ## Документация
 

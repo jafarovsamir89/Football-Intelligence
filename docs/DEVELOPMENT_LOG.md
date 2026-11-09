@@ -28,7 +28,8 @@
 ### Test / CI status
 
 - Verification: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug passed locally on 2026-11-09. Eleven unit tests passed; the APK was built at app/build/outputs/apk/debug/app-debug.apk.
-- Baseline CI: successful debug APK build at b09f96d (see audit link); this does not verify the new changes.
+- GitHub Actions run 42704812973 passed all steps on d4b4c38, including unit tests, APK build, and upload of the 15,899,210-byte football-intelligence-debug-apk artifact.
+- That first run reported deprecation warnings for Node 20 action runtimes and setup-java v4. The workflow is being upgraded to current Node 24 action releases; a verification run is pending.
 
 ### Test correction
 
@@ -36,7 +37,7 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 
 ### Next stage
 
-1. Push this verified revision and confirm GitHub Actions tests and APK artifact.
+1. Confirm the refreshed GitHub Actions runtime also passes and uploads the APK.
 2. Extract persistence/domain code and add database regression tests.
 3. Add import/export with explicit source, market, and UTC timestamps.
 4. Add timestamped prediction logging and walk-forward tooling only when a legal historical dataset can be imported.
