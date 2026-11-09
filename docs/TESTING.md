@@ -8,6 +8,7 @@ Automated JUnit 4 unit tests cover the extracted pure Kotlin analytics engine:
 - Invalid and non-finite decimal odds.
 - Poisson and Dixon–Coles output normalization and invalid parameters.
 - Brier score, log loss, and per-unit expected value.
+- Elo strict pre-kickoff filtering, future-match leakage guard, home advantage, smoothed draw prior, invalid rows, and minimum-history thresholds.
 
 Run with:
 
@@ -16,7 +17,7 @@ Run with:
 ./gradlew :app:assembleDebug
 ~~~
 
-The repository includes the Gradle 8.11.1 wrapper with the distribution SHA-256 pinned. On 2026-11-09, JDK 17 and the installed Android SDK were used to run both commands above successfully: all 11 unit tests passed and the debug APK built locally. GitHub Actions run 42705882847 passed unit tests, built the APK, and uploaded football-intelligence-debug-apk with the updated Node 24 workflow. CI uses the same wrapper tasks.
+The repository includes the Gradle 8.11.1 wrapper with the distribution SHA-256 pinned. On 2026-11-09, JDK 17 and the installed Android SDK ran `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` successfully: all 18 unit tests passed and the debug APK built locally. This includes the experimental Elo implementation. GitHub Actions run 42706593669 passed the previous 11-test revision; the Elo revision still needs its own CI run. CI uses the same wrapper tasks.
 
 The run returned one maintenance annotation: Gradle 8.11.1 is out of date. The project currently uses Android Gradle Plugin 8.7.3, whose official compatibility table sets Gradle 8.9 as the minimum. Gradle 8.11.1 builds successfully; update the Android plugin and wrapper together in a separately verified toolchain migration. [Android Gradle Plugin compatibility table](https://developer.android.com/build/releases/about-agp).
 

@@ -2,6 +2,8 @@
 
 ## Unreleased — 2026-11-09
 
+- Added an experimental Elo 1X2 baseline fitted only from same-league results strictly before kickoff; suppresses forecasts below the documented history thresholds and labels the model uncalibrated.
+- Added Elo unit tests for cutoff filtering, future leakage, home advantage, draw prior, and sample-size gating.
 - Added pure Kotlin 1X2 market de-vigging with basic, Power, and Shin methods.
 - Added independent Poisson score-grid and optional Dixon–Coles low-score adjustment primitives.
 - Added Brier, log-loss, and per-unit expected-value calculations with JUnit coverage.

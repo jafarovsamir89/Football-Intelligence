@@ -27,3 +27,7 @@ Use update/insert semantics rather than SQLite REPLACE, so refreshing provider f
 ## D-007: Do not automate crowd site ingestion without permission
 
 Reviewed platform terms do not establish a right to scrape/replicate Tipstrr or Pikkit; no public licensed Blogabet prediction feed was identified. Store user-provided records only, with an unverified status, unless the source offers permission and a compatible data export/API.
+
+## D-008: Gate the first Elo forecast on pre-match local history
+
+Use only completed results stored for the same league and strictly before kickoff. The initial baseline uses fixed Elo defaults and a smoothed draw rate. Suppress 1X2 output until the history contains at least 10 league matches and 3 appearances per team. Label every shown estimate experimental and uncalibrated until a frozen forecast log and chronological walk-forward evaluation exist.

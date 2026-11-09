@@ -28,6 +28,8 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
+import az.simplesoft.footballintelligence.analytics.EloEngine
+import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.isFreshQuote
 import az.simplesoft.footballintelligence.analytics.normalizeProviderTimestampUtc
 
@@ -88,6 +90,19 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
         readableDatabase.rawQuery("SELECT id,league,home,away,kickoff,finished,home_score,away_score FROM matches ORDER BY finished ASC,kickoff ASC LIMIT 250",null).use { c ->
             while(c.moveToNext()) result.add(Match(c.getInt(0),c.getString(1),c.getString(2),c.getString(3),c.getString(4),c.getInt(5)==1,
                 if(c.isNull(6)) null else c.getInt(6),if(c.isNull(7)) null else c.getInt(7)))
+        }
+        return result
+    }
+    fun historicalResultsBefore(league:String, cutoffMillis:Long):List<HistoricalMatch> {
+        val result=mutableListOf<HistoricalMatch>()
+        readableDatabase.rawQuery(
+            "SELECT home,away,kickoff,home_score,away_score FROM matches WHERE league=? AND finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL",
+            arrayOf(league)
+        ).use { c ->
+            while(c.moveToNext()) {
+                val kickoff=runCatching { Instant.parse(c.getString(2)).toEpochMilli() }.getOrNull() ?: continue
+                if(kickoff<cutoffMillis) result.add(HistoricalMatch(kickoff,c.getString(0),c.getString(1),c.getInt(3),c.getInt(4)))
+            }
         }
         return result
     }
@@ -171,6 +186,18 @@ class MainActivity:ComponentActivity() {
     var message by remember { mutableStateOf("Выбери лигу и обнови матчи. Интернет нужен только для обновления.") }
     val matches=remember(revision) { store.matches() }
     val active=matches.firstOrNull { it.id==selected }
+    val eloForecast=remember(active?.id,revision) {
+        active?.let { match ->
+            val kickoff=runCatching { Instant.parse(match.kickoff).toEpochMilli() }.getOrNull()
+            if(match.finished||kickoff==null) null
+            else EloEngine.forecast(
+                history=store.historicalResultsBefore(match.league,kickoff),
+                forecastKickoffMillis=kickoff,
+                homeTeam=match.home,
+                awayTeam=match.away,
+            )
+        }
+    }
     val quoteList=remember(selected,revision) { if(selected>=0) store.quotes(selected) else emptyList() }
     val pickList=remember(selected,revision) { if(selected>=0) store.picks(selected) else emptyList() }
     val tickets=remember(revision) { store.tickets() }
@@ -250,6 +277,22 @@ class MainActivity:ComponentActivity() {
                 else {
                   Text("${active.home} — ${active.away}",style=MaterialTheme.typography.titleLarge)
                   Text("${niceTime(active.kickoff)} · ${if(active.finished) "Завершён" else "До начала"}",style=MaterialTheme.typography.labelSmall)
+                  HorizontalDivider()
+                  Text("Экспериментальный Elo-baseline",fontWeight=FontWeight.Bold)
+                  if(active.finished) {
+                      Text("Предматчевый расчёт для завершённого матча не показывается.",style=MaterialTheme.typography.bodySmall)
+                  } else if(eloForecast==null) {
+                      Text("Не удалось прочитать время начала; расчёт недоступен.",style=MaterialTheme.typography.bodySmall)
+                  } else {
+                      val probabilities=eloForecast.probabilities
+                      if(probabilities==null) {
+                          Text("Недостаточно истории: ${eloForecast.matchesUsed} матчей в лиге, ${eloForecast.homeTeamMatches} для ${active.home} и ${eloForecast.awayTeamMatches} для ${active.away}. Для показа нужно минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} матчей в лиге и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} для каждой команды.",style=MaterialTheme.typography.bodySmall)
+                      } else {
+                          Text("Оценка 1X2: ${"%.1f".format(probabilities.home*100)}% / ${"%.1f".format(probabilities.draw*100)}% / ${"%.1f".format(probabilities.away*100)}%",fontWeight=FontWeight.SemiBold)
+                          Text("На основе ${eloForecast.matchesUsed} прошлых матчей лиги; ${active.home}: ${eloForecast.homeTeamMatches}, ${active.away}: ${eloForecast.awayTeamMatches}.",style=MaterialTheme.typography.bodySmall)
+                      }
+                      Text("Источник: сохранённые результаты OpenLigaDB этой лиги до времени начала матча. Elo с фиксированными параметрами, без калибровки и walk-forward проверки; экспериментальная оценка, не рекомендация и не показатель уверенности.",style=MaterialTheme.typography.bodySmall)
+                  }
                   HorizontalDivider()
                   Text("Снимок линии букмекера (1X2)",fontWeight=FontWeight.Bold)
                   Text("Введи все три исхода одного букмекера. Сохраняется время снимка. Данные не проверяются автоматически.",style=MaterialTheme.typography.bodySmall)

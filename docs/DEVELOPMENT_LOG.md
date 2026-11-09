@@ -43,3 +43,22 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 2. Add import/export with explicit source, market, and UTC timestamps.
 3. Add timestamped prediction logging and walk-forward tooling only when a legal historical dataset can be imported.
 4. Review a paired AGP/Gradle version update with regression build verification.
+
+## 2026-11-09 — experimental Elo baseline (CI pending)
+
+### Work completed
+
+- Added a pure Kotlin Elo engine. It trains on completed local results whose kickoff is strictly earlier than the forecast match, uses same-league history from SQLite, and avoids using any result at or after the forecast cutoff.
+- Added a smoothed league draw prior and an explicit sample gate: at least 10 prior league matches and 3 appearances for each team. The UI reports the local source and sample counts and labels the estimate experimental, uncalibrated, and not a recommendation.
+- Added `AGENTS.md` with the enduring project mission, constraints, engineering practices, and the exact continuation point; this log remains the detailed session/milestone record.
+- Updated the README, architecture, roadmap, limitations, decisions, changelog, and test guide to describe the Elo baseline and its limits.
+
+### Model defaults and test correction
+
+- Defaults: rating 1500, K=20, home advantage +65 Elo points, and 25% draw prior weighted as 4 matches. These are transparent starting values, not fitted or validated values.
+- The first run compiled but two assertions encoded incorrect expectations: home advantage was tested as an away advantage after a rating update, and the empty-history output was expected to be symmetric despite the nonzero home advantage. The fixtures were corrected to test the model's actual settings; this was a test correction, not a model parameter tuning exercise.
+
+### Verification and next actions
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally on 2026-11-09; 18 unit tests completed and the debug APK was built. GitHub Actions for this revision is pending.
+- Next: review the full diff; commit and push this milestone; verify the GitHub Actions test/APK artifact; then record the CI run. After that, implement the next data/validation milestone from the roadmap.
