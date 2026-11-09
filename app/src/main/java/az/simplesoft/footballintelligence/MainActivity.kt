@@ -27,18 +27,23 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.io.ByteArrayOutputStream
 import java.time.Instant
+import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.analytics.EloEngine
+import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
+import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
+import az.simplesoft.footballintelligence.analytics.WalkForwardTarget
 import az.simplesoft.footballintelligence.analytics.isFreshQuote
 import az.simplesoft.footballintelligence.analytics.normalizeProviderTimestampUtc
 import az.simplesoft.footballintelligence.data.FootballDataCsvImporter
 import az.simplesoft.footballintelligence.data.FootballCsvImportReport
 import az.simplesoft.footballintelligence.data.StoredFootballCsvImport
+import az.simplesoft.footballintelligence.data.ImportedHistoryRow
 
 data class Match(val id: Int, val league: String, val home: String, val away: String,
                  val kickoff: String, val finished: Boolean, val homeScore: Int?, val awayScore: Int?)
@@ -165,6 +170,27 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
             return StoredFootballCsvImport(inserted,duplicateRows)
         } finally { db.endTransaction() }
     }
+    fun importedCompetitionCodes():List<String> {
+        val result=mutableListOf<String>()
+        readableDatabase.rawQuery("SELECT competition_code FROM historical_results GROUP BY competition_key ORDER BY competition_key",null).use { c ->
+            while(c.moveToNext()) result.add(c.getString(0))
+        }
+        return result
+    }
+    fun importedHistory(competitionCode:String):List<ImportedHistoryRow> {
+        val result=mutableListOf<ImportedHistoryRow>()
+        val key=competitionCode.trim().lowercase(Locale.ROOT)
+        readableDatabase.rawQuery(
+            "SELECT id,competition_code,event_date,available_at,home_team,away_team,home_goals,away_goals FROM historical_results WHERE competition_key=? ORDER BY available_at,event_date,home_key,away_key",
+            arrayOf(key)
+        ).use { c ->
+            while(c.moveToNext()) {
+                val date=runCatching { LocalDate.parse(c.getString(2)) }.getOrNull() ?: continue
+                result.add(ImportedHistoryRow(c.getLong(0),c.getString(1),date,c.getLong(3),c.getString(4),c.getString(5),c.getInt(6),c.getInt(7)))
+            }
+        }
+        return result
+    }
     fun quotes(matchId:Int):List<Quote> {
         val result=mutableListOf<Quote>()
         readableDatabase.rawQuery("SELECT id,match_id,bookmaker,h,d,a,captured_at FROM quotes WHERE match_id=? ORDER BY captured_at DESC",arrayOf(matchId.toString())).use { c ->
@@ -244,9 +270,17 @@ class MainActivity:ComponentActivity() {
     var importingCsv by remember { mutableStateOf(false) }
     var csvImportMessage by remember { mutableStateOf("") }
     var fallbackCompetition by remember { mutableStateOf("") }
+    var selectedBacktestCode by remember { mutableStateOf("") }
+    var backtestRunning by remember { mutableStateOf(false) }
+    var backtestMessage by remember { mutableStateOf("") }
+    var backtestReport by remember { mutableStateOf<EloWalkForwardReport?>(null) }
+    var backtestReportCode by remember { mutableStateOf("") }
     var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var message by remember { mutableStateOf("Выбери лигу и обнови матчи. Интернет нужен только для обновления.") }
     val matches=remember(revision) { store.matches() }
+    val importedCompetitionCodes=remember(revision) { store.importedCompetitionCodes() }
+    val activeBacktestCode=selectedBacktestCode.takeIf { it in importedCompetitionCodes }
+        ?: importedCompetitionCodes.firstOrNull().orEmpty()
     val active=matches.firstOrNull { it.id==selected }
     val eloForecast=remember(active?.id,revision) {
         active?.let { match ->
@@ -308,6 +342,8 @@ class MainActivity:ComponentActivity() {
                     activity.runOnUiThread {
                         revision++
                         importingCsv=false
+                        backtestReport=null
+                        backtestReportCode=""
                         val examples=report.examples.take(2).joinToString("; ").let { if(it.isBlank()) "" else " Примеры: $it" }
                         csvImportMessage="Импорт: добавлено ${stored.insertedRows}, дублей ${stored.duplicateRows}, пропущено строк ${report.rejectedRows} из ${report.rowsRead}.$examples"
                     }
@@ -341,6 +377,51 @@ class MainActivity:ComponentActivity() {
         }.start()
     }
 
+    fun runImportedBacktest(competitionCode:String) {
+        if(backtestRunning||competitionCode.isBlank()) return
+        backtestRunning=true
+        backtestMessage="Расчёт по сохранённым результатам…"
+        backtestReport=null
+        backtestReportCode=""
+        Thread {
+            try {
+                val rows=store.importedHistory(competitionCode)
+                val history=rows.map { row ->
+                    HistoricalMatch(
+                        kickoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
+                        homeTeam=row.homeTeam,
+                        awayTeam=row.awayTeam,
+                        homeGoals=row.homeGoals,
+                        awayGoals=row.awayGoals,
+                        availableAtMillis=row.availableAtMillis,
+                    )
+                }
+                val targets=rows.map { row ->
+                    WalkForwardTarget(
+                        id=row.id.toString(),
+                        forecastCutoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
+                        homeTeam=row.homeTeam,
+                        awayTeam=row.awayTeam,
+                        homeGoals=row.homeGoals,
+                        awayGoals=row.awayGoals,
+                    )
+                }
+                val report=EloWalkForwardEngine.evaluate(history,targets)
+                activity.runOnUiThread {
+                    backtestReportCode=competitionCode
+                    backtestReport=report
+                    backtestRunning=false
+                    backtestMessage=""
+                }
+            } catch(e:Exception) {
+                activity.runOnUiThread {
+                    backtestRunning=false
+                    backtestMessage="Ошибка исторического теста: ${e.message ?: "неизвестная ошибка"}"
+                }
+            }
+        }.start()
+    }
+
     MaterialTheme {
       Scaffold(topBar={ Surface(color=MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
@@ -350,7 +431,7 @@ class MainActivity:ComponentActivity() {
       }}) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("Матчи","Анализ","Виртуальные ставки","О проекте").forEachIndexed { i,title ->
+                listOf("Матчи","Анализ","Виртуальные ставки","Бэктест","О проекте").forEachIndexed { i,title ->
                     FilterChip(selected=tab==i,onClick={tab=i},label={Text(title)})
                 }
             }
@@ -502,6 +583,35 @@ class MainActivity:ComponentActivity() {
                                 Text(state,style=MaterialTheme.typography.bodySmall)
                             }
                         }
+                    }
+                }
+              }
+              3 -> Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
+                Text("Elo walk-forward",style=MaterialTheme.typography.titleLarge)
+                Text("Ретроспективная оценка по импортированным результатам. Для каждого календарного дня используется один срез, без результатов этого дня; строки CSV становятся доступны только спустя два дня.",style=MaterialTheme.typography.bodySmall)
+                Text("Это не воспроизведение архивных котировок и не сравнение с рынком: временные версии исходных файлов не сохранены, а вероятности не калиброваны.",style=MaterialTheme.typography.bodySmall)
+                if(importedCompetitionCodes.isEmpty()) {
+                    Text("Сначала импортируй завершённые матчи через CSV на вкладке «Матчи».")
+                } else {
+                    Text("Код соревнования из CSV",fontWeight=FontWeight.SemiBold)
+                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                        importedCompetitionCodes.forEach { code ->
+                            FilterChip(selected=activeBacktestCode==code,onClick={selectedBacktestCode=code},label={Text(code)})
+                        }
+                    }
+                    Text("Минимум для прогноза: ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} прошлых матчей соревнования и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} матча каждой команды.",style=MaterialTheme.typography.bodySmall)
+                    Button(onClick={runImportedBacktest(activeBacktestCode)},enabled=!backtestRunning,modifier=Modifier.fillMaxWidth()) { Text("Рассчитать walk-forward") }
+                    if(backtestRunning) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    if(backtestMessage.isNotBlank()) Text(backtestMessage,style=MaterialTheme.typography.bodySmall)
+                    if(backtestReportCode==activeBacktestCode) backtestReport?.let { report ->
+                        HorizontalDivider()
+                        Text("Матчей: ${report.targetCount} · прогнозов: ${report.forecastCount} · пропущено из-за малого сэмпла: ${report.skippedForInsufficientHistory}",fontWeight=FontWeight.SemiBold)
+                        if(report.meanBrierScore==null||report.meanLogLoss==null) {
+                            Text("Недостаточно предматчевой истории для расчёта показателей.",style=MaterialTheme.typography.bodySmall)
+                        } else {
+                            Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
+                        }
+                        Text("Результаты показывают только качество вероятностных оценок на этом локальном файле; они не доказывают преимущество, прибыль или превосходство над букмекерами.",style=MaterialTheme.typography.bodySmall)
                     }
                 }
               }

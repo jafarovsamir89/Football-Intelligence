@@ -18,6 +18,21 @@ class EloEngineTest {
         assertEquals(0, model.gamesFor("Gamma"))
     }
 
+    @Test fun earlierKickoffIsStillExcludedWhenResultWasNotYetAvailable() {
+        val history = listOf(HistoricalMatch(100, "Alpha", "Beta", 4, 0, availableAtMillis = 300))
+        val model = EloEngine.fit(history, forecastKickoffMillis = 200)
+        assertEquals(0, model.matchesUsed)
+    }
+
+    @Test fun sameAvailabilityBatchDoesNotDependOnInputRowOrder() {
+        val first = HistoricalMatch(100, "Alpha", "Beta", 3, 0)
+        val second = HistoricalMatch(100, "Alpha", "Gamma", 0, 2)
+        val forward = EloEngine.fit(listOf(first, second), forecastKickoffMillis = 200)
+        val reverse = EloEngine.fit(listOf(second, first), forecastKickoffMillis = 200)
+        assertEquals(forward.ratings, reverse.ratings)
+        assertEquals(forward.playedByTeam, reverse.playedByTeam)
+    }
+
     @Test fun futureMatchesDoNotChangeEarlierRatings() {
         val earlier = listOf(HistoricalMatch(100, "Alpha", "Beta", 1, 0))
         val withFuture = earlier + HistoricalMatch(500, "Alpha", "Beta", 0, 8)

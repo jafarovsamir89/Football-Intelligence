@@ -33,4 +33,4 @@ Before any strategy is promoted:
 4. Report calibration, Brier, log loss, ROI, CLV, drawdown, sample count, uncertainty intervals, and stake assumptions.
 5. Keep tuning out of the final test window; publish failures and versions in the experiment log.
 
-No historic backtest has been run yet. The project currently has no full-coverage timestamped odds or tipster dataset.
+The app now has a date-bucketed Elo walk-forward evaluator for user-imported score CSVs, but no real historical file has been run through it in this workspace. It emits Brier and Log Loss only and has no market baseline. The project still has no full-coverage timestamped odds or licensed tipster dataset.

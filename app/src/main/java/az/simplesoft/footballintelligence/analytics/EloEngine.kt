@@ -10,6 +10,8 @@ data class HistoricalMatch(
     val awayTeam: String,
     val homeGoals: Int,
     val awayGoals: Int,
+    /** First safe time when this result may be used; callers with unknown timing must supply a bound. */
+    val availableAtMillis: Long = kickoffMillis,
 )
 
 data class EloConfig(
@@ -50,36 +52,42 @@ object EloEngine {
     const val MIN_HISTORY_MATCHES_FOR_FORECAST = 10
     const val MIN_TEAM_MATCHES_FOR_FORECAST = 3
 
-    /** Fits ratings from only matches whose kickoff is strictly earlier than the forecast cutoff. */
+    /** Fits ratings from only results whose safe availability time is strictly before the forecast cutoff. */
     fun fit(
         history: Collection<HistoricalMatch>,
         forecastKickoffMillis: Long,
         config: EloConfig = EloConfig(),
     ): EloRatings {
-        val eligible = history.filter { it.kickoffMillis < forecastKickoffMillis }
+        val eligible = history.filter { it.availableAtMillis < forecastKickoffMillis }
             .onEach(::validateMatch)
-            .sortedWith(compareBy<HistoricalMatch> { it.kickoffMillis }.thenBy { teamKey(it.homeTeam) }.thenBy { teamKey(it.awayTeam) })
+            .sortedWith(compareBy<HistoricalMatch> { it.availableAtMillis }.thenBy { it.kickoffMillis }.thenBy { teamKey(it.homeTeam) }.thenBy { teamKey(it.awayTeam) })
         val ratings = mutableMapOf<String, Double>()
         val played = mutableMapOf<String, Int>()
         var drawCount = 0
 
-        for (match in eligible) {
-            val home = teamKey(match.homeTeam)
-            val away = teamKey(match.awayTeam)
-            val homeRating = ratings[home] ?: config.initialRating
-            val awayRating = ratings[away] ?: config.initialRating
-            val expectedHome = expectedHomeScore(homeRating, awayRating, config.homeAdvantage)
-            val actualHome = when {
-                match.homeGoals > match.awayGoals -> 1.0
-                match.homeGoals < match.awayGoals -> 0.0
-                else -> 0.5
+        for (sameAvailability in eligible.groupBy { it.availableAtMillis }.toSortedMap().values) {
+            // A date-only source may give many matches the same availability boundary. Use one
+            // pre-batch rating snapshot so result order cannot leak into other matches in that batch.
+            val ratingDeltas = mutableMapOf<String, Double>()
+            for (match in sameAvailability) {
+                val home = teamKey(match.homeTeam)
+                val away = teamKey(match.awayTeam)
+                val homeRating = ratings[home] ?: config.initialRating
+                val awayRating = ratings[away] ?: config.initialRating
+                val expectedHome = expectedHomeScore(homeRating, awayRating, config.homeAdvantage)
+                val actualHome = when {
+                    match.homeGoals > match.awayGoals -> 1.0
+                    match.homeGoals < match.awayGoals -> 0.0
+                    else -> 0.5
+                }
+                val delta = config.kFactor * (actualHome - expectedHome)
+                ratingDeltas[home] = (ratingDeltas[home] ?: 0.0) + delta
+                ratingDeltas[away] = (ratingDeltas[away] ?: 0.0) - delta
+                played[home] = (played[home] ?: 0) + 1
+                played[away] = (played[away] ?: 0) + 1
+                if (actualHome == 0.5) drawCount++
             }
-            val delta = config.kFactor * (actualHome - expectedHome)
-            ratings[home] = homeRating + delta
-            ratings[away] = awayRating - delta
-            played[home] = (played[home] ?: 0) + 1
-            played[away] = (played[away] ?: 0) + 1
-            if (actualHome == 0.5) drawCount++
+            for ((team, delta) in ratingDeltas) ratings[team] = (ratings[team] ?: config.initialRating) + delta
         }
 
         val smoothedDrawRate = (drawCount + config.priorDrawProbability * config.priorMatchCount) /

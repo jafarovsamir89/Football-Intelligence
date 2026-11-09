@@ -31,6 +31,17 @@ data class StoredFootballCsvImport(
     val duplicateRows: Int,
 )
 
+data class ImportedHistoryRow(
+    val id: Long,
+    val competitionCode: String,
+    val eventDate: LocalDate,
+    val availableAtMillis: Long,
+    val homeTeam: String,
+    val awayTeam: String,
+    val homeGoals: Int,
+    val awayGoals: Int,
+)
+
 /** Parser for user-selected Football-Data.co.uk style results CSV files. */
 object FootballDataCsvImporter {
     private val isoDate = DateTimeFormatter.ISO_LOCAL_DATE
@@ -38,6 +49,10 @@ object FootballDataCsvImporter {
 
     /** Source files have a calendar date but no timezone; don't use a result until two days later. */
     fun conservativeAvailabilityMillis(eventDate: LocalDate): Long = eventDate.plusDays(2)
+        .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
+
+    /** Date-only historical targets are evaluated at the start of their listed calendar date. */
+    fun dateBucketForecastCutoffMillis(eventDate: LocalDate): Long = eventDate
         .atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
 
     fun decode(bytes: ByteArray): String = try {

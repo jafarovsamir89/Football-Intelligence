@@ -64,18 +64,32 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 - Committed and pushed as `63eedc1` (`Add leakage-safe experimental Elo baseline`). GitHub Actions run [42708351125](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125) passed tests and APK build and uploaded `football-intelligence-debug-apk`. The run includes the existing Gradle 8.11.1 maintenance annotation.
 - Next: implement timestamp-safe walk-forward evaluation and a licensed historical-results import path; explicitly track date-only source data so it cannot leak same-day results into pre-match forecasts.
 
-## 2026-11-09 — manual historical CSV import (local verification passed; CI pending)
+## 2026-11-09 — manual historical CSV import (CI passed)
 
 ### Work completed
 
 - Added a user-triggered Android document picker for Football-Data-style CSV and a 20 MiB file limit. Files are selected locally; the app does not crawl or schedule downloads.
-- Added a tolerant CSV parser for `Div`, `Date`, `HomeTeam`, `AwayTeam`, `FTHG`, and `FTAG`, with UTF-8/Windows-1252 decoding, quoted/semicolon input support, date parsing, row rejection details, and duplicate suppression. Odds fields are ignored.
+- Added a tolerant CSV parser for `Div`, `Date`, `HomeTeam`, `AwayTeam`, `FTHG`/`HG`, and `FTAG`/`AG`, with UTF-8/Windows-1252 decoding, quoted/semicolon input support, date parsing, row rejection details, and duplicate suppression. Odds fields are ignored.
 - Added SQLite version 2 tables for imported results and source-file/import-time records. The v1→v2 upgrade adds tables/indexes without replacing matches, odds, picks, or tickets.
-- Stored source-date rows with a conservative availability boundary at UTC midnight two days after the listed date. Imported data remains separate from OpenLigaDB IDs and is not yet consumed by Elo/backtest screens.
+- Stored source-date rows with a conservative availability boundary at UTC midnight two days after the listed date. Imported data remains separate from OpenLigaDB IDs.
 - Rechecked Football-Data.co.uk usage policy: manual downloads or light automation up to twice weekly for private personal/academic use, with restrictions on commercial and heavy automated data-training projects. The app uses only user-selected files and does not redistribute the data. Verified Android's Storage Access Framework file-picker guidance in official documentation.
 
 ### Verification and gaps
 
 - First build attempt exposed a malformed Kotlin test string around an escaped CSV quote; corrected the test fixture. The subsequent `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally: 26 tests, APK build successful.
-- No dedicated Android instrumentation test currently exercises the v1→v2 SQLite migration or UI file-picker flow. Imported score rows are stored but have not yet been connected to walk-forward metrics; this is the immediate next implementation stage.
-- Next: finish diff/docs review; commit/push; verify GitHub Actions for this importer; then add a chronological evaluator that consumes imported rows using `available_at`, testing simultaneous/date-only rows without future leakage.
+- No dedicated Android instrumentation test exercises the v1→v2 SQLite migration or UI file-picker flow. GitHub Actions run [42711478723](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42711478723) passed the CSV revision, including unit tests, APK build, and artifact upload.
+
+## 2026-11-09 — availability-aware Elo walk-forward (local verification passed; CI pending)
+
+### Work completed
+
+- Extended historical rows with a separate safe-availability timestamp. Elo training now filters by `availableAtMillis`, not only event kickoff.
+- Elo updates all results sharing an availability timestamp as one batch from a common pre-batch rating snapshot, so row ordering cannot affect later ratings.
+- Added `EloWalkForwardEngine`: groups targets by cutoff, fits one model per cutoff, excludes results whose availability is equal to/after that cutoff, suppresses predictions under the same 10-match/3-per-team gates, and computes mean multiclass Brier and Log Loss.
+- Connected the imported-results table to a standalone «Бэктест» screen. It uses one date-level cutoff for every match on a source date and the conservative two-day `available_at` delay. It reports target/prediction/skipped counts and scores; it does not import odds or claim superiority to a market.
+- Marked the backtest as retrospective. No actual source-file vintage or publication-time record exists; no real CSV dataset has been imported and evaluated in this workspace yet.
+
+### Verification and next actions
+
+- Current working tree passes `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug`: 32 unit tests and APK build successful. The new walk-forward revision has not yet been committed or sent through GitHub Actions.
+- Next: review all `available_at`/cutoff paths and UI state, update documentation, commit and push, inspect CI and artifact, then add tests for the actual SQLite migration/import transaction when an Android test runtime is available.
