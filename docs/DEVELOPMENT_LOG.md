@@ -28,8 +28,10 @@
 ### Test / CI status
 
 - Verification: ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug passed locally on 2026-11-09. Eleven unit tests passed; the APK was built at app/build/outputs/apk/debug/app-debug.apk.
-- GitHub Actions run 42704812973 passed all steps on d4b4c38, including unit tests, APK build, and upload of the 15,899,210-byte football-intelligence-debug-apk artifact.
-- That first run reported deprecation warnings for Node 20 action runtimes and setup-java v4. The workflow is being upgraded to current Node 24 action releases; a verification run is pending.
+- GitHub Actions run 42704812973 passed all steps on d4b4c38, including unit tests, APK build, and artifact upload. It reported deprecation warnings for Node 20 action runtimes and setup-java v4.
+- Updated workflow runtimes and runner in commit 3372f23: checkout v7, setup-java v6, setup-gradle v6 with basic cache, upload-artifact v7, and Ubuntu 24.04.
+- GitHub Actions run 42705882847 passed all steps on 3372f23. It passed unit tests, built the APK, and uploaded the 15,899,212-byte football-intelligence-debug-apk artifact. The Node 20/setup-java v4 warnings are gone; CI now reports only that Gradle 8.11.1 is out of date.
+- Android's current compatibility table lists Gradle 8.9 as the minimum for the app's AGP 8.7 line. Keep the passing 8.11.1 wrapper for this milestone; evaluate a paired AGP/Gradle update separately.
 
 ### Test correction
 
@@ -37,7 +39,7 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 
 ### Next stage
 
-1. Confirm the refreshed GitHub Actions runtime also passes and uploads the APK.
-2. Extract persistence/domain code and add database regression tests.
-3. Add import/export with explicit source, market, and UTC timestamps.
-4. Add timestamped prediction logging and walk-forward tooling only when a legal historical dataset can be imported.
+1. Extract persistence/domain code and add database regression tests.
+2. Add import/export with explicit source, market, and UTC timestamps.
+3. Add timestamped prediction logging and walk-forward tooling only when a legal historical dataset can be imported.
+4. Review a paired AGP/Gradle version update with regression build verification.

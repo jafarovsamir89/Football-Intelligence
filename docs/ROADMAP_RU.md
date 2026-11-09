@@ -10,8 +10,8 @@
 - Basic/Power/Shin удаление маржи, простое среднее свежих введённых линий и расчёт ROI только по рассчитанным виртуальным ставкам.
 - Математические примитивы независимого Poisson и Dixon–Coles с unit-тестами. Параметры моделей ещё не оцениваются на исторических данных; прогноз матча не показывается.
 - Ошибки источника отображаются, сохранённые данные доступны офлайн.
-- GitHub Actions run 42704812973 прошёл unit tests, собрал APK и загрузил artifact football-intelligence-debug-apk для ревизии d4b4c38.
-- Следующим изменением workflow обновлены GitHub Actions runtime до актуальных версий с Node 24; новый CI-запуск ожидается после push.
+- GitHub Actions run 42705882847 прошёл unit tests, собрал APK и загрузил artifact football-intelligence-debug-apk для ревизии 3372f23.
+- Workflow использует checkout v7, setup-java v6, setup-gradle v6, upload-artifact v7 и Ubuntu 24.04. CI выдал advisory, что Gradle 8.11.1 устарел; совместимость AGP/Gradle записана в TESTING.md.
 
 ## Этап B: данные и импорт
 - Каталог лиг и сезонов OpenLigaDB вместо жёстко заданных кнопок.
