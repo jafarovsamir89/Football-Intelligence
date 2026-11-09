@@ -15,6 +15,7 @@ The [penaltyblog model documentation](https://penaltyblog.readthedocs.io/en/late
 ## Data and inference limits
 
 - A result archive alone does not contain pre-match information timestamps. It can support retrospective form features only if each training row is cut strictly before kickoff.
+- Football-Data.co.uk's current usage policy limits the free files to private personal betting/academic use and allows manual downloads or at most light automation (twice weekly maximum); it excludes commercial/data-training projects with heavy automated bots/scrapers/AI. The app only imports a file the user selected and does not fetch or redistribute it. Its first CSV importer keeps completed scores only and does not ingest odds. The `Date` column is treated as a source-local date with no trusted timezone; imported results are withheld until UTC midnight two days later. This conservative availability bound avoids using a same-day result at an earlier kickoff, at the cost of omitting some recent information.
 - Closing odds are a useful benchmark but can leak future market movement if treated as known earlier. Opening, snapshot, and closing prices must remain distinct.
 - The app's current manual picks do not establish when a tipster first published the pick and can omit losing/deleted tips. Do not calculate a credible historical ROI from a selectively entered sample.
 - Multiple accounts may copy one original prediction. Distinct names do not imply independent evidence.

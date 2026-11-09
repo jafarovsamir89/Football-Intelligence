@@ -31,3 +31,7 @@ Reviewed platform terms do not establish a right to scrape/replicate Tipstrr or 
 ## D-008: Gate the first Elo forecast on pre-match local history
 
 Use only completed results stored for the same league and strictly before kickoff. The initial baseline uses fixed Elo defaults and a smoothed draw rate. Suppress 1X2 output until the history contains at least 10 league matches and 3 appearances per team. Label every shown estimate experimental and uncalibrated until a frozen forecast log and chronological walk-forward evaluation exist.
+
+## D-009: Import historical scores through explicit file selection
+
+Do not crawl or schedule downloads from Football-Data.co.uk. Support an explicit user-selected CSV under that provider's personal-use policy, record the source filename and import time, and keep imported results in their own tables until competition mapping and a walk-forward reader exist. Ignore odds columns in this first importer. Because the date has no trusted timezone, mark a result usable only at UTC midnight two days after the listed calendar date. This errs on the side of excluding data that might not yet have been available before kickoff.

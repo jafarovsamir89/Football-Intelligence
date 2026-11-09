@@ -20,14 +20,15 @@
 5. Виртуальные одиночные ставки с фиксацией до матча и ROI по рассчитанным ставкам.
 6. Чистые Kotlin-примитивы Poisson и Dixon–Coles, Brier score, log loss и EV с unit-тестами.
 7. Экспериментальный Elo-baseline для выбранного матча: использует только сохранённые результаты той же лиги до kickoff, скрывает вероятности при малой выборке и явно помечается как некалиброванный. На 2026-11-09 локально прошли 18 тестов и debug-сборка; для коммита `63eedc1` также прошёл GitHub Actions.
+8. Ручной CSV-импорт завершённых результатов через системный файловый выбор Android. Сохраняются метка формата/источника (не проверяется), имя файла, время импорта и дата матча; коэффициенты игнорируются, а строки с одной только датой откладываются на два дня для защиты от временной утечки. На 2026-11-09 локально прошли 26 unit-тестов и сборка.
 
-Экспрессы, импорт исторических файлов и walk-forward backtest ещё не реализованы.
+Импортированные результаты пока хранятся отдельно и ещё не включены в walk-forward backtest или прогнозы текущих матчей. Импорт коэффициентов/JSON, экспорт данных, экспрессы и walk-forward отчёт ещё не реализованы.
 
 ## Android APK
 
 В GitHub Actions открой workflow **Build Android Debug APK** и запусти сборку. После успешного выполнения скачай artifact football-intelligence-debug-apk и установи app-debug.apk на Android. APK — тестовая debug-сборка, а не релиз для Play Store.
 
-Сборка и unit tests коммита `63eedc1` прошли в [GitHub Actions](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125); workflow загрузил artifact football-intelligence-debug-apk. Для локальной проверки используй JDK 17 и команды из TESTING.md.
+GitHub Actions run [42708351125](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125) проверил коммит `63eedc1`, прошёл 18 тестов и загрузил artifact football-intelligence-debug-apk. Для CSV-изменений локально прошли 25 тестов и сборка; GitHub Actions ещё не запускался для этого изменения. Для локальной проверки используй JDK 17 и команды из TESTING.md.
 
 ## Документация
 

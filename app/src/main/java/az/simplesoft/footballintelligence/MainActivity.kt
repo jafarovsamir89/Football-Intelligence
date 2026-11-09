@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence
 
 import android.os.Bundle
+import android.provider.OpenableColumns
 import androidx.compose.ui.platform.LocalContext
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
@@ -8,6 +9,8 @@ import android.content.Context
 import android.content.ContentValues
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -22,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
+import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -32,6 +36,9 @@ import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.isFreshQuote
 import az.simplesoft.footballintelligence.analytics.normalizeProviderTimestampUtc
+import az.simplesoft.footballintelligence.data.FootballDataCsvImporter
+import az.simplesoft.footballintelligence.data.FootballCsvImportReport
+import az.simplesoft.footballintelligence.data.StoredFootballCsvImport
 
 data class Match(val id: Int, val league: String, val home: String, val away: String,
                  val kickoff: String, val finished: Boolean, val homeScore: Int?, val awayScore: Int?)
@@ -53,14 +60,22 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
     return Triple(p.home, p.draw, p.away)
 }
 
-class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence.db", null, 1) {
+class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER)")
         db.execSQL("CREATE TABLE quotes (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id INTEGER NOT NULL, bookmaker TEXT NOT NULL, h REAL NOT NULL, d REAL NOT NULL, a REAL NOT NULL, captured_at INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE picks (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id INTEGER NOT NULL, source TEXT NOT NULL, outcome TEXT NOT NULL, created_at INTEGER NOT NULL)")
         db.execSQL("CREATE TABLE tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id INTEGER NOT NULL, outcome TEXT NOT NULL, price REAL NOT NULL, stake REAL NOT NULL, bookmaker TEXT NOT NULL, created_at INTEGER NOT NULL)")
+        createHistoricalImportTables(db)
     }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {}
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if(oldVersion<2) createHistoricalImportTables(db)
+    }
+    private fun createHistoricalImportTables(db:SQLiteDatabase) {
+        db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE historical_results (id INTEGER PRIMARY KEY AUTOINCREMENT, import_id INTEGER NOT NULL, competition_code TEXT NOT NULL, competition_key TEXT NOT NULL, event_date TEXT NOT NULL, available_at INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_key TEXT NOT NULL, away_key TEXT NOT NULL, home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL, UNIQUE(competition_key,event_date,home_key,away_key))")
+        db.execSQL("CREATE INDEX historical_results_asof ON historical_results(competition_key,available_at)")
+    }
     fun upsert(matches: List<Match>) {
         val db = writableDatabase
         db.beginTransaction()
@@ -105,6 +120,50 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
             }
         }
         return result
+    }
+    fun importHistoricalResults(fileName:String, report:FootballCsvImportReport):StoredFootballCsvImport {
+        val db=writableDatabase
+        val importedAt=System.currentTimeMillis()
+        var inserted=0
+        db.beginTransaction()
+        try {
+            val importValues=ContentValues().apply {
+                put("source","Football-Data-style CSV (user-selected; provider unverified)")
+                put("file_name",fileName)
+                put("imported_at",importedAt)
+                put("rows_read",report.rowsRead)
+                put("accepted_rows",report.results.size)
+                put("inserted_rows",0)
+                put("duplicate_rows",0)
+                put("rejected_rows",report.rejectedRows)
+            }
+            val importId=db.insertOrThrow("historical_imports",null,importValues)
+            for (row in report.results) {
+                val competitionKey=row.competitionCode.trim().lowercase(Locale.ROOT)
+                fun teamKey(team:String)=team.trim().lowercase(Locale.ROOT).split(Regex("\\s+")).joinToString(" ")
+                // Source files provide a calendar date but no timezone. Make results available
+                // only at UTC midnight two days later, a conservative bound across civil zones.
+                val availableAt=FootballDataCsvImporter.conservativeAvailabilityMillis(row.eventDate)
+                val values=ContentValues().apply {
+                    put("import_id",importId)
+                    put("competition_code",row.competitionCode.trim())
+                    put("competition_key",competitionKey)
+                    put("event_date",row.eventDate.toString())
+                    put("available_at",availableAt)
+                    put("home_team",row.homeTeam.trim())
+                    put("away_team",row.awayTeam.trim())
+                    put("home_key",teamKey(row.homeTeam))
+                    put("away_key",teamKey(row.awayTeam))
+                    put("home_goals",row.homeGoals)
+                    put("away_goals",row.awayGoals)
+                }
+                if(db.insertWithOnConflict("historical_results",null,values,SQLiteDatabase.CONFLICT_IGNORE)!=-1L) inserted++
+            }
+            val duplicateRows=report.duplicateRows+(report.results.size-inserted)
+            db.execSQL("UPDATE historical_imports SET inserted_rows=?,duplicate_rows=? WHERE id=?",arrayOf(inserted,duplicateRows,importId))
+            db.setTransactionSuccessful()
+            return StoredFootballCsvImport(inserted,duplicateRows)
+        } finally { db.endTransaction() }
     }
     fun quotes(matchId:Int):List<Quote> {
         val result=mutableListOf<Quote>()
@@ -182,6 +241,9 @@ class MainActivity:ComponentActivity() {
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
     var downloading by remember { mutableStateOf(false) }
+    var importingCsv by remember { mutableStateOf(false) }
+    var csvImportMessage by remember { mutableStateOf("") }
+    var fallbackCompetition by remember { mutableStateOf("") }
     var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var message by remember { mutableStateOf("Выбери лигу и обнови матчи. Интернет нужен только для обновления.") }
     val matches=remember(revision) { store.matches() }
@@ -216,6 +278,48 @@ class MainActivity:ComponentActivity() {
     var stake by remember(selected) { mutableStateOf("10") }
     var warning by remember(selected) { mutableStateOf("") }
     val blue=MaterialTheme.colorScheme.primary
+
+    val csvLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if(uri!=null&&!importingCsv) {
+            importingCsv=true
+            csvImportMessage="Импорт CSV…"
+            val fallback=fallbackCompetition.trim().ifBlank { null }
+            Thread {
+                try {
+                    val resolver=activity.contentResolver
+                    val fileName=resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { c ->
+                        if(c.moveToFirst()) c.getString(0) else null
+                    } ?: uri.lastPathSegment ?: "football-results.csv"
+                    val input=resolver.openInputStream(uri) ?: error("Файл недоступен для чтения.")
+                    val bytes=input.use { stream ->
+                        val output=ByteArrayOutputStream()
+                        val buffer=ByteArray(8192)
+                        while(true) {
+                            val count=stream.read(buffer)
+                            if(count<0) break
+                            require(output.size()+count<=20*1024*1024) { "CSV-файл больше 20 МБ." }
+                            output.write(buffer,0,count)
+                        }
+                        output.toByteArray()
+                    }
+                    val report=FootballDataCsvImporter.parse(FootballDataCsvImporter.decode(bytes),fallback)
+                    require(report.results.isNotEmpty()) { "Не найдено корректных завершённых матчей. Проверь Date, HomeTeam, AwayTeam, FTHG/HG и FTAG/AG." }
+                    val stored=store.importHistoricalResults(fileName,report)
+                    activity.runOnUiThread {
+                        revision++
+                        importingCsv=false
+                        val examples=report.examples.take(2).joinToString("; ").let { if(it.isBlank()) "" else " Примеры: $it" }
+                        csvImportMessage="Импорт: добавлено ${stored.insertedRows}, дублей ${stored.duplicateRows}, пропущено строк ${report.rejectedRows} из ${report.rowsRead}.$examples"
+                    }
+                } catch(e:Exception) {
+                    activity.runOnUiThread {
+                        importingCsv=false
+                        csvImportMessage="Ошибка импорта: ${e.message ?: "неизвестная ошибка"}"
+                    }
+                }
+            }.start()
+        }
+    }
 
     fun download(league:String, season:Int) {
         if(downloading) return
@@ -256,7 +360,12 @@ class MainActivity:ComponentActivity() {
                     Button(onClick={download("bl1",2026)},enabled=!downloading){Text("Бундеслига")}
                     OutlinedButton(onClick={download("bl2",2026)},enabled=!downloading){Text("2. Бундеслига")}
                     OutlinedButton(onClick={download("bl1",2025)},enabled=!downloading){Text("Сезон 2025/26")}
+                    OutlinedButton(onClick={csvLauncher.launch(arrayOf("text/*","application/vnd.ms-excel","application/csv"))},enabled=!importingCsv){Text("Импорт CSV")}
                 }
+                OutlinedTextField(value=fallbackCompetition,onValueChange={fallbackCompetition=it},label={Text("Код лиги, если нет Div (например E0)")},singleLine=true,modifier=Modifier.fillMaxWidth().padding(horizontal=12.dp))
+                Text("Выбирай CSV, вручную скачанный с Football-Data.co.uk. Источник файла автоматически не проверяется. Коэффициенты не импортируются; строки с незавершённым или некорректным счётом пропускаются.",Modifier.padding(horizontal=12.dp),style=MaterialTheme.typography.bodySmall)
+                if(csvImportMessage.isNotBlank()) Text(csvImportMessage,Modifier.padding(horizontal=12.dp),style=MaterialTheme.typography.bodySmall)
+                if(importingCsv) LinearProgressIndicator(Modifier.fillMaxWidth())
                 Text(message,Modifier.padding(12.dp),style=MaterialTheme.typography.bodySmall)
                 if(downloading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 LazyColumn(contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){

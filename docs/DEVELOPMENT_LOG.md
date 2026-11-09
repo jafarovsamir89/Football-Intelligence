@@ -63,3 +63,19 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally on 2026-11-09; 18 unit tests completed and the debug APK was built.
 - Committed and pushed as `63eedc1` (`Add leakage-safe experimental Elo baseline`). GitHub Actions run [42708351125](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42708351125) passed tests and APK build and uploaded `football-intelligence-debug-apk`. The run includes the existing Gradle 8.11.1 maintenance annotation.
 - Next: implement timestamp-safe walk-forward evaluation and a licensed historical-results import path; explicitly track date-only source data so it cannot leak same-day results into pre-match forecasts.
+
+## 2026-11-09 — manual historical CSV import (local verification passed; CI pending)
+
+### Work completed
+
+- Added a user-triggered Android document picker for Football-Data-style CSV and a 20 MiB file limit. Files are selected locally; the app does not crawl or schedule downloads.
+- Added a tolerant CSV parser for `Div`, `Date`, `HomeTeam`, `AwayTeam`, `FTHG`, and `FTAG`, with UTF-8/Windows-1252 decoding, quoted/semicolon input support, date parsing, row rejection details, and duplicate suppression. Odds fields are ignored.
+- Added SQLite version 2 tables for imported results and source-file/import-time records. The v1→v2 upgrade adds tables/indexes without replacing matches, odds, picks, or tickets.
+- Stored source-date rows with a conservative availability boundary at UTC midnight two days after the listed date. Imported data remains separate from OpenLigaDB IDs and is not yet consumed by Elo/backtest screens.
+- Rechecked Football-Data.co.uk usage policy: manual downloads or light automation up to twice weekly for private personal/academic use, with restrictions on commercial and heavy automated data-training projects. The app uses only user-selected files and does not redistribute the data. Verified Android's Storage Access Framework file-picker guidance in official documentation.
+
+### Verification and gaps
+
+- First build attempt exposed a malformed Kotlin test string around an escaped CSV quote; corrected the test fixture. The subsequent `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally: 26 tests, APK build successful.
+- No dedicated Android instrumentation test currently exercises the v1→v2 SQLite migration or UI file-picker flow. Imported score rows are stored but have not yet been connected to walk-forward metrics; this is the immediate next implementation stage.
+- Next: finish diff/docs review; commit/push; verify GitHub Actions for this importer; then add a chronological evaluator that consumes imported rows using `available_at`, testing simultaneous/date-only rows without future leakage.
