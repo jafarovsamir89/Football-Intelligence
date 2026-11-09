@@ -17,16 +17,16 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
       - name: Verify Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
           echo "ANDROID_SDK_ROOT=$ANDROID_SDK_ROOT"
           ls /usr/local/lib/android/sdk/platforms || true
           ls /usr/local/lib/android/sdk/build-tools || true
+      - name: Unit tests
+        run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build APK
-        run: gradle --no-daemon :app:assembleDebug
+        run: ./gradlew --no-daemon :app:assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: football-intelligence-debug-apk

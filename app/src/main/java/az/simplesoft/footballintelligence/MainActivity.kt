@@ -5,6 +5,7 @@ import androidx.compose.ui.platform.LocalContext
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.Context
+import android.content.ContentValues
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.*
@@ -25,7 +26,10 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
-import kotlin.math.pow
+import az.simplesoft.footballintelligence.analytics.MarginMethod
+import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
+import az.simplesoft.footballintelligence.analytics.isFreshQuote
+import az.simplesoft.footballintelligence.analytics.normalizeProviderTimestampUtc
 
 data class Match(val id: Int, val league: String, val home: String, val away: String,
                  val kickoff: String, val finished: Boolean, val homeScore: Int?, val awayScore: Int?)
@@ -42,10 +46,9 @@ fun niceTime(raw: String): String = try {
 } catch (_: Exception) { raw.take(16) }
 fun scoreResult(m: Match): String? = if (!m.finished || m.homeScore == null || m.awayScore == null) null
     else if (m.homeScore > m.awayScore) "H" else if (m.homeScore < m.awayScore) "A" else "D"
-fun fairProbabilities(q: Quote): Triple<Double, Double, Double> {
-    val hs = 1.0 / q.h; val ds = 1.0 / q.d; val as_ = 1.0 / q.a
-    val total = hs + ds + as_
-    return Triple(hs / total, ds / total, as_ / total)
+fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Triple<Double, Double, Double> {
+    val p = ProbabilityEngine.removeMargin(q.h, q.d, q.a, method)
+    return Triple(p.home, p.draw, p.away)
 }
 
 class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence.db", null, 1) {
@@ -61,9 +64,21 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
         db.beginTransaction()
         try {
             for (m in matches) {
-                // Do not overwrite a previously settled result with an incomplete API record.
-                db.execSQL("INSERT OR REPLACE INTO matches(id,league,home,away,kickoff,finished,home_score,away_score) VALUES(?,?,?,?,?,?,?,?)",
-                    arrayOf(m.id,m.league,m.home,m.away,m.kickoff,if(m.finished) 1 else 0,m.homeScore,m.awayScore))
+                // Never replace/delete a row: tickets and other local records refer to this match ID.
+                // An incomplete later provider response must not erase a result already used for settlement.
+                val values = ContentValues().apply {
+                    put("league", m.league); put("home", m.home); put("away", m.away); put("kickoff", m.kickoff)
+                    put("finished", if (m.finished) 1 else 0)
+                    if (m.homeScore == null) putNull("home_score") else put("home_score", m.homeScore)
+                    if (m.awayScore == null) putNull("away_score") else put("away_score", m.awayScore)
+                }
+                val updated = db.update("matches", values,
+                    "id=? AND (finished=0 OR (?=1 AND ? IS NOT NULL AND ? IS NOT NULL))",
+                    arrayOf(m.id.toString(), if (m.finished) "1" else "0", m.homeScore?.toString(), m.awayScore?.toString()))
+                if (updated == 0) {
+                    values.put("id", m.id)
+                    db.insertWithOnConflict("matches", null, values, SQLiteDatabase.CONFLICT_IGNORE)
+                }
             }
             db.setTransactionSuccessful()
         } finally { db.endTransaction() }
@@ -97,6 +112,14 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
         }
         return result
     }
+    fun ticketMatches():Map<Int,Match> {
+        val result=linkedMapOf<Int,Match>()
+        readableDatabase.rawQuery("SELECT DISTINCT m.id,m.league,m.home,m.away,m.kickoff,m.finished,m.home_score,m.away_score FROM matches m INNER JOIN tickets t ON t.match_id=m.id",null).use { c ->
+            while(c.moveToNext()) result[c.getInt(0)]=Match(c.getInt(0),c.getString(1),c.getString(2),c.getString(3),c.getString(4),c.getInt(5)==1,
+                if(c.isNull(6)) null else c.getInt(6),if(c.isNull(7)) null else c.getInt(7))
+        }
+        return result
+    }
     fun saveQuote(matchId:Int, book:String, h:Double,d:Double,a:Double) =
         writableDatabase.execSQL("INSERT INTO quotes(match_id,bookmaker,h,d,a,captured_at) VALUES(?,?,?,?,?,?)",arrayOf(matchId,book,h,d,a,System.currentTimeMillis()))
     fun savePick(matchId:Int, source:String,outcome:String) =
@@ -111,8 +134,9 @@ fun parseMatches(data: JSONArray, league: String): List<Match> = buildList {
         val id=o.optInt("matchID",0)
         val h=o.optJSONObject("team1")?.optString("teamName").orEmpty()
         val a=o.optJSONObject("team2")?.optString("teamName").orEmpty()
-        val date=o.optString("matchDateTimeUTC","")
-        if(id==0 || h.isBlank() || a.isBlank() || date.isBlank()) continue
+        val rawDate=o.optString("matchDateTimeUTC","")
+        val date=normalizeProviderTimestampUtc(rawDate)
+        if(id==0 || h.isBlank() || a.isBlank() || date==null) continue
         val goals=o.optJSONArray("matchResults")
         var hs:Int?=null; var as_:Int?=null
         if(goals!=null) {
@@ -124,7 +148,7 @@ fun parseMatches(data: JSONArray, league: String): List<Match> = buildList {
             }
         }
         val done=o.optBoolean("matchIsFinished",false)
-        add(Match(id,league,h,a,date+"Z",done,if(done) hs else null,if(done) as_ else null))
+        add(Match(id,league,h,a,date,done,if(done) hs else null,if(done) as_ else null))
     }
 }
 
@@ -143,14 +167,16 @@ class MainActivity:ComponentActivity() {
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
     var downloading by remember { mutableStateOf(false) }
+    var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var message by remember { mutableStateOf("Выбери лигу и обнови матчи. Интернет нужен только для обновления.") }
     val matches=remember(revision) { store.matches() }
     val active=matches.firstOrNull { it.id==selected }
     val quoteList=remember(selected,revision) { if(selected>=0) store.quotes(selected) else emptyList() }
     val pickList=remember(selected,revision) { if(selected>=0) store.picks(selected) else emptyList() }
     val tickets=remember(revision) { store.tickets() }
+    val ticketMatches=remember(revision) { store.ticketMatches() }
     val mapped=matches.associateBy { it.id }
-    val settled=tickets.mapNotNull { t -> mapped[t.matchId]?.let { m -> scoreResult(m)?.let { it to t } } }
+    val settled=tickets.mapNotNull { t -> ticketMatches[t.matchId]?.let { m -> scoreResult(m)?.let { it to t } } }
     val exposure=settled.sumOf { it.second.stake }
     val returned=settled.sumOf { (r,t)->if(r==t.outcome) t.stake*t.price else 0.0 }
     val roi=if(exposure>0) (returned/exposure-1)*100 else 0.0
@@ -168,19 +194,19 @@ class MainActivity:ComponentActivity() {
         if(downloading) return
         downloading=true;message="Получение $league $season..."
         Thread {
+            var connection: HttpURLConnection? = null
             try {
                 val url=URL("https://api.openligadb.de/getmatchdata/$league/$season")
-                val connection=url.openConnection() as HttpURLConnection
+                connection=url.openConnection() as HttpURLConnection
                 connection.connectTimeout=12000; connection.readTimeout=16000
                 connection.setRequestProperty("Accept","application/json")
                 val body=connection.inputStream.bufferedReader().use { it.readText() }
-                connection.disconnect()
                 val list=parseMatches(JSONArray(body),league)
                 store.upsert(list)
                 activity.runOnUiThread { revision++; downloading=false;message="Сохранено матчей: ${list.size} ($league). Все данные доступны офлайн." }
             } catch(e:Exception) {
                 activity.runOnUiThread { downloading=false;message="Ошибка сети или данных: ${e.message}" }
-            }
+            } finally { connection?.disconnect() }
         }.start()
     }
 
@@ -227,6 +253,12 @@ class MainActivity:ComponentActivity() {
                   HorizontalDivider()
                   Text("Снимок линии букмекера (1X2)",fontWeight=FontWeight.Bold)
                   Text("Введи все три исхода одного букмекера. Сохраняется время снимка. Данные не проверяются автоматически.",style=MaterialTheme.typography.bodySmall)
+                  Text("Удаление маржи",fontWeight=FontWeight.SemiBold)
+                  Row(horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                      listOf(MarginMethod.BASIC to "Нормализация", MarginMethod.POWER to "Power", MarginMethod.SHIN to "Shin").forEach { (method, label) ->
+                          FilterChip(selected=marginMethod==method,onClick={marginMethod=method},label={Text(label)})
+                      }
+                  }
                   OutlinedTextField(value=book,onValueChange={book=it},label={Text("Название букмекера")},singleLine=true,modifier=Modifier.fillMaxWidth())
                   Row(horizontalArrangement=Arrangement.spacedBy(7.dp)) {
                       OutlinedTextField(value=h,onValueChange={h=it},label={Text("П1")},singleLine=true,modifier=Modifier.weight(1f))
@@ -243,20 +275,30 @@ class MainActivity:ComponentActivity() {
                   if(quoteList.isNotEmpty()) {
                     Text("Сохранённые линии",fontWeight=FontWeight.Bold)
                     quoteList.forEach { q ->
-                        val p=fairProbabilities(q)
+                        val p=fairProbabilities(q, marginMethod)
                         ElevatedCard {
                             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                                 Text(q.bookmaker,fontWeight=FontWeight.SemiBold)
                                 Text("П1 ${q.h} · X ${q.d} · П2 ${q.a}")
-                                Text("Рыночная оценка без маржи: ${"%.1f".format(p.first*100)}% / ${"%.1f".format(p.second*100)}% / ${"%.1f".format(p.third*100)}%",style=MaterialTheme.typography.bodySmall)
-                                Text("Снято: ${niceTime(Instant.ofEpochMilli(q.capturedAt).toString())}",style=MaterialTheme.typography.labelSmall)
+                                Text("${marginMethod.name} • без маржи: ${"%.1f".format(p.first*100)}% / ${"%.1f".format(p.second*100)}% / ${"%.1f".format(p.third*100)}%",style=MaterialTheme.typography.bodySmall)
+                                val fresh=isFreshQuote(q.capturedAt,System.currentTimeMillis())
+                                Text("${if(fresh) "Свежая запись" else "Устарела или время некорректно"} · ${niceTime(Instant.ofEpochMilli(q.capturedAt).toString())}",style=MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
-                    val recent=quoteList.filter { System.currentTimeMillis()-it.capturedAt < 10*60*1000L }
-                    if(recent.size>=2) {
-                        Text("Лучшая из свежих котировок (10 мин): П1 ${recent.maxOf{it.h}}, X ${recent.maxOf{it.d}}, П2 ${recent.maxOf{it.a}}",style=MaterialTheme.typography.bodyMedium)
-                        Text("Разница цен — не доказательство положительного EV.",style=MaterialTheme.typography.bodySmall)
+                    val now=System.currentTimeMillis()
+                    val freshByBook=quoteList.filter { isFreshQuote(it.capturedAt,now) }
+                        .groupBy { it.bookmaker.trim().lowercase(Locale.ROOT) }
+                        .values.mapNotNull { rows -> rows.maxByOrNull { it.capturedAt } }
+                    if(freshByBook.isNotEmpty()) {
+                        val consensus=freshByBook.map { fairProbabilities(it,marginMethod) }
+                        val consensusH=consensus.map{it.first}.average()
+                        val consensusD=consensus.map{it.second}.average()
+                        val consensusA=consensus.map{it.third}.average()
+                        Text("Среднее записанных линий по одному последнему снимку на букмекера (${freshByBook.size}): ${"%.1f".format(consensusH*100)}% / ${"%.1f".format(consensusD*100)}% / ${"%.1f".format(consensusA*100)}%",fontWeight=FontWeight.SemiBold)
+                        Text("Простое среднее введённых 1X2 линий после удаления маржи; не проверено у букмекеров.",style=MaterialTheme.typography.bodySmall)
+                        Text("Лучшие записанные цены по П1/X/П2 могут относиться к разным букмекерам; проверяй каждый коэффициент отдельно: ${freshByBook.maxOf{it.h}} · ${freshByBook.maxOf{it.d}} · ${freshByBook.maxOf{it.a}}",style=MaterialTheme.typography.bodySmall)
+                        Text("Расхождение котировок не является доказательством положительного EV.",style=MaterialTheme.typography.bodySmall)
                     }
                   }
                   HorizontalDivider()
@@ -274,7 +316,10 @@ class MainActivity:ComponentActivity() {
                   Text("Виртуальная одиночная ставка",fontWeight=FontWeight.Bold)
                   OutcomeSelect(outcome,{outcome=it})
                   OutlinedTextField(value=stake,onValueChange={stake=it},label={Text("Условная сумма (₼)")},modifier=Modifier.fillMaxWidth(),singleLine=true)
-                  val available=quoteList.filter { System.currentTimeMillis()-it.capturedAt<10*60*1000L }
+                  val now=System.currentTimeMillis()
+                  val available=quoteList.filter { isFreshQuote(it.capturedAt,now) }
+                      .groupBy { it.bookmaker.trim().lowercase(Locale.ROOT) }
+                      .values.mapNotNull { rows -> rows.maxByOrNull { it.capturedAt } }
                   val best=available.maxByOrNull{if(outcome=="H") it.h else if(outcome=="D") it.d else it.a}
                   val price=best?.let{if(outcome=="H") it.h else if(outcome=="D") it.d else it.a}
                   Text(if(best==null) "Нет свежей линии за последние 10 минут" else "Линия: ${best.bookmaker} • коэффициент ${price}",style=MaterialTheme.typography.bodySmall)
@@ -295,7 +340,7 @@ class MainActivity:ComponentActivity() {
                 Spacer(Modifier.height(12.dp))
                 LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)) {
                     items(tickets,key={it.id}) { t ->
-                        val m=mapped[t.matchId]
+                        val m=ticketMatches[t.matchId] ?: mapped[t.matchId]
                         val result=m?.let{scoreResult(it)}
                         val state=if(result==null) "Ожидается" else if(result==t.outcome) "Выигрыш +${"%.2f".format(t.stake*(t.price-1))}" else "Проигрыш −${"%.2f".format(t.stake)}"
                         ElevatedCard {
