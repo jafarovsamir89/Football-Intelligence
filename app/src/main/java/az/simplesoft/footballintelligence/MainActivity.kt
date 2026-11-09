@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence
 
 import android.os.Bundle
+import androidx.compose.ui.platform.LocalContext
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.content.Context
@@ -61,7 +62,7 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
         try {
             for (m in matches) {
                 // Do not overwrite a previously settled result with an incomplete API record.
-                db.execSQL("INSERT INTO matches(id,league,home,away,kickoff,finished,home_score,away_score) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET league=excluded.league,home=excluded.home,away=excluded.away,kickoff=excluded.kickoff,finished=CASE WHEN excluded.finished=1 THEN 1 ELSE matches.finished END,home_score=COALESCE(excluded.home_score,matches.home_score),away_score=COALESCE(excluded.away_score,matches.away_score)",
+                db.execSQL("INSERT OR REPLACE INTO matches(id,league,home,away,kickoff,finished,home_score,away_score) VALUES(?,?,?,?,?,?,?,?)",
                     arrayOf(m.id,m.league,m.home,m.away,m.kickoff,if(m.finished) 1 else 0,m.homeScore,m.awayScore))
             }
             db.setTransactionSuccessful()
@@ -137,6 +138,7 @@ class MainActivity:ComponentActivity() {
 }
 
 @Composable fun FootballScreen(store:Store) {
+    val activity = LocalContext.current as ComponentActivity
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -175,9 +177,9 @@ class MainActivity:ComponentActivity() {
                 connection.disconnect()
                 val list=parseMatches(JSONArray(body),league)
                 store.upsert(list)
-                runOnUiThreadCompat { revision++; downloading=false;message="Сохранено матчей: ${list.size} ($league). Все данные доступны офлайн." }
+                activity.runOnUiThread { revision++; downloading=false;message="Сохранено матчей: ${list.size} ($league). Все данные доступны офлайн." }
             } catch(e:Exception) {
-                runOnUiThreadCompat { downloading=false;message="Ошибка сети или данных: ${e.message}" }
+                activity.runOnUiThread { downloading=false;message="Ошибка сети или данных: ${e.message}" }
             }
         }.start()
     }
