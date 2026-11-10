@@ -1,5 +1,20 @@
 # Development log
 
+## 2026-11-10 — avoid exponential delays between first-run import segments
+
+### Finding and change
+
+- Continued passive observation of the API 26 Android 8 install. At 03:47 UTC the DB contained 32,680 matches; OpenFootball was `OK`/25,904, OpenLigaDB was `PARTIAL`/9,392, and 114 league-season states had been processed. The lease was free and Android had scheduled the next retry about nine minutes later. Network validation/ping succeeded.
+- The delay was caused by returning `Result.retry()` for the expected eight-minute time budget. WorkManager applies exponential retry backoff, so routine progress was delayed as though the provider had failed.
+- Split a normal time-budget continuation from actual provider/network errors. A time-budget hit now appends another connected one-time Worker with `ExistingWorkPolicy.APPEND_OR_REPLACE` and returns success for the current segment. This continues after healthy work or resets a failed/cancelled chain. Actual request/catalog errors and lock contention still use retry/backoff. Periodic refresh can also append its continuation to the same one-time chain.
+- Added four tests for continuation, success and retry routing. Updated the architecture, data-source, zero-touch, roadmap, limitations, testing and agent instructions to distinguish normal continuation from failure retry.
+
+### Verification and next actions
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally: 79 tests, 0 failures, 0 errors, 0 skipped; debug APK assembled. `git diff --check` passed.
+- This revision is not yet committed or CI-verified. Next: push the code/docs milestone, wait for GitHub Actions, then update-install the stable-signed artifact on API 26 without uninstalling or clearing its database. Verify the existing cache survives, queued continuation makes progress without the old exponential pause, and both provider states reach `OK` if the public source catalog permits it. Do not claim full API 26 completion before inspecting provider states.
+- The API 26 WebViews continue to show no visible page text. This change does not alter bookmaker capture or bypass site protections. API 34 offline cache and the existing full multi-provider sync remain verified in the prior entries.
+
 ## 2026-11-09 — repository audit and analytics foundation
 
 ### Work completed

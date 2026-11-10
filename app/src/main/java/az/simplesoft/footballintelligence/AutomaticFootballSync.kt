@@ -33,6 +33,16 @@ import kotlinx.coroutines.withContext
 private const val PERIODIC_SYNC_NAME = "football-intelligence-daily-sync"
 private const val ONCE_SYNC_NAME = "football-intelligence-sync-now"
 private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, below the provider's 60/minute cap.
+private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
+
+internal enum class SyncNextStep { CONTINUE, SUCCESS, RETRY }
+
+internal fun decideSyncNextStep(retryNeeded: Boolean, continuationNeeded: Boolean, anySuccess: Boolean): SyncNextStep = when {
+    retryNeeded -> SyncNextStep.RETRY
+    continuationNeeded -> SyncNextStep.CONTINUE
+    anySuccess -> SyncNextStep.SUCCESS
+    else -> SyncNextStep.RETRY
+}
 
 object FootballSyncScheduler {
     fun scheduleOnAppOpen(context: Context) {
@@ -80,6 +90,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         val seasonCount = 5
         var anySuccess = false
         var retryNeeded = false
+        var continuationNeeded = false
         val summaryText = mutableListOf<String>()
 
         val openFootball = runCatching { OpenFootballSync(store).sync(today, startedAt) }
@@ -96,6 +107,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             )
             anySuccess = outcome.successAtMillis != null
             retryNeeded = retryNeeded || outcome.retryNeeded
+            continuationNeeded = continuationNeeded || outcome.continuationNeeded
             summaryText += "OpenFootball ${outcome.status}: ${outcome.records}"
         }.onFailure { error ->
             retryNeeded = true
@@ -118,6 +130,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             )
             anySuccess = anySuccess || outcome.successAtMillis != null
             retryNeeded = retryNeeded || outcome.retryNeeded
+            continuationNeeded = continuationNeeded || outcome.continuationNeeded
             summaryText += "OpenLigaDB ${outcome.status}: ${outcome.records}"
         }.onFailure { error ->
             retryNeeded = true
@@ -126,11 +139,12 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         }
 
         val linkedOdds = runCatching { store.relinkUnmatchedBookmakerOdds() }.getOrDefault(0)
-        setProgress(workDataOf("stage" to "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds))
-        when {
-            retryNeeded -> Result.retry()
-            anySuccess -> Result.success()
-            else -> Result.retry()
+        val nextStep = decideSyncNextStep(retryNeeded, continuationNeeded, anySuccess)
+        setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds))
+        when (nextStep) {
+            SyncNextStep.RETRY -> Result.retry()
+            SyncNextStep.SUCCESS -> Result.success()
+            SyncNextStep.CONTINUE -> if (enqueueContinuation()) Result.success() else Result.retry()
         }
         } finally {
             try {
@@ -140,6 +154,16 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             }
         }
     }
+
+    private fun enqueueContinuation(): Boolean = runCatching {
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val continuation = OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>()
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        WorkManager.getInstance(applicationContext)
+            .enqueueUniqueWork(ONCE_SYNC_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, continuation)
+    }.isSuccess
 }
 
 private data class SyncOutcome(
@@ -147,6 +171,7 @@ private data class SyncOutcome(
     val records: Int,
     val successAtMillis: Long?,
     val retryNeeded: Boolean,
+    val continuationNeeded: Boolean,
     val errors: List<String>,
 )
 
@@ -214,6 +239,7 @@ private class OpenFootballSync(private val store: Store) {
         var recordCount = 0
         var completedFiles = 0
         var needsRetry = false
+        var continuationNeeded = false
         var consecutiveErrors = 0
         val seasons = OpenFootballJsonParser.planSeasons(today, 5)
         for (season in seasons) {
@@ -222,8 +248,8 @@ private class OpenFootballSync(private val store: Store) {
             if (directory.isEmpty()) continue
             for (file in directory) {
                 if (System.currentTimeMillis() - syncStartedAt >= TimeUnit.MINUTES.toMillis(8)) {
-                    needsRetry = true
-                    errors += "sync continues on the next WorkManager attempt"
+                    continuationNeeded = true
+                    errors += SYNC_CONTINUATION_MESSAGE
                     break
                 }
                 val key = "openfootball:${file.season}:${file.fileName}"
@@ -274,7 +300,8 @@ private class OpenFootballSync(private val store: Store) {
             },
             records = recordCount,
             successAtMillis = System.currentTimeMillis().takeIf { completedFiles > 0 },
-            retryNeeded = needsRetry || errors.isNotEmpty(),
+            retryNeeded = needsRetry || errors.any { it != SYNC_CONTINUATION_MESSAGE },
+            continuationNeeded = continuationNeeded,
             errors = errors,
         )
     }
@@ -325,6 +352,7 @@ private class OpenLigaDbSync(private val store: Store) {
         var successfulLeagues = 0
         var catalogsFound = 0
         var retryNeeded = false
+        var continuationNeeded = false
         val started = syncStartedAt
 
         seasonLoop@ for (seasonYear in today.year downTo today.year - 4) {
@@ -333,8 +361,8 @@ private class OpenLigaDbSync(private val store: Store) {
             catalogsFound++
             for (league in catalog) {
                 if (System.currentTimeMillis() - started >= maxRuntimeMillis) {
-                    retryNeeded = true
-                    errors += "sync continues on the next WorkManager attempt"
+                    continuationNeeded = true
+                    errors += SYNC_CONTINUATION_MESSAGE
                     break@seasonLoop
                 }
                 val leagueKey = "${league.shortcut.lowercase()}:${league.season}"
@@ -403,7 +431,7 @@ private class OpenLigaDbSync(private val store: Store) {
             }
         }
         if (catalogsFound == 0) {
-            return SyncOutcome("ERROR", 0, null, true, listOf("OpenLigaDB football catalogs were unavailable."))
+            return SyncOutcome("ERROR", 0, null, true, false, listOf("OpenLigaDB football catalogs were unavailable."))
         }
         return SyncOutcome(
             status = when {
@@ -414,6 +442,7 @@ private class OpenLigaDbSync(private val store: Store) {
             records = recordCount,
             successAtMillis = System.currentTimeMillis().takeIf { successfulLeagues > 0 },
             retryNeeded = retryNeeded,
+            continuationNeeded = continuationNeeded,
             errors = errors,
         )
     }

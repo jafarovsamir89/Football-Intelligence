@@ -25,7 +25,7 @@ C. Дополнительно изучить независимые официа
 - `DataSource` abstraction + `ProviderRegistry`, capability flags (schedule, result, statistics, odds, tipster, live), source attribution and freshness.
 - WorkManager для best-effort periodic sync с network constraint; также синхронизация на запуске с TTL и запретом параллельных дублей.
 - Periodic WorkManager НЕ гарантирует точные интервалы/непрерывную работу на выключенном телефоне. UI показывает последнюю успешную синхронизацию.
-- HTTP-кэш, ограничение скорости, таймауты, экспоненциальный backoff, хранить time fetched и source published time, дедупликацию и стабильные provider IDs. Не ломать прежнюю SQLite и пользовательские записи.
+- HTTP-кэш, ограничение скорости, таймауты, экспоненциальный backoff для сетевых ошибок, хранить time fetched и source published time, дедупликацию и стабильные provider IDs. Нормальное продолжение после лимита 8 минут добавляется в последовательную WorkManager-очередь без роста retry-backoff. Не ломать прежнюю SQLite и пользовательские записи.
 - Составлять прогнозы только из завершённых исторических результатов до фактического forecast cutoff.
 - При отсутствии точного времени начала исторического матча консервативно сдвигать `available_at` после даты финального результата.
 

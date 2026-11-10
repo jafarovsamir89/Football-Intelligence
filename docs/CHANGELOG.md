@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — queue bounded sync continuation without retry backoff
+
+- Separate the normal eight-minute work budget from actual provider/network failures. At the budget boundary, append another connected one-time Worker to the unique chain with `APPEND_OR_REPLACE` and complete the current Worker; failed requests still return `Result.retry()` and keep WorkManager backoff.
+- Add unit coverage for continuation/success/retry routing. Locally verified 79 unit tests and debug APK assembly; Android/API 26 verification of the signed CI artifact is pending.
+
 ## Unreleased — close sync database helpers and clarify queued status
 
 - Close the temporary SQLite helper used to read provider freshness, close the worker's database after each attempt (including a lock-contention retry), and close the activity-owned helper on destroy.
