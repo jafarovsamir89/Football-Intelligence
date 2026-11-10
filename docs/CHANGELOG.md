@@ -1,10 +1,16 @@
 # Changelog
 
-## Unreleased — retain provenance and scores across provider duplicates (local API 34 passed; CI pending)
+## Unreleased — verify provider-failure retry routing (CI and API 34 update-install passed)
+
+- Add an isolated API 34 integration test for the production `AutomaticFootballSyncWorker`: airplane mode and Wi-Fi are disabled, a local rejecting proxy receives both provider catalog routes, and a random test database is removed afterward.
+- Verify both provider errors lead the real Worker to `Result.retry()`, persist error states without false successful timestamps, and release the database sync lease.
+- Verification: 88 JVM and 9 API 34 instrumentation tests passed locally and in Actions [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), along with APK build, stable signing and artifact upload. Update-install on the existing API 34 app retained all recorded data. WorkManager's delayed retry scheduling still needs direct integration coverage.
+
+## Unreleased — retain provenance and scores across provider duplicates (CI and API 34 update-install passed)
 
 - Merge source labels, URLs and capture time for naturally matched fixtures even when the incoming provider has no result or no more precise kickoff.
 - Keep a settled score when an incomplete source arrives or a second provider reports a conflicting score. Promote date-only fixtures to an exact kickoff and final score when the incoming provider has valid timing/results.
-- Add two isolated SQLite Android instrumentation tests. Local verification: 88 JVM + 7 API 34 instrumentation tests and APK build passed. CI pending.
+- Add two isolated SQLite Android instrumentation tests. Local verification: 88 JVM + 7 API 34 instrumentation tests and APK build passed; Actions [42767934594](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42767934594) passed. The stable-signed APK update-installed without data clear.
 
 ## Unreleased — freeze prospective forecast snapshots (CI and API 34 update-install passed)
 

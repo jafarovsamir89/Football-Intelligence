@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — Worker provider-failure retry routing (local API 34 passed; CI pending)
+## 2026-11-10 — Worker provider-failure retry routing (CI and API 34 update-install passed)
 
 ### Change
 
@@ -12,7 +12,9 @@
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 9 API 34 instrumentation tests, 0 failures/errors/skips; the aggregate report completed in 13.187s. The separate Android test emulator returned to its original airplane/Wi-Fi settings, and the primary database was not used.
-- First CI attempt [42771702073](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42771702073) was cancelled because proxy selection alone did not guarantee isolation on a networked GitHub emulator. This revision explicitly disables network access before executing the worker. Commit/push and a new CI run are next; WorkManager delayed retry/backoff rescheduling remains a distinct gap.
+- Commit `6073cfe` passed Actions [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883): 88 JVM tests, all 9 API 34 instrumentation tests, APK build, stable signing and artifact upload. The APK's certificate SHA-256 matched the established key: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Update-installed the CI APK on the primary API 34 emulator using `adb install -r` only; no uninstall or data clear. Before and after: schema v11, 39,181 matches, 184 competitions, 350 bookmaker snapshots, 69 accumulators/384 legs, and 62 forecast snapshots/0 settlements. Both automatic source statuses remained `OK`; MainActivity resumed without a fatal log. The first proxy-only CI attempt [42771702073](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42771702073) was cancelled because it did not guarantee isolation on a networked emulator; the network-disabled revision passed.
+- Next: directly verify WorkManager's delayed retry/backoff rescheduling with a deterministic isolated test. That scheduling path is distinct from the now-tested real Worker's failure-to-`Result.retry()` decision.
 
 ## 2026-11-10 — WorkManager offline gating instrumentation (CI and API 34 update-install passed)
 
