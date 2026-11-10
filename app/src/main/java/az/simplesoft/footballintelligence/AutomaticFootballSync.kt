@@ -34,6 +34,8 @@ private const val PERIODIC_SYNC_NAME = "football-intelligence-daily-sync"
 private const val ONCE_SYNC_NAME = "football-intelligence-sync-now"
 private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, below the provider's 60/minute cap.
 private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
+internal const val PERIODIC_SYNC_INTERVAL_HOURS = 24L
+internal const val APP_OPEN_SYNC_STALE_AFTER_HOURS = 8L
 
 internal enum class SyncNextStep { CONTINUE, SUCCESS, RETRY }
 
@@ -44,30 +46,54 @@ internal fun decideSyncNextStep(retryNeeded: Boolean, continuationNeeded: Boolea
     else -> SyncNextStep.RETRY
 }
 
+internal fun isAppOpenSyncStale(mostRecentSuccessAtMillis: Long?, nowMillis: Long): Boolean =
+    mostRecentSuccessAtMillis == null ||
+        mostRecentSuccessAtMillis <= 0L ||
+        nowMillis - mostRecentSuccessAtMillis >= TimeUnit.HOURS.toMillis(APP_OPEN_SYNC_STALE_AFTER_HOURS)
+
 object FootballSyncScheduler {
     fun scheduleOnAppOpen(context: Context) {
         val appContext = context.applicationContext
-        val manager = WorkManager.getInstance(appContext)
-        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val periodic = PeriodicWorkRequestBuilder<AutomaticFootballSyncWorker>(24, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-        manager.enqueueUniquePeriodicWork(PERIODIC_SYNC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
-
         val summaries = runCatching {
             Store(appContext).let { store ->
                 try { store.providerSyncSummaries() } finally { store.close() }
             }
         }.getOrDefault(emptyList())
         val mostRecentSuccess = summaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull() ?: 0L
-        val stale = mostRecentSuccess == 0L || System.currentTimeMillis() - mostRecentSuccess >= TimeUnit.HOURS.toMillis(8)
-        if (stale) {
-            val immediate = OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>()
+        enqueueForFreshness(appContext, mostRecentSuccess, System.currentTimeMillis())
+    }
+
+    /**
+     * Enqueues the app-open and periodic work for a given freshness snapshot.
+     * The optional delay keeps instrumentation requests queued without making external HTTP calls.
+     */
+    internal fun enqueueForFreshness(
+        context: Context,
+        mostRecentSuccessAtMillis: Long?,
+        nowMillis: Long,
+        immediateInitialDelayMillis: Long = 0L,
+    ) {
+        require(immediateInitialDelayMillis >= 0L)
+        val appContext = context.applicationContext
+        val manager = WorkManager.getInstance(appContext)
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val periodic = PeriodicWorkRequestBuilder<AutomaticFootballSyncWorker>(
+            PERIODIC_SYNC_INTERVAL_HOURS,
+            TimeUnit.HOURS,
+        )
+            .setConstraints(constraints)
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            .build()
+        manager.enqueueUniquePeriodicWork(PERIODIC_SYNC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
+
+        if (isAppOpenSyncStale(mostRecentSuccessAtMillis, nowMillis)) {
+            val immediateBuilder = OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>()
                 .setConstraints(constraints)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-                .build()
-            manager.enqueueUniqueWork(ONCE_SYNC_NAME, ExistingWorkPolicy.KEEP, immediate)
+            if (immediateInitialDelayMillis > 0L) {
+                immediateBuilder.setInitialDelay(immediateInitialDelayMillis, TimeUnit.MILLISECONDS)
+            }
+            manager.enqueueUniqueWork(ONCE_SYNC_NAME, ExistingWorkPolicy.KEEP, immediateBuilder.build())
         }
     }
 

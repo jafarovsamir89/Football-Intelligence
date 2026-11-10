@@ -25,6 +25,7 @@ Coverage includes:
 - Streaming chronological walk-forward equivalence with independent as-of Elo fits, shared availability batches, and future-result exclusion.
 - Equal-width one-vs-rest calibration bins: per-outcome sample sizes, observed frequencies, mean predicted probabilities, bin edge handling and empty-input behavior.
 - AndroidJUnitRunner SQLite upgrades from the original v1 schema through v10 and from v9 to v10, preserving user records and final scores; tests use random isolated database names.
+- WorkManager instrumentation checks the persisted 24-hour periodic request and its CONNECTED constraint, a delayed one-time request and no started attempts, KEEP behavior across repeated enqueue, and fresh-data suppression. The delayed test request is cancelled; no data provider is contacted.
 
 The API 34 database has 39,181 merged rows, 30,090 completed-result rows, 184 competitions, season keys `2022` through `2026-27`; provider source counts are OpenFootball 25,904 and OpenLigaDB 17,776. Current code rejects 566 previously stored placeholder-identity rows from reads, model input and backtests (kept in the database for ID/migration safety). The installed app recomputed post-filter automatic walk-forward: 29,588 targets, 19,185 forecasts and 10,403 insufficient-history skips. Older unfiltered figures are obsolete.
 
@@ -51,7 +52,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 ## Remaining verification gaps
 
 - SQLite v1→v10 and v9→v10 migration preservation, plus settled-score retention during incomplete refresh, have isolated instrumentation coverage. Cross-provider merge/score retention still needs dedicated instrumentation.
-- WorkManager lock contention/retry is covered by existing logic; pure routing tests cover success, continuation and retry decisions. API 26 verified the actual enqueue and completion path across a normal runtime boundary. Dedicated WorkManager integration tests for network constraints, ETag/304, pacing and lock expiry remain absent.
+- The new WorkManager instrumentation verifies scheduled request constraints and freshness decisions without running the worker. Worker retry/backoff, actual offline gating, continuation execution, ETag/304, provider pacing and lock expiry still lack dedicated integration tests. API 26 has a separate observed real continuation run.
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
 - Compose accessibility and physical-device layout remain unverified. API 26 cold start skipped 44 frames during initial JIT compilation on the latest CI APK. On a local API 34 cold start after moving the 39k match-list query to IO, 68 frames were skipped during JIT startup, the activity reached `Displayed` in 3.6s, and its Compose controls were present in the UI hierarchy; no fresh ANR or SQLite-helper leak was logged. Repeat cold/warm measurements remain open.

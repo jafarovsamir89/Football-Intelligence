@@ -1,5 +1,19 @@
 # Development log
 
+## 2026-11-10 — WorkManager queue instrumentation (local API 34 passed; CI pending)
+
+### Change
+
+- Extracted the freshness-driven enqueue path so production app-open scheduling and instrumentation exercise the same queue construction. The app still uses a zero-delay one-time request; instrumentation supplies a one-hour delay to inspect persistent WorkManager state without starting network sync.
+- Added unit checks for the eight-hour stale boundary and an Android instrumentation test for the connected-network constraint, 24-hour periodic interval, queued/no-attempt state, unique KEEP behavior on repeated enqueue, and suppression of one-time work while provider data is fresh.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 3 tests on the isolated API 34 AVD: 2 SQLite migration tests and 1 WorkManager scheduler test.
+- Local result XML totals: 84 JVM tests + 3 Android instrumentation tests, 0 failures/errors/skips. The delayed request was cancelled in `finally`; no Worker or HTTP sync remained queued on the test emulator.
+- Next: commit and push this milestone, verify the API 34 emulator test and APK in Actions, then expand coverage to worker retry/offline behavior and cross-provider score retention. Immutable forecast snapshots remain a separate roadmap task.
+
 ## 2026-11-10 — isolated SQLite migration instrumentation (CI and API 34 update-install passed)
 
 ### Change

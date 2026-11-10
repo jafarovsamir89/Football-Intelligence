@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — verify WorkManager scheduling without network side effects
+
+- Reuse the production freshness scheduling path in instrumentation and assert the 24-hour periodic request, CONNECTED network constraints, no duplicate unique work on repeated app open, and no immediate request for fresh source data.
+- Add an eight-hour stale boundary unit test. The instrumentation request has a one-hour initial delay and is cancelled afterward, so the test verifies persisted WorkManager state without triggering a public-data import.
+- Local verification: 84 JUnit and 3 API 34 instrumentation tests passed; CI verification is pending.
+
 ## Unreleased — isolate and test SQLite upgrade paths
 
 - Allow a test-specific Store database name while retaining the unchanged production default.
