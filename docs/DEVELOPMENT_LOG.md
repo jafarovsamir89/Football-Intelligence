@@ -1,17 +1,31 @@
 # Development log
 
-## 2026-11-10 — WorkManager offline gating instrumentation (local API 34 passed; CI pending)
+## 2026-11-10 — Worker provider-failure retry routing (local API 34 passed; CI pending)
+
+### Change
+
+- Added an Android instrumentation test that executes the real `AutomaticFootballSyncWorker` against a local rejecting HTTP proxy. The proxy selector routes only the worker's public catalog requests to loopback and closes them; no live provider request is made.
+- The worker runs with a random isolated SQLite filename and test context. The test verifies requests reached both `api.github.com` and `api.openligadb.de`, the worker returns WorkManager `Result.retry()`, both provider states report `ERROR` with no successful timestamp, and the sync lock is released. The proxy selector and temporary database are restored/deleted in `finally`.
+- This exercises the production decision from actual provider failures through the Worker's retry result. It does not yet exercise WorkManager's delayed retry scheduling/resumption.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 9 API 34 instrumentation tests, 0 failures/errors/skips; the aggregate report completed in 12.117s. The separate Android test emulator returned to its original airplane/Wi-Fi settings, and the primary database was not used.
+- The new retry integration change is local only; commit and GitHub Actions verification are next. WorkManager delayed retry/backoff rescheduling remains a distinct gap.
+
+## 2026-11-10 — WorkManager offline gating instrumentation (CI and API 34 update-install passed)
 
 ### Change
 
 - Added an integration test that turns airplane mode on and disables Wi-Fi through Android's supported system commands, enqueues the same zero-delay `CONNECTED` sync used by app-open scheduling, and waits for both Wi-Fi to be off and `ConnectivityManager.activeNetwork` to be null before checking the queue. Both immediate and periodic work must stay `ENQUEUED` with zero attempts and no progress.
-- The test always cancels its unique work and restores the original airplane-mode value in `finally`; it runs only on the isolated instrumentation emulator.
+- The test always cancels its unique work and restores the original airplane-mode and Wi-Fi values in `finally`; it runs only on the isolated instrumentation emulator.
 
 ### Verification and next action
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 8 Android instrumentation tests on API 34. The test emulator returned to airplane mode off; the primary API 34 database was not touched by instrumentation.
-- This test change is local only; commit and CI verification are next. The current CI APK at `fab515a` is independently verified and installed on the primary emulator.
+- Commit `8d9da3c` passed Actions [42769411532](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42769411532): 88 JVM tests, 8 API 34 instrumentation tests, APK build, stable signing and upload. The artifact signer SHA-256 matched the established key. Update-installed on the primary API 34 app without uninstall/data clear; schema v11, 39,181 matches, 350 quote snapshots, 69 accumulators/384 legs, and 62 forecasts/0 settlements were retained. MainActivity resumed without a fatal log.
 
 ## 2026-11-10 — cross-provider duplicate provenance and score retention (CI and API 34 update-install passed)
 
@@ -27,7 +41,7 @@
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 7 instrumentation tests on the isolated API 34 emulator. Test databases are random, isolated, and deleted in `finally`; the primary API 34 user database was untouched.
 - `git diff --check` passed. Commit `fab515a` passed Actions [42767934594](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42767934594): 88 JVM tests, all 7 API 34 instrumentation tests, APK build, stable signing, and artifact upload.
 - Verified CI signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; update-installed the artifact over the existing API 34 app without uninstall or data clear. Before and after install: schema v11, 39,181 matches, 315 bookmaker snapshots, 69 accumulators/384 legs, 62 prospective forecasts/0 settlements. MainActivity resumed with no fatal log.
-- Next: commit/push the offline WorkManager integration test and verify its Actions run. Retry/backoff still has pure routing tests and runtime observations but lacks a focused integration test.
+- Next: commit and CI-verify the real Worker failure-to-`Result.retry()` test; then consider direct WorkManager delayed retry/backoff rescheduling. The API 26 continuation check covers a separate path.
 
 ## 2026-11-10 — prospective forecast ledger and cutoff correction (CI and API 34 update-install passed)
 

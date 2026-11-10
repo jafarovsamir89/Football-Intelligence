@@ -39,6 +39,7 @@ dependencies {
     testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.work:work-testing:2.12.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
     implementation("androidx.compose.runtime:runtime-livedata")
 }
