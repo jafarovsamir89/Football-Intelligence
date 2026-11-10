@@ -154,6 +154,22 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 1. Commit and push this substantial stage, wait for GitHub Actions, download the CI APK, verify its certificate and update-install over the existing app without losing SQLite. Record the CI run.
 2. Add dedicated migration/WorkManager tests and API 26 verification; keep odds-reuse permission and device/timezone compatibility clearly open.
 
+## 2026-11-09 — CI artifact verified; API 26 cold-start responsiveness follow-up (local build passed; CI pending)
+
+- Commit `0bff2f6` was pushed. GitHub Actions run [42744967721](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42744967721) passed unit tests, APK build, stable personal test signing and artifact upload. CI certificate SHA-256 matched the saved key fingerprint `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Downloaded and update-installed that artifact over API 34 without uninstall. SQLite v10 remained at 39,181 match rows and retained bookmaker snapshot and accumulator history (120 quote snapshots / 59 accumulator rows at inspection).
+- Installed the same artifact on a clean API 26 emulator (Android 8.0). `MainActivity` stayed resumed with no fatal exception. The first automatic history sync was still running/retrying at 10,445 local match rows; this is a partial observation, not a completed API 26 sync. Both bookmaker visible-page collectors returned `ERROR` / no visible data on this old emulator WebView. Do not bypass it; this may differ on a handset with an updated System WebView. API 34 POC remains the only successful live odds page validation.
+- The API 26 cold-open run logged skipped frames while 30k-history reads and forecast construction were synchronous in Compose. Moved league history reads to `Dispatchers.IO`, bulk forecast assembly and selected-match Elo fitting to `Dispatchers.Default`, and stopped reloading the full history for every WorkManager progress revision. API 26 relaunch after this local change had only a short initial JIT frame skip in the observed log; repeat a warm/cold comparison after CI.
+- The coupon screen on API 34 still shows fresh-source counts and puts real same-book TOPAZ coupons first; it retains the source quote list behind an expand control. The stable-key local build update preserved schema v10 and all 39,181 match rows.
+- Latest full local `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` after the off-main-thread change passed: 75 tests, 0 failures/errors, APK built. API 34 local update install and API 26 same-key update both succeeded. Current `MainActivity.kt` performance change is uncommitted and needs its own Actions verification.
+
+### Next steps
+
+1. Commit/push the responsiveness fix with this log update; verify Actions test/build/signature.
+2. Update-install that CI APK on API 34 and API 26. Verify no launch crash, collect cold/warm frame logs, and check existing SQLite preservation.
+3. Let the API 26 first-run retry continue until provider statuses/counts settle or a repeatable external connectivity condition explains the limit. Do not call it complete while it is partial.
+4. Report API 26 WebView as unavailable for that emulator if it still yields no visible page; never use alternate hidden endpoints or evasion. Existing API 34 integration remains tested.
+
 ## 2026-11-09 — Misli WebView proof and first clean-install capture (local build passed; data sync still running)
 
 ### Implemented

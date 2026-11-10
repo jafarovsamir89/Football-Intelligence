@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The current local revision passed the full `:app:testDebugUnitTest :app:assembleDebug` command with **75 JUnit tests** and a successful APK build. The matching CI artifact is still pending.
+The current local revision passed the full `:app:testDebugUnitTest :app:assembleDebug` command with **75 JUnit tests** and a successful APK build. The current MainActivity threading change is uncommitted; CI run [42744967721](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42744967721) verifies preceding commit `0bff2f6`.
 
 Coverage includes:
 
@@ -31,17 +31,19 @@ After placeholder exclusion, the installed Backtest screen reported 29,588 targe
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes. No API 26 emulator or physical phone has yet been used.
 
+The CI-signed artifact for `0bff2f6` was installed on an Android 8 / API 26 emulator. The app opened and remained active without a fatal exception. First-run WorkManager sync was still partial at 10,445 rows when inspected; both bookmaker WebViews reported that no visible page text was returned. This does not verify full API 26 sync or current bookmaker capture on that old WebView. The subsequent local UI-thread change passes tests/build but is awaiting CI and repeat API 26 checks. No physical handset has been tested.
+
 ## CI / APK
 
 GitHub Actions run [42729262549](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42729262549) passed unit tests, `assembleDebug`, and artifact upload for commit `4edec14`. The downloaded artifact (`football-intelligence-debug-apk`, 17,140,940 bytes) reports package `az.simplesoft.footballintelligence`, version `0.1.0`, minSdk 26 and targetSdk 35. It installed after a clean uninstall on API 34, opened the main screen, started first-open sync, and captured 8 Misli plus 25 eTopaz rows. Its background history sync was still running at the first inspection (5,394 rows, 15 competitions); the equivalent local build had already been followed through to completion above.
 
-The first CI artifact used the runner's generated debug certificate, so Android correctly rejected updating a different-key installation. A private test signing key is stored only in repository Actions Secrets; the workflow re-signs CI artifacts with it. Final run [42731992205](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42731992205) passed tests, build, stable signing, and artifact upload. The downloaded artifact's certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched prior CI APKs and update-installed without uninstalling. The key is not checked into Git.
+The first CI artifact used the runner's generated debug certificate, so Android correctly rejected updating a different-key installation. A private test signing key is stored only in repository Actions Secrets; the workflow re-signs CI artifacts with it. Latest successful run [42744967721](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42744967721) passed 75 tests, build, stable signing, and artifact upload for `0bff2f6`. Its certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched prior CI APKs; update-install on API 34 preserved 39,181 matches, 120 quote snapshots and 59 accumulator records. The key is not checked into Git.
 
 ## Remaining verification gaps
 
 - SQLite v1–v10 upgrade preservation and cross-provider merge/score retention still need dedicated instrumentation coverage, despite local v10 update-install preservation.
 - WorkManager lock contention/retry has been corrected and end-to-end first-run continuation across the 8-minute boundary was observed on API 34; dedicated WorkManager integration tests for enqueue, network constraints, ETag/304, pacing, and lock expiry are still absent.
-- First-open API 34 sync is verified, but should be repeated on API 26/physical hardware.
+- First-open API 34 full sync is verified. API 26 artifact smoke test opened, but sync remained partial at inspection and bookmaker WebView returned no visible text. Recheck sync on a completed run and use a physical handset; current async-compute change still needs API 26 CI-artifact retest.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
-- Compose accessibility, layout on small screens, Android 8/API 26 execution, large database performance, and offline refresh behavior need device checks.
+- Compose accessibility and physical-device layout remain unverified. A cold API 26 launch previously skipped many frames; history/model calculations were moved off the UI thread, but repeat measurements on the current revision remain open.
 - The automatic-source walk-forward is retrospective on current files. Calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.

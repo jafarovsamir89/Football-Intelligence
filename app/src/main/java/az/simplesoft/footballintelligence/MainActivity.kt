@@ -41,6 +41,7 @@ import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.analytics.EloEngine
+import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
@@ -1004,16 +1005,17 @@ class MainActivity:ComponentActivity() {
     val activeBacktestCode=selectedBacktestCode.takeIf { it in importedCompetitionCodes }
         ?: importedCompetitionCodes.firstOrNull().orEmpty()
     val active=matches.firstOrNull { it.id==selected }
-    val eloForecast=remember(active?.id,revision) {
-        active?.let { match ->
-            val kickoff=runCatching { Instant.parse(match.kickoff).toEpochMilli() }.getOrNull()
-            if(match.finished||kickoff==null||!match.exactKickoff) null
-            else EloEngine.forecast(
-                history=store.historicalResultsBefore(match.league,kickoff),
-                forecastKickoffMillis=kickoff,
-                homeTeam=match.home,
-                awayTeam=match.away,
-            )
+    var eloForecast by remember { mutableStateOf<EloForecast?>(null) }
+    LaunchedEffect(active?.id,revision) {
+        val match=active
+        val kickoff=match?.let { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrNull() }
+        if(match==null||match.finished||kickoff==null||!match.exactKickoff) {
+            eloForecast=null
+        } else {
+            val history=withContext(Dispatchers.IO) { store.historicalResultsBefore(match.league,kickoff) }
+            eloForecast=withContext(Dispatchers.Default) {
+                EloEngine.forecast(history,kickoff,match.home,match.away)
+            }
         }
     }
     val quoteList=remember(selected,revision) { if(selected>=0) store.quotes(selected) else emptyList() }
@@ -1025,23 +1027,41 @@ class MainActivity:ComponentActivity() {
     val misliOdds=remember(revision) { store.freshBookmakerOdds("misli") }
     val topazSyncState=remember(revision) { store.bookmakerSyncState("topaz") }
     val topazOdds=remember(revision) { store.freshBookmakerOdds("topaz") }
-    val historicalByLeague=remember(revision) { store.historicalResultsByLeague() }
-    val forecastedMatches=remember(matches,misliOdds,topazOdds,revision) {
+    val historyRefreshKey=syncSummaries.map { it.providerId to it.lastSuccessAtMillis }
+    var historicalByLeague by remember { mutableStateOf<Map<String,List<HistoricalMatch>>>(emptyMap()) }
+    var historyVersion by remember { mutableIntStateOf(0) }
+    LaunchedEffect(historyRefreshKey) {
+        val loaded=withContext(Dispatchers.IO) { store.historicalResultsByLeague() }
+        historicalByLeague=loaded
+        historyVersion++
+    }
+    val matchForecastKey=remember(matches) {
+        matches.map { listOf(it.id,it.league,it.home,it.away,it.kickoff,it.finished,it.homeScore,it.awayScore,it.exactKickoff,it.availableAtMillis) }.hashCode()
+    }
+    val oddsForecastKey=remember(misliOdds,topazOdds) {
+        (misliOdds+topazOdds).map { listOf(it.providerId,it.matchId,it.kickoffMillis,it.home,it.draw,it.away,it.capturedAtMillis) }.hashCode()
+    }
+    var forecastedMatches by remember { mutableStateOf<List<ForecastedMatch>>(emptyList()) }
+    LaunchedEffect(matchForecastKey,oddsForecastKey,historyVersion) {
+        val matchSnapshot=matches
+        val oddsSnapshot=misliOdds+topazOdds
+        val historySnapshot=historicalByLeague
         val now=System.currentTimeMillis()
-        val linkedOddsMatchIds=(misliOdds+topazOdds).mapNotNull { it.matchId }.toSet()
-        val futureMatches=matches.filter { !it.finished&&it.exactKickoff&&TeamDataQuality.isValidFixture(it.home,it.away) }
-            .sortedBy { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
-        val orderedMatches=(futureMatches.filter { it.id in linkedOddsMatchIds }+futureMatches.filterNot { it.id in linkedOddsMatchIds })
-            .distinctBy { it.id }.take(80)
-        orderedMatches.asSequence()
-            .mapNotNull { match ->
+        forecastedMatches=withContext(Dispatchers.Default) {
+            val linkedOddsMatchIds=oddsSnapshot.mapNotNull { it.matchId }.toSet()
+            val futureMatches=matchSnapshot.filter { !it.finished&&it.exactKickoff&&TeamDataQuality.isValidFixture(it.home,it.away) }
+                .sortedBy { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
+            val orderedMatches=(futureMatches.filter { it.id in linkedOddsMatchIds }+futureMatches.filterNot { it.id in linkedOddsMatchIds })
+                .distinctBy { it.id }.take(80)
+            orderedMatches.mapNotNull { match ->
                 val kickoff=runCatching { Instant.parse(match.kickoff).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
                 if(kickoff<=now) return@mapNotNull null
-                val history=historicalByLeague[match.league].orEmpty().filter { it.kickoffMillis<kickoff&&it.availableAtMillis<kickoff }
+                val history=historySnapshot[match.league].orEmpty().filter { it.kickoffMillis<kickoff&&it.availableAtMillis<kickoff }
                 val forecast=EloEngine.forecast(history,kickoff,match.home,match.away)
                 val probabilities=forecast.probabilities ?: return@mapNotNull null
                 ForecastedMatch(match.id,match.home,match.away,kickoff,probabilities)
-            }.toList()
+            }
+        }
     }
     val bookmakerCouponPrices=remember(misliOdds,topazOdds) {
         mapOf(
@@ -1241,17 +1261,20 @@ class MainActivity:ComponentActivity() {
                   Text("${niceMatchTime(active)} · ${if(active.finished) "Завершён" else "До начала"}",style=MaterialTheme.typography.labelSmall)
                   HorizontalDivider()
                   Text("Экспериментальный Elo-baseline",fontWeight=FontWeight.Bold)
+                  val activeForecast=eloForecast
                   if(active.finished) {
                       Text("Предматчевый расчёт для завершённого матча не показывается.",style=MaterialTheme.typography.bodySmall)
-                  } else if(eloForecast==null) {
-                      Text("Не удалось прочитать время начала; расчёт недоступен.",style=MaterialTheme.typography.bodySmall)
+                  } else if(!active.exactKickoff) {
+                      Text("Для этой записи есть только дата без точного kickoff; предматчевый расчёт недоступен.",style=MaterialTheme.typography.bodySmall)
+                  } else if(activeForecast==null) {
+                      Text("Расчёт Elo по локальной истории загружается…",style=MaterialTheme.typography.bodySmall)
                   } else {
-                      val probabilities=eloForecast.probabilities
+                      val probabilities=activeForecast.probabilities
                       if(probabilities==null) {
-                          Text("Недостаточно истории: ${eloForecast.matchesUsed} матчей в лиге, ${eloForecast.homeTeamMatches} для ${active.home} и ${eloForecast.awayTeamMatches} для ${active.away}. Для показа нужно минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} матчей в лиге и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} для каждой команды.",style=MaterialTheme.typography.bodySmall)
+                          Text("Недостаточно истории: ${activeForecast.matchesUsed} матчей в лиге, ${activeForecast.homeTeamMatches} для ${active.home} и ${activeForecast.awayTeamMatches} для ${active.away}. Для показа нужно минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} матчей в лиге и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} для каждой команды.",style=MaterialTheme.typography.bodySmall)
                       } else {
                           Text("Оценка 1X2: ${"%.1f".format(probabilities.home*100)}% / ${"%.1f".format(probabilities.draw*100)}% / ${"%.1f".format(probabilities.away*100)}%",fontWeight=FontWeight.SemiBold)
-                          Text("На основе ${eloForecast.matchesUsed} прошлых матчей лиги; ${active.home}: ${eloForecast.homeTeamMatches}, ${active.away}: ${eloForecast.awayTeamMatches}.",style=MaterialTheme.typography.bodySmall)
+                          Text("На основе ${activeForecast.matchesUsed} прошлых матчей лиги; ${active.home}: ${activeForecast.homeTeamMatches}, ${active.away}: ${activeForecast.awayTeamMatches}.",style=MaterialTheme.typography.bodySmall)
                       }
                       Text("Источник: сохранённые результаты OpenLigaDB этой лиги до времени начала матча. Elo с фиксированными параметрами, без калибровки и walk-forward проверки; экспериментальная оценка, не рекомендация и не показатель уверенности.",style=MaterialTheme.typography.bodySmall)
                   }
