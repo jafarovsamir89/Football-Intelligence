@@ -25,7 +25,7 @@
 
 ## Android APK
 
-Успешная сборка текущей ревизии: [GitHub Actions 42729262549](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42729262549), artifact `football-intelligence-debug-apk`. APK — тестовая debug-сборка, а не релиз для Play Store. Для установки с возможностью обновлять приложение без потери локальной базы скачивай artifact из Actions: дальнейшие CI APK будут подписываться одним приватным тестовым ключом; локальный APK с компьютера имеет другой debug-сертификат.
+Последняя успешная сборка: [GitHub Actions 42731002068](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42731002068), artifact `football-intelligence-debug-apk`. APK — тестовая debug-сборка, а не релиз для Play Store. CI APK подписываются стабильным приватным тестовым ключом, чтобы их можно было обновлять без удаления локальной базы; локальный APK с компьютера имеет другой debug-сертификат. Сборка с исправлением повторного запуска синхронизации ещё проверяется.
 
 Последняя локальная проверка: 62 JUnit-теста и `assembleDebug` прошли. Artifact Actions установлен на API 34 после чистой установки и автоматически начал заполнять локальную базу.
 

@@ -65,7 +65,8 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = Store(applicationContext)
         if (!store.tryAcquireProviderSyncLock(System.currentTimeMillis(), TimeUnit.MINUTES.toMillis(9))) {
-            return@withContext Result.success()
+            setProgress(workDataOf("stage" to "waiting_for_sync_lock"))
+            return@withContext Result.retry()
         }
         try {
         val startedAt = System.currentTimeMillis()
