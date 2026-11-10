@@ -797,6 +797,10 @@ class MainActivity:ComponentActivity() {
         FootballSyncScheduler.scheduleOnAppOpen(this)
         setContent { FootballScreen(store) }
     }
+    override fun onDestroy() {
+        store.close()
+        super.onDestroy()
+    }
 }
 
 /**
@@ -987,7 +991,7 @@ class MainActivity:ComponentActivity() {
     val lastSuccessfulSync=syncSummaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull()
     val syncStatusText=when {
         syncBusy -> "Идёт автоматическая синхронизация источников…"
-        syncQueued -> "Автоматическая синхронизация ожидает подключения к сети; локальная база доступна."
+        syncQueued -> "Автоматическая синхронизация стоит в очереди WorkManager; возможна системная задержка или ожидание сети. Локальная база доступна."
         lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
         else -> "Автоматическая синхронизация запланирована; ожидается сеть или первый успешный ответ источника."
     }
@@ -999,9 +1003,18 @@ class MainActivity:ComponentActivity() {
         val relinked=runCatching { withContext(Dispatchers.IO) { store.relinkUnmatchedBookmakerOdds() } }.getOrDefault(0)
         if(relinked>0) revision++
     }
-    val matches=remember(revision) { store.matches() }
-    val recentResults=remember(revision) { store.recentCompletedMatches() }
-    val importedCompetitionCodes=remember(revision) { store.importedCompetitionCodes() }
+    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
+    var recentResults by remember { mutableStateOf<List<Match>>(emptyList()) }
+    var importedCompetitionCodes by remember { mutableStateOf<List<String>>(emptyList()) }
+    val matchRefreshKey=syncSummaries.map { it.providerId to it.lastCheckedAtMillis }
+    LaunchedEffect(matchRefreshKey) {
+        val loaded=withContext(Dispatchers.IO) {
+            Triple(store.matches(),store.recentCompletedMatches(),store.importedCompetitionCodes())
+        }
+        matches=loaded.first
+        recentResults=loaded.second
+        importedCompetitionCodes=loaded.third
+    }
     val activeBacktestCode=selectedBacktestCode.takeIf { it in importedCompetitionCodes }
         ?: importedCompetitionCodes.firstOrNull().orEmpty()
     val active=matches.firstOrNull { it.id==selected }

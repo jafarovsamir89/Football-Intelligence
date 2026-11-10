@@ -45,7 +45,11 @@ object FootballSyncScheduler {
             .build()
         manager.enqueueUniquePeriodicWork(PERIODIC_SYNC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
 
-        val summaries = runCatching { Store(appContext).providerSyncSummaries() }.getOrDefault(emptyList())
+        val summaries = runCatching {
+            Store(appContext).let { store ->
+                try { store.providerSyncSummaries() } finally { store.close() }
+            }
+        }.getOrDefault(emptyList())
         val mostRecentSuccess = summaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull() ?: 0L
         val stale = mostRecentSuccess == 0L || System.currentTimeMillis() - mostRecentSuccess >= TimeUnit.HOURS.toMillis(8)
         if (stale) {
@@ -64,11 +68,13 @@ object FootballSyncScheduler {
 class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = Store(applicationContext)
+        var syncLockAcquired = false
+        try {
         if (!store.tryAcquireProviderSyncLock(System.currentTimeMillis(), TimeUnit.MINUTES.toMillis(9))) {
             setProgress(workDataOf("stage" to "waiting_for_sync_lock"))
             return@withContext Result.retry()
         }
-        try {
+        syncLockAcquired = true
         val startedAt = System.currentTimeMillis()
         val today = LocalDate.now(ZoneOffset.UTC)
         val seasonCount = 5
@@ -127,7 +133,11 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             else -> Result.retry()
         }
         } finally {
-            store.releaseProviderSyncLock()
+            try {
+                if (syncLockAcquired) store.releaseProviderSyncLock()
+            } finally {
+                store.close()
+            }
         }
     }
 }

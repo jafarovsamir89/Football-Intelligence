@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The current local revision passed the full `:app:testDebugUnitTest :app:assembleDebug` command with **75 JUnit tests** and a successful APK build. The current MainActivity threading change is uncommitted; CI run [42744967721](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42744967721) verifies preceding commit `0bff2f6`.
+Commit `3cdcd96` passed GitHub Actions run [42747055613](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42747055613): **75 JUnit tests**, APK build, stable signing and artifact upload. The current uncommitted follow-up also passed `:app:testDebugUnitTest :app:assembleDebug` (75 tests, 0 failures/errors/skips). It closes temporary SQLite helpers, moves the match/recent-result list queries to IO, and improves queued-sync status text; it still needs CI.
 
 Coverage includes:
 
@@ -29,9 +29,9 @@ The latest standard WebView capture on API 34 stored 10 Misli and 25 TOPAZ futur
 
 After placeholder exclusion, the installed Backtest screen reported 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106 and Log Loss 1.0235. These are still retrospective scores from current source snapshots, not archived vintages or future calibration evidence.
 
-Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes. No API 26 emulator or physical phone has yet been used.
+Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
 
-The CI-signed artifact for `0bff2f6` was installed on an Android 8 / API 26 emulator. The app opened and remained active without a fatal exception. First-run WorkManager sync was still partial at 10,445 rows when inspected; both bookmaker WebViews reported that no visible page text was returned. This does not verify full API 26 sync or current bookmaker capture on that old WebView. The subsequent local UI-thread change passes tests/build but is awaiting CI and repeat API 26 checks. No physical handset has been tested.
+The CI-signed artifact for `3cdcd96` was update-installed on Android 8 / API 26 and opened without a fatal exception. The update interrupted a prior worker; the nine-minute sync lease and WorkManager retry backoff delayed continuation despite validated emulator network connectivity. Without further APK updates, sync progressed to OpenFootball `OK`/25,904 and OpenLigaDB `PARTIAL`/306, with 26,449 total local rows at the latest check. Full API 26 sync is still not claimed. Both bookmaker WebViews reported no visible page text and status `ERROR` on this emulator. The CI cold launch skipped 44 frames once during JIT startup; on the later local build the main match sort moved to IO. No physical handset has been tested.
 
 ## CI / APK
 
@@ -43,7 +43,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 - SQLite v1–v10 upgrade preservation and cross-provider merge/score retention still need dedicated instrumentation coverage, despite local v10 update-install preservation.
 - WorkManager lock contention/retry has been corrected and end-to-end first-run continuation across the 8-minute boundary was observed on API 34; dedicated WorkManager integration tests for enqueue, network constraints, ETag/304, pacing, and lock expiry are still absent.
-- First-open API 34 full sync is verified. API 26 artifact smoke test opened, but sync remained partial at inspection and bookmaker WebView returned no visible text. Recheck sync on a completed run and use a physical handset; current async-compute change still needs API 26 CI-artifact retest.
+- First-open API 34 full sync is verified. API 26 WorkManager continuation is now observed, but still partial at the latest inspection; let it finish without interrupting an active worker. Bookmaker WebView returned no visible text on API 26. Use a physical handset when available.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
-- Compose accessibility and physical-device layout remain unverified. A cold API 26 launch previously skipped many frames; history/model calculations were moved off the UI thread, but repeat measurements on the current revision remain open.
+- Compose accessibility and physical-device layout remain unverified. API 26 cold start skipped 44 frames during initial JIT compilation on the latest CI APK. On a local API 34 cold start after moving the 39k match-list query to IO, 68 frames were skipped during JIT startup, the activity reached `Displayed` in 3.6s, and its Compose controls were present in the UI hierarchy; no fresh ANR or SQLite-helper leak was logged. Repeat cold/warm measurements remain open.
 - The automatic-source walk-forward is retrospective on current files. Calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.

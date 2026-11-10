@@ -1,8 +1,13 @@
 # Changelog
 
+## Unreleased — close sync database helpers and clarify queued status
+
+- Close the temporary SQLite helper used to read provider freshness, close the worker's database after each attempt (including a lock-contention retry), and close the activity-owned helper on destroy.
+- Describe a queued sync as waiting on WorkManager/system scheduling or network constraints; the queue can be caused by retry backoff, so it must not imply that the network is necessarily offline.
+
 ## Unreleased — keep large history calculations off the UI thread
 
-- Load full league history from SQLite on `Dispatchers.IO`, and build automatic fixture forecasts / selected-match Elo on `Dispatchers.Default` so WorkManager progress refreshes do not freeze Compose.
+- Load the 39k match list, recent results and full league history from SQLite on `Dispatchers.IO`, and build automatic fixture forecasts / selected-match Elo on `Dispatchers.Default` so WorkManager progress refreshes do not freeze Compose.
 - Cache league history across sync progress revisions and reload it after a provider reports a new successful sync.
 - On API 26 emulator, the preceding CI APK opened but emitted skipped-frame warnings during cold-start history reads; a local same-key build with this change relaunched with only a brief initial JIT skip in the observed log. CI artifact recheck remains pending.
 - No change to forecast inputs or model parameters; this is a responsiveness and database-read scheduling change.
