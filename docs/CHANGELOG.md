@@ -3,7 +3,7 @@
 ## Unreleased — queue bounded sync continuation without retry backoff
 
 - Separate the normal eight-minute work budget from actual provider/network failures. At the budget boundary, append another connected one-time Worker to the unique chain with `APPEND_OR_REPLACE` and complete the current Worker; failed requests still return `Result.retry()` and keep WorkManager backoff.
-- Add unit coverage for continuation/success/retry routing. Locally verified 79 unit tests and debug APK assembly; Android/API 26 verification of the signed CI artifact is pending.
+- Add unit coverage for continuation/success/retry routing. Locally verified 79 unit tests and debug APK assembly; Actions run [42752522409](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42752522409) passed and uploaded the stable-signed artifact. Update-install and full data sync were verified on Android 8/API 26 without clearing the existing SQLite database.
 
 ## Unreleased — close sync database helpers and clarify queued status
 
@@ -25,7 +25,7 @@
 - Place price-backed drafts first. Reject stale (>30-minute), future-dated, untimestamped, invalid, or unmapped lines at the coupon-builder boundary.
 - Exclude known placeholder team names from provider writes, match lists, fixture links, predictions and performance calculations; reject new placeholder parser rows while keeping legacy IDs/data intact.
 - Use v10 SQLite migration to add selection basis and preserve existing database contents.
-- API 34 POC latest capture observed 10 Misli/25 TOPAZ visible rows; seven TOPAZ fixtures joined local matches. Portugal—Denmark match 85257 had an actual TOPAZ 1.45/4.31/5.29 capture. No reuse license or profitability is claimed.
+- At that milestone's API 34 capture, 10 Misli/25 TOPAZ visible rows were observed; seven TOPAZ fixtures joined local matches. A later `e8c3a33` capture is recorded in `docs/DEVELOPMENT_LOG.md`. No reuse license or profitability is claimed.
 - Added regression tests for accumulator dimensions, per-provider isolation, timestamps, stale/future quotes, placeholder rejection, settlement and performance reports.
 
 ## Unreleased — zero-touch multi-source data, Misli/TOPAZ, and automatic model checks
