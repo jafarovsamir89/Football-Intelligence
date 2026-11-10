@@ -27,6 +27,20 @@ jobs:
           ls /usr/local/lib/android/sdk/build-tools || true
       - name: Unit tests
         run: ./gradlew --no-daemon :app:testDebugUnitTest
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Android instrumentation tests
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
       - name: Build APK
         run: ./gradlew --no-daemon :app:assembleDebug
       - name: Sign APK with stable personal test key

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — isolate and test SQLite upgrade paths
+
+- Allow a test-specific Store database name while retaining the unchanged production default.
+- Add AndroidJUnitRunner integration coverage for v1→v10 and v9→v10 migrations, preservation of settled results and user records, and the v10 selection-basis default. Tests were executed on an isolated API 34 emulator.
+- Add API 34 Android Emulator Runner instrumentation execution to GitHub Actions. Local API 34 run passed two instrumentation tests; CI verification is pending.
+
 ## Unreleased — retrospective Elo reliability diagnostics
 
 - Add tested one-vs-rest reliability bins for home/draw/away forecasts, including sample sizes, mean predicted probability, observed frequency, and mean ECE.

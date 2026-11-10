@@ -1,5 +1,19 @@
 # Development log
 
+## 2026-11-10 — isolated SQLite migration instrumentation (local API 34 passed; CI pending)
+
+### Change
+
+- Added an optional database-name parameter to `Store` (default remains `football_intelligence.db`) so Android instrumentation can exercise real SQLite migrations without deleting or modifying a user's application database.
+- Added AndroidJUnitRunner instrumentation tests for the original v1 schema upgrading through v10 and the v9→v10 accumulator migration. The v1 test verifies match identity/score, availability metadata, quote/pick/ticket preservation, required new tables, and that an incomplete refresh cannot erase a settled result. The v9 test verifies old accumulator rows survive and get the `MODEL_RANKED` migration default.
+- Added AndroidX Test runner/JUnit dependencies and configured the GitHub Actions workflow to launch an API 34 emulator for `connectedDebugAndroidTest`.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed locally; 83 JVM unit tests passed and instrumentation source compiled.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` ran on the separate, previously app-empty `memora_synthetic_capture` API 34 emulator: 2 tests passed. Test DB names contain random UUIDs and are deleted in `finally`; the pre-existing API 34 app database was not touched.
+- GitHub Actions is not yet run for this instrumentation/workflow change. Push the milestone, verify emulator boot and connected test execution in Actions, and fix any runner issue. Then add dedicated WorkManager scheduling/worker integration coverage; the current pure retry-routing tests and API 26 continuation observation do not replace it.
+
 ## 2026-11-10 — retrospective one-vs-rest calibration diagnostics (CI and API 34 runtime passed)
 
 ### Change

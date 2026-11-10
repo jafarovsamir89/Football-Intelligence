@@ -4,6 +4,7 @@
 
 ```sh
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
+ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest
 ```
 
 Commit `6faac0b` passed GitHub Actions run [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): **83 JUnit tests**, APK build, stable signing and artifact upload all passed. The signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable key. The artifact update-installed on API 34 and preserved the existing database.
@@ -23,6 +24,7 @@ Coverage includes:
 - Rejection of placeholder team identities in source parsers, read-side lists and historical evaluation.
 - Streaming chronological walk-forward equivalence with independent as-of Elo fits, shared availability batches, and future-result exclusion.
 - Equal-width one-vs-rest calibration bins: per-outcome sample sizes, observed frequencies, mean predicted probabilities, bin edge handling and empty-input behavior.
+- AndroidJUnitRunner SQLite upgrades from the original v1 schema through v10 and from v9 to v10, preserving user records and final scores; tests use random isolated database names.
 
 The API 34 database has 39,181 merged rows, 30,090 completed-result rows, 184 competitions, season keys `2022` through `2026-27`; provider source counts are OpenFootball 25,904 and OpenLigaDB 17,776. Current code rejects 566 previously stored placeholder-identity rows from reads, model input and backtests (kept in the database for ID/migration safety). The installed app recomputed post-filter automatic walk-forward: 29,588 targets, 19,185 forecasts and 10,403 insufficient-history skips. Older unfiltered figures are obsolete.
 
@@ -31,6 +33,8 @@ After installing `e8c3a33` on API 34, a standard WebView capture at 2026-11-10 0
 After placeholder exclusion, the installed Backtest screen reported 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106 and Log Loss 1.0235. These are still retrospective scores from current source snapshots, not archived vintages or future calibration evidence.
 
 The `6faac0b` CI APK was installed on API 34. Backtest reported one-vs-rest macro ECE 2.2% across 19,185 forecasts; by outcome, home 3.1%, draw 0.9%, away 2.5%. The expanded occupied-bin rows were visible with mean predicted probability, observed frequency and sample count. SQLite counts before and after install matched: 39,181 matches, 197 bookmaker snapshots, 59 accumulators. This UI check demonstrates execution against the local dataset only; it is not a prospective calibration result.
+
+Two SQLite migration instrumentation tests passed on a separate API 34 emulator without an installed Football Intelligence package. Random test database names were deleted after execution; the existing API 34 app cache was not touched. They cover v1→v10 preservation and v9→v10 selection-basis migration. The current workflow change that provisions API 34 for these tests still awaits its Actions result.
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
 
