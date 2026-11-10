@@ -44,5 +44,5 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 1. SQLite instrumentation now covers v1→v10 and v9→v10 migrations on API 34. Add cross-provider result/quote retention cases and run on API 26 plus a physical Android device.
 2. Add immutable, versioned forecast snapshots and a prospective settlement report; current reliability diagnostics use retrospective source snapshots.
 3. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests are in place.
-4. Add WorkManager instrumentation for first-open enqueue, retry, offline cache, uniqueness, and rate-limit request pacing; only pure retry-routing tests and an API 26 runtime continuation check exist so far.
+4. WorkManager instrumentation verifies app-open enqueue constraints, uniqueness, freshness, and (locally on API 34; CI pending) that zero-delay work stays queued while offline. Add focused retry/backoff integration and rate-limit request pacing coverage; pure retry-routing tests and the API 26 runtime continuation check remain complementary evidence.
 5. Verify both collectors across timezones and more events; clarify their odds-reuse terms. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.
