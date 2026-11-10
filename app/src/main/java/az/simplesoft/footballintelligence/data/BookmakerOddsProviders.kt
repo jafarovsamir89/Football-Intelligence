@@ -58,6 +58,11 @@ fun latestBookmakerSnapshotsPerEvent(snapshots:List<BookmakerOddsSnapshot>):List
         rows.maxByOrNull { it.capturedAtMillis }
     }.sortedBy { it.kickoffMillis }
 
+private fun publicRouteLabel(rawUrl:String):String = runCatching {
+    val uri=java.net.URI(rawUrl)
+    "${uri.host ?: "unknown"}${uri.path.orEmpty()}".take(160)
+}.getOrDefault("некорректный URL")
+
 data class BookmakerProviderStatus(
     val providerId: String,
     val displayName: String,
@@ -145,7 +150,7 @@ class MisliOddsProvider : BookmakerOddsProvider {
             uri.scheme == "https" && uri.host in setOf("misli.az", "www.misli.az") &&
                 uri.path == "/idman-novleri/futbol"
         }.getOrDefault(false)
-        if (!validUrl) return failed("Получена не публичная футбольная страница Misli.")
+        if (!validUrl) return failed("Страница Misli открыла маршрут ${publicRouteLabel(page.url)} вне ожидаемой публичной футбольной страницы.")
         val zone = runCatching { ZoneId.of(page.timeZoneId) }.getOrElse {
             return failed("Не удалось определить часовой пояс страницы.")
         }
@@ -486,7 +491,7 @@ class TopazOddsProvider : BookmakerOddsProvider {
             val uri=java.net.URI(page.url)
             uri.scheme=="https" && uri.host in setOf("etopaz.az","www.etopaz.az") && uri.path=="/home"
         }.getOrDefault(false)
-        if(!validUrl) return failed("Получена не публичная главная страница eTopaz.")
+        if(!validUrl) return failed("Страница eTopaz открыла маршрут ${publicRouteLabel(page.url)} вне ожидаемой публичной страницы.")
         val zone=runCatching { ZoneId.of(page.timeZoneId) }.getOrElse { return failed("Не удалось определить часовой пояс страницы.") }
         if(page.visibleText.length>100_000) return failed("Текст страницы превышает безопасный лимит.")
         if(page.title.isBlank()||page.visibleText.isBlank()) return failed("Публичная страница не вернула видимые события.")

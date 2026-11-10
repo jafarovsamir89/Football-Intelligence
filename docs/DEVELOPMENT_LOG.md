@@ -1,5 +1,33 @@
 # Development log
 
+## 2026-11-10 — SQLite concurrency diagnosis and WAL fix (local API 34 passed; CI pending)
+
+### Finding
+
+- After update-installing CI commit `8d5ab00` (Actions [42889711265](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42889711265)), I reopened the API 34 app to verify the next public odds capture. The app's prior successful WebView snapshot was from 07:21 UTC and had expired. At 20:00 UTC, while WorkManager was importing current football data, both new captures were saved as `ERROR: database is locked`.
+- Android logcat showed `SQLiteConnectionPool` with one active connection and foreground reads waiting 30–60 seconds. The Compose startup relink duplicated work already performed by the sync Worker after provider import, adding another large database scan during the same window.
+- The separate instrumentation emulator 5558 has no active default network (Wi-Fi radio initially off; `active default network: none`; public ping unreachable). Its `chromewebdata/` WebView result is therefore an offline harness condition, not evidence of a bookmaker blocking or redirecting the page. The emulator radio was restored to its original Wi-Fi-off state.
+
+### Change and local verification
+
+- Enabled SQLite WAL in `Store` so foreground reads can continue against the last committed snapshot during provider writes. Removed the redundant foreground startup relink; the Worker relinks unmatched quotes after each provider sync segment.
+- Added a randomized-database Android instrumentation regression that holds one Store's write transaction open and verifies a second Store can read the committed snapshot within three seconds. Existing production schema and user rows are not migrated or deleted.
+- Added safe provider-route diagnostics that report only public host/path (never query parameters) when a page URL is outside its expected route.
+- Passed `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`: 88 JVM tests, Android test compilation, APK assembly. `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 11 API 34 instrumentation tests with zero failures/errors/skips. `git diff --check` passed.
+- The code/docs changes are not yet committed or CI-verified. The latest successful public-page capture remains the 07:21 UTC snapshot: Misli 10 rows / 0 exact links; TOPAZ 25 / 7 exact links. Those prices are stale and no new live price is claimed.
+
+### Source rights review and next action
+
+- Rechecked official [Misli robots.txt](https://www.misli.az/robots.txt): it permits `/` for crawlers and disallows account, shared-coupon and live-detail paths. That is not an odds-reuse license. Read the current [eTopaz terms](https://etopaz.az/terms-conditions): they frame a BAL LINE subscriber/wagering agreement and limit subscriber-account use, but contain no express automated-reuse permission for anonymous public odds. Do not infer either permission or prohibition beyond the text.
+- Read the requested [reference scraper](https://github.com/aliabbasov99/ai-football-prediction/blob/main/backend/scripts/scrape_misli_all.py): it uses `undetected_chromedriver`, stealth arguments, page scrolling, BeautifulSoup selectors, explicit aliases and fuzzy `SequenceMatcher` thresholds. No code or evasion mechanism was copied; this app keeps normal public WebView rendering and exact reviewed aliases.
+- Next: commit/push WAL and diagnostics; wait for green Actions, download and verify its stable-signed artifact, update-install on the connected primary API 34 emulator without clearing its 39k-match DB, and repeat first-open sync plus visible bookmaker capture after WorkManager finishes.
+
+## 2026-11-10 — isolate Worker failure instrumentation from network (CI and API 34 update-install passed)
+
+- Commit `8d5ab00` replaced the loopback-proxy failure test with an injected `ProviderHttpClient` that records OpenFootball/OpenLigaDB catalog calls and throws without a socket. The previous documentation rerun [42778440884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42778440884) had received `PARTIAL` despite airplane mode and a loopback proxy, so the earlier network-isolation claim was withdrawn.
+- Actions [42889711265](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42889711265) passed 88 JVM tests, 10 API 34 instrumentation tests, APK build, stable signing and upload. Signer SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Update-install on the existing API 34 emulator used `adb install -r` only. The database was byte-identical before/after (SHA-256 `d0ff6e9616e5a4db71592fa3a8cd0536e8ae0ffaa23094568caebd94f3dcd618`). On the subsequent connected app open, the result count reached 30,114/39,181 and the old foreground capture exposed a database contention issue documented in the next entry.
+
 ## 2026-11-10 — make Worker failure instrumentation network-proof (local API 34 passed; CI pending)
 
 ### Finding and correction

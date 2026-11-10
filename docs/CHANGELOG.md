@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased — protect foreground odds capture from SQLite contention (local API 34 passed; CI pending)
+
+- Reproduced a `SQLiteDatabaseLockedException` when first-open WorkManager sync and bookmaker WebView capture read/write the single-connection store at the same time.
+- Enable SQLite WAL and remove the duplicate foreground startup relink; the Worker still relinks unmatched snapshots after each provider sync segment.
+- Add a randomized SQLite concurrency instrumentation test. Local verification passed 88 JVM + 11 API 34 instrumentation tests, Android test compilation and APK assembly. The change is not yet committed or Actions-verified; a connected runtime quote-capture recheck remains open.
+- A separate test emulator had no active network and returned WebView's internal `chromewebdata/` page; this was not treated as evidence of bookmaker blocking. Latest saved public prices (10 Misli, 25 TOPAZ at 07:21 UTC; 0/7 exact fixture links) are stale.
+
+## Unreleased — make Worker failure test network-proof (CI and API 34 update-install passed)
+
+- Inject a fake `ProviderHttpClient` into the real Worker failure test. It records both public catalog URLs and throws locally without opening a socket, then verifies provider `ERROR`, WorkManager retry and lock release.
+- The earlier proxy setup did not guarantee isolation; Actions rerun [42778440884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42778440884) observed a public `PARTIAL` response. The corrected commit `8d5ab00` passed 88 JVM tests, 10 API 34 instrumentation tests, APK build, stable signing and upload in Actions [42889711265](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42889711265).
+- Update-install on the API 34 primary emulator preserved the database byte-for-byte. A follow-up app-open runtime check uncovered the independent SQLite contention issue addressed above.
+
 ## Unreleased — verify WorkManager retry/backoff rescheduling (CI and API 34 update-install passed)
 
 - Add a network-free instrumentation test using a unique test request and worker that returns `Result.retry()` once, stays queued through at least 20 seconds of a 30-second exponential backoff, then succeeds on its second attempt.

@@ -143,6 +143,12 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
 }
 
 class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 11) {
+    init {
+        // Permit read connections while WorkManager writes a large provider batch. Without WAL,
+        // the single SQLite connection can starve foreground WebView capture and UI reads.
+        setWriteAheadLoggingEnabled(true)
+    }
+
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER, source_key TEXT UNIQUE, source_name TEXT NOT NULL DEFAULT 'OpenLigaDB', exact_kickoff INTEGER NOT NULL DEFAULT 1, available_at INTEGER, source_url TEXT, event_date TEXT, season TEXT, captured_at INTEGER)")
         db.execSQL("CREATE INDEX matches_event_date_idx ON matches(event_date,home,away)")
@@ -1234,10 +1240,6 @@ class MainActivity:ComponentActivity() {
         oneTimeSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
     ) { revision++ }
-    LaunchedEffect(store) {
-        val relinked=runCatching { withContext(Dispatchers.IO) { store.relinkUnmatchedBookmakerOdds() } }.getOrDefault(0)
-        if(relinked>0) revision++
-    }
     var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     var recentResults by remember { mutableStateOf<List<Match>>(emptyList()) }
     var importedCompetitionCodes by remember { mutableStateOf<List<String>>(emptyList()) }

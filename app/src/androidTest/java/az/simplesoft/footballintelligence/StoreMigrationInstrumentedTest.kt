@@ -19,9 +19,51 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 @RunWith(AndroidJUnit4::class)
 class StoreMigrationInstrumentedTest {
+    @Test fun writeAheadLoggingAllowsForegroundReadsDuringProviderWrite() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-wal-concurrency-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val writer = Store(context, databaseName)
+        val reader = Store(context, databaseName)
+        val executor = Executors.newSingleThreadExecutor()
+        try {
+            val db = writer.writableDatabase
+            assertTrue("Store must enable WAL for concurrent provider reads.", db.isWriteAheadLoggingEnabled)
+            db.beginTransaction()
+            try {
+                db.execSQL(
+                    "INSERT INTO matches(id,league,home,away,kickoff,finished) " +
+                        "VALUES(900001,'test','Alpha','Beta','2030-01-01T12:00:00Z',0)",
+                )
+                val count = executor.submit<Int> {
+                    reader.readableDatabase.rawQuery("SELECT COUNT(*) FROM matches", null).use { cursor ->
+                        assertTrue(cursor.moveToFirst())
+                        cursor.getInt(0)
+                    }
+                }.get(3, TimeUnit.SECONDS)
+                // A WAL reader sees the last committed snapshot while the provider batch is open.
+                assertEquals(0, count)
+                db.setTransactionSuccessful()
+            } finally {
+                db.endTransaction()
+            }
+            reader.readableDatabase.rawQuery("SELECT COUNT(*) FROM matches", null).use { cursor ->
+                assertTrue(cursor.moveToFirst())
+                assertEquals(1, cursor.getInt(0))
+            }
+        } finally {
+            executor.shutdownNow()
+            reader.close()
+            writer.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
     @Test fun versionOneUpgradeKeepsMatchesQuotesPicksTicketsAndCreatesCurrentTables() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "fi-v1-migration-${UUID.randomUUID()}.db"
