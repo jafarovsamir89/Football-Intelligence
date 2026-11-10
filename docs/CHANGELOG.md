@@ -1,10 +1,16 @@
 # Changelog
 
+## Unreleased — verify WorkManager retry/backoff rescheduling (local API 34 passed; CI pending)
+
+- Add a network-free instrumentation test using a unique test request and worker that returns `Result.retry()` once, stays queued through at least 20 seconds of a 30-second exponential backoff, then succeeds on its second attempt.
+- Extend airplane-mode/Wi-Fi transition waits to 30 seconds after CI [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) exposed a transient timeout at the previous 10-second limit.
+- Verification: 88 JVM tests, 10 API 34 instrumentation tests, instrumentation compilation and APK assembly pass locally. Combined CI for this revision is pending.
+
 ## Unreleased — verify provider-failure retry routing (CI and API 34 update-install passed)
 
 - Add an isolated API 34 integration test for the production `AutomaticFootballSyncWorker`: airplane mode and Wi-Fi are disabled, a local rejecting proxy receives both provider catalog routes, and a random test database is removed afterward.
 - Verify both provider errors lead the real Worker to `Result.retry()`, persist error states without false successful timestamps, and release the database sync lease.
-- Verification: 88 JVM and 9 API 34 instrumentation tests passed locally and in Actions [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), along with APK build, stable signing and artifact upload. Update-install on the existing API 34 app retained all recorded data. WorkManager's delayed retry scheduling still needs direct integration coverage.
+- Verification: 88 JVM and 9 API 34 instrumentation tests passed locally and in Actions [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), along with APK build, stable signing and artifact upload. Update-install on the existing API 34 app retained all recorded data. Direct delayed-retry coverage was added in the following unreleased entry.
 
 ## Unreleased — retain provenance and scores across provider duplicates (CI and API 34 update-install passed)
 

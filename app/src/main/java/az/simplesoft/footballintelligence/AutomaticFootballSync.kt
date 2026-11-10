@@ -10,6 +10,7 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import az.simplesoft.footballintelligence.data.OpenFootballCompetitionFile
@@ -36,6 +37,10 @@ private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, be
 private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
 internal const val PERIODIC_SYNC_INTERVAL_HOURS = 24L
 internal const val APP_OPEN_SYNC_STALE_AFTER_HOURS = 8L
+internal const val SYNC_RETRY_BACKOFF_SECONDS = 30L
+
+internal fun <B : WorkRequest.Builder<B, W>, W : WorkRequest> withAutomaticSyncRetryBackoff(builder: B): B =
+    builder.setBackoffCriteria(BackoffPolicy.EXPONENTIAL, SYNC_RETRY_BACKOFF_SECONDS, TimeUnit.SECONDS)
 
 internal enum class SyncNextStep { CONTINUE, SUCCESS, RETRY }
 
@@ -77,19 +82,18 @@ object FootballSyncScheduler {
         val appContext = context.applicationContext
         val manager = WorkManager.getInstance(appContext)
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val periodic = PeriodicWorkRequestBuilder<AutomaticFootballSyncWorker>(
-            PERIODIC_SYNC_INTERVAL_HOURS,
-            TimeUnit.HOURS,
-        )
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
+        val periodic = withAutomaticSyncRetryBackoff(
+            PeriodicWorkRequestBuilder<AutomaticFootballSyncWorker>(
+                PERIODIC_SYNC_INTERVAL_HOURS,
+                TimeUnit.HOURS,
+            ).setConstraints(constraints),
+        ).build()
         manager.enqueueUniquePeriodicWork(PERIODIC_SYNC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
 
         if (isAppOpenSyncStale(mostRecentSuccessAtMillis, nowMillis)) {
-            val immediateBuilder = OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>()
-                .setConstraints(constraints)
-                .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
+            val immediateBuilder = withAutomaticSyncRetryBackoff(
+                OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>().setConstraints(constraints),
+            )
             if (immediateInitialDelayMillis > 0L) {
                 immediateBuilder.setInitialDelay(immediateInitialDelayMillis, TimeUnit.MILLISECONDS)
             }
@@ -183,10 +187,9 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
 
     private fun enqueueContinuation(): Boolean = runCatching {
         val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-        val continuation = OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>()
-            .setConstraints(constraints)
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
+        val continuation = withAutomaticSyncRetryBackoff(
+            OneTimeWorkRequestBuilder<AutomaticFootballSyncWorker>().setConstraints(constraints),
+        ).build()
         WorkManager.getInstance(applicationContext)
             .enqueueUniqueWork(ONCE_SYNC_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, continuation)
     }.isSuccess

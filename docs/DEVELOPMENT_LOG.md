@@ -1,5 +1,19 @@
 # Development log
 
+## 2026-11-10 — WorkManager retry/backoff rescheduling (local API 34 passed; CI pending)
+
+### Change
+
+- Added an instrumentation test that enqueues a unique real WorkManager request with the production 30-second exponential backoff policy. A test-only Worker returns `retry()` once and then succeeds; it does not use the network or the football database.
+- Verified that WorkManager persisted the first attempt as `ENQUEUED`, kept it queued for at least 20 seconds of its 30-second backoff, then executed it again and reached `SUCCEEDED` on attempt 2. The random preference key and work request are cleaned up in `finally`.
+- Extended the offline-radio transition wait in both scheduler and Worker instrumentation tests from 10 to 30 seconds. A documentation-only push's Actions run [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) exposed a transient CI emulator timeout at the 10-second airplane-mode/Wi-Fi check; no production code or live network request failed.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed; 88 JVM test results remain green.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 10 API 34 instrumentation tests, 0 failures/errors/skips. The backoff test also passed by itself. Radio-sensitive tests restore emulator settings; this run did not touch the primary app database.
+- The full instrumentation run includes the 20-second backoff check and passed locally. Commit and push this revision next, then verify the complete CI pipeline and install its stable-signed APK without clearing app data. Actions verification for this retry/backoff integration is still pending.
+
 ## 2026-11-10 — Worker provider-failure retry routing (CI and API 34 update-install passed)
 
 ### Change

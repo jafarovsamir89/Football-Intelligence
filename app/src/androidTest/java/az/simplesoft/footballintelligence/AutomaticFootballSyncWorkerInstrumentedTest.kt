@@ -53,7 +53,7 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
         try {
             if (!wasAirplaneModeEnabled) runShellCommand("cmd connectivity airplane-mode enable")
             if (wasWifiEnabled) runShellCommand("cmd wifi set-wifi-enabled disabled")
-            waitUntil(timeoutMillis = TimeUnit.SECONDS.toMillis(10)) {
+            waitUntil(timeoutMillis = TimeUnit.SECONDS.toMillis(30)) {
                 Settings.Global.getInt(baseContext.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1 &&
                     Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 0 &&
                     connectivityManager.activeNetwork == null
