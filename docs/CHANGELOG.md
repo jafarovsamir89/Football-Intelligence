@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — verify WorkManager retry/backoff rescheduling (local API 34 passed; CI pending)
+## Unreleased — verify WorkManager retry/backoff rescheduling (CI and API 34 update-install passed)
 
 - Add a network-free instrumentation test using a unique test request and worker that returns `Result.retry()` once, stays queued through at least 20 seconds of a 30-second exponential backoff, then succeeds on its second attempt.
 - Extend airplane-mode/Wi-Fi transition waits to 30 seconds after CI [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) exposed a transient timeout at the previous 10-second limit.
-- Verification: 88 JVM tests, 10 API 34 instrumentation tests, instrumentation compilation and APK assembly pass locally. Combined CI for this revision is pending.
+- Verification: 88 JVM tests and all 10 API 34 instrumentation tests passed locally and in Actions [42777428309](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42777428309), with APK build, stable signing and artifact upload. Update-install without data clear preserved schema v11, 39,181 matches, 184 competitions, 385 quote snapshots, 71 accumulators/402 legs and 62 forecast snapshots/0 settlements.
 
 ## Unreleased — verify provider-failure retry routing (CI and API 34 update-install passed)
 

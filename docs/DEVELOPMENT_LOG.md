@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — WorkManager retry/backoff rescheduling (local API 34 passed; CI pending)
+## 2026-11-10 — WorkManager retry/backoff rescheduling (CI and API 34 update-install passed)
 
 ### Change
 
@@ -12,7 +12,9 @@
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed; 88 JVM test results remain green.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 10 API 34 instrumentation tests, 0 failures/errors/skips. The backoff test also passed by itself. Radio-sensitive tests restore emulator settings; this run did not touch the primary app database.
-- The full instrumentation run includes the 20-second backoff check and passed locally. Commit and push this revision next, then verify the complete CI pipeline and install its stable-signed APK without clearing app data. Actions verification for this retry/backoff integration is still pending.
+- Commit `ee438ac` passed Actions [42777428309](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42777428309): 88 JVM tests, all 10 API 34 instrumentation tests, APK build, stable signing and artifact upload. The 10 Android tests completed successfully in the CI runner; the APK certificate SHA-256 matched the established key `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Update-installed the CI APK over the existing API 34 app with `adb install -r`; no uninstall or data clear. Before and after: schema v11, 39,181 matches, 184 competitions, 385 bookmaker snapshots, 71 accumulators/402 legs, and 62 forecast snapshots/0 settlements. OpenFootball and OpenLigaDB remained `OK`; MainActivity resumed without a fatal log.
+- The preceding docs-only Actions run [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) failed at an unrelated 10-second radio-state wait in the offline scheduler test. Increasing the test transition allowance to 30 seconds resolved it; the combined revision passed Actions. Next: add focused evidence for provider pacing and conditional HTTP cache responses; the current retry/backoff scheduling gap is closed.
 
 ## 2026-11-10 — Worker provider-failure retry routing (CI and API 34 update-install passed)
 
@@ -20,7 +22,7 @@
 
 - Added an Android instrumentation test that executes the real `AutomaticFootballSyncWorker` while airplane mode and Wi-Fi are disabled and `ConnectivityManager.activeNetwork` is null. A local rejecting HTTP proxy also receives both public catalog request routes and closes them; the test cannot reach a live provider even if Java ignores the proxy selector.
 - The worker runs with a random isolated SQLite filename and test context. The test verifies requests reached both `api.github.com` and `api.openligadb.de`, the worker returns WorkManager `Result.retry()`, both provider states report `ERROR` with no successful timestamp, and the sync lock is released. The proxy selector and temporary database are restored/deleted in `finally`.
-- This exercises the production decision from actual provider failures through the Worker's retry result. It does not yet exercise WorkManager's delayed retry scheduling/resumption.
+- This exercises the production decision from actual provider failures through the Worker's retry result. WorkManager's separate delayed scheduling/resumption was added and verified in the following development-log entry.
 
 ### Verification and next action
 
