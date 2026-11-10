@@ -29,7 +29,7 @@
 
 ## Android APK
 
-Последняя успешная CI-проверка: [GitHub Actions 42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554) для `fd51aa4`: 88 JVM-тестов, 11 API 34 instrumentation тестов, APK, стабильная подпись и artifact upload `13805066252`. APK SHA-256 `4bd05b6d68a1a0441e420af4eae7babfaa6d9cd5591a8729adf41dd3d3bdb08a`; сертификат SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Он update-installed поверх сохранённого API 34 профиля без очистки; после обычного автоматического повторного capture оба букмекера не предоставили проверяемых будущих линий. Это тестовая debug-сборка, не релиз Play Store.
+Последний успешный CI workflow: [GitHub Actions 42907247006](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42907247006) для docs commit `3edfee6`: 88 JVM-тестов, 11 API 34 instrumentation тестов, APK, стабильная подпись и artifact upload `13806585316`. Его APK SHA-256 совпадает с runtime-проверенным `fd51aa4`: `4bd05b6d68a1a0441e420af4eae7babfaa6d9cd5591a8729adf41dd3d3bdb08a`; сертификат SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK update-installed поверх сохранённого API 34 профиля без очистки; автоматический повторный capture обоих букмекеров не нашёл проверяемых будущих линий. Это тестовая debug-сборка, не релиз Play Store.
 
 После update-install v11 на API 34 база сохранила 39 181 матч и 315 снимков коэффициентов; все прежние 59 virtual accumulators/328 legs остались на месте. При открытии приложение записало 62 неизменяемых предматчевых прогноза; 0 из них пока имеют завершённый результат. В интерфейсе показано, что анализ точности ждёт результаты.
 

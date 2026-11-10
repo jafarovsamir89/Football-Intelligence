@@ -35,7 +35,7 @@ Continue the user's master request in `docs/DEVELOPMENT_LOG.md` and the roadmap 
 
 ## Current continuation point
 
-Latest code commit `fd51aa4` coalesces duplicate bookmaker WebView callbacks and schedules the next page load at the 30-minute freshness boundary, including when the app opens with quotes that are still fresh. It passed 88 JVM and 11 API 34 instrumentation tests locally and Actions [42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554), artifact `13805066252`. The stable-signed APK update-installed without uninstall/data clear and preserved the existing database. The older WorkManager test race/fix and earlier CI results remain documented in [`docs/DEVELOPMENT_LOG.md`](docs/DEVELOPMENT_LOG.md).
+Latest code commit `fd51aa4` coalesces duplicate bookmaker WebView callbacks and schedules the next page load at the 30-minute freshness boundary, including when the app opens with quotes that are still fresh. It passed 88 JVM and 11 API 34 instrumentation tests locally and Actions [42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554), artifact `13805066252`. Documentation commit `3edfee6` reran the same full workflow successfully in [42907247006](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42907247006), artifact `13806585316`, with an APK SHA-256 identical to the runtime-tested code artifact. The stable-signed APK update-installed without uninstall/data clear and preserved the existing database. Earlier CI results remain documented in [`docs/DEVELOPMENT_LOG.md`](docs/DEVELOPMENT_LOG.md).
 
 ### Latest runtime finding (2026-11-10)
 
