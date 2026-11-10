@@ -4,7 +4,7 @@
 
 - Reuse the production freshness scheduling path in instrumentation and assert the 24-hour periodic request, CONNECTED network constraints, no duplicate unique work on repeated app open, and no immediate request for fresh source data.
 - Add an eight-hour stale boundary unit test. The instrumentation request has a one-hour initial delay and is cancelled afterward, so the test verifies persisted WorkManager state without triggering a public-data import.
-- Local verification: 84 JUnit and 3 API 34 instrumentation tests passed; CI verification is pending.
+- Verification: 84 JUnit and 3 API 34 instrumentation tests passed locally; Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971) passed tests, APK build, stable signing and artifact upload.
 
 ## Unreleased — isolate and test SQLite upgrade paths
 

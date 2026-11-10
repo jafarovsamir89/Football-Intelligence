@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — WorkManager queue instrumentation (local API 34 passed; CI pending)
+## 2026-11-10 — WorkManager queue instrumentation (CI and local API 34 passed)
 
 ### Change
 
@@ -12,7 +12,8 @@
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 3 tests on the isolated API 34 AVD: 2 SQLite migration tests and 1 WorkManager scheduler test.
 - Local result XML totals: 84 JVM tests + 3 Android instrumentation tests, 0 failures/errors/skips. The delayed request was cancelled in `finally`; no Worker or HTTP sync remained queued on the test emulator.
-- Next: commit and push this milestone, verify the API 34 emulator test and APK in Actions, then expand coverage to worker retry/offline behavior and cross-provider score retention. Immutable forecast snapshots remain a separate roadmap task.
+- Pushed as `92836d8`; Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971) passed the same 84 JVM + 3 API 34 instrumentation tests, built and signed the APK, and uploaded it.
+- Next: add immutable versioned forecast snapshots with result settlement and a strictly forecast-time-filtered history. Actual offline gating/worker retry and cross-provider score retention remain further integration gaps.
 
 ## 2026-11-10 — isolated SQLite migration instrumentation (CI and API 34 update-install passed)
 

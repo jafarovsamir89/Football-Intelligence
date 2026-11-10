@@ -28,7 +28,7 @@
 
 ## Android APK
 
-Последняя успешная CI-сборка: [GitHub Actions 42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588) для `fb65bcc`: 83 unit-теста, 2 API 34 instrumentation теста, APK, стабильная подпись и artifact upload. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Артефакт обновил API 34 без потери SQLite v10: до и после 39 181 матч, 197 котировок, 59 виртуальных купонов, 328 legs. APK — тестовая debug-сборка, не релиз Play Store.
+Последняя успешная CI-сборка: [GitHub Actions 42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971) для `92836d8`: 84 unit-теста, 3 API 34 instrumentation теста, APK, стабильная подпись и artifact upload. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK — тестовая debug-сборка, не релиз Play Store.
 
 На API 34 экран walk-forward отобразил 19 185 прогнозов, mean one-vs-rest ECE 2,2% (П1 3,1%, X 0,9%, П2 2,5%) и раскрываемые reliability bins. Это диагностика ретроспективной выборки, не калибровка. На API 26 Android 8 полный zero-touch sync прошёл: SQLite v10 хранит 38 609 матчей, 29 588 результатов в 183 соревнованиях; OpenFootball `OK`/25 904, OpenLigaDB `OK`/17 202, обработано 214 лиг-сезонов. Обычное продолжение после восьмиминутного сегмента отработало без exponential backoff. Ограничение: WebView этого API 26 эмулятора не вернул видимого текста для Misli/TOPAZ, поэтому там `ERROR` и нет реальных коэффициентов. На API 34 обычный WebView ранее захватил публичные линии. Физический телефон ещё не проверялся.
 
