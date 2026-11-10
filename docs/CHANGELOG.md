@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — explain provider sync progress during first-run imports (local suite passed; Actions pending)
+## Unreleased — explain provider sync progress during first-run imports (CI and local suite passed)
 
 - Publish the active OpenFootball/OpenLigaDB stage to the main screen so long bounded WorkManager runs have a useful status message.
 - Label OpenLigaDB `DEFERRED` when an automatic continuation is queued before the source begins importing leagues. Keep `ERROR` for actual no-progress failures and `PARTIAL` for completed work with provider errors.
-- Add tests for provider stage text and deferred-vs-error status. The bundled local run passed 91 JVM tests with no failures and assembled the debug APK; Actions/API 34 instrumentation are pending.
+- Add tests for provider stage text and deferred-vs-error status. The bundled local run passed 91 JVM tests with no failures and assembled the debug APK. Actions [42921473653](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42921473653) passed 12 API 34 instrumentation tests, APK build, stable signing and artifact upload `13812041365`. Downloaded artifact SHA-256: `8bf19b2cda7958aaeaca4fcd2b96b01caaede1b1df38e7bdb1d5868d0ae80cbf`.
 
 ## Unreleased — delay the first periodic sync (CI and clean-install scheduling check passed)
 
