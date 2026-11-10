@@ -1,17 +1,21 @@
 # Development log
 
-## 2026-11-10 — serialize Store writers after API 26 startup crash (local suite passed; CI/runtime pending)
+## 2026-11-10 — serialize Store writers after API 26 startup crash (CI and API 26 update-install passed)
 
 ### Finding
 
 - A stable-signed API 26 update-install migrated the data-bearing v10 database to v11, retained 38,609 matches / 29,588 completed results, and opened in WAL mode. On relaunch, Activity forecast-ledger writes raced with WorkManager's provider transaction and crashed the app on the main thread with `SQLiteDatabaseLockedException` from `Store.recordProspectiveForecastSnapshots`. Data remained readable and row counts were retained.
 - This was writer/writer contention, which WAL alone does not prevent. All production `Store` mutations now share a fair, process-wide reentrant coordinator, and forecast/coupon history writes run on `Dispatchers.IO` so waiting for a sync transaction cannot block the UI thread.
 
-### Local verification and next work
+### Verification and remaining checks
 
 - Added an API 34 regression test using two `Store` instances and a held background transaction. It confirms that the foreground forecast write waits, commits after release, and is readable from the other instance.
-- The initial local Gradle run passed all 88 JVM tests, assembled the debug APK, and passed all 12 API 34 instrumentation tests. The persistent API 34 emulator correctly rejected the local debug signing key because its installed app uses the stable CI certificate; no app/data was uninstalled. I then strengthened the new regression assertion to check the foreground thread is actually queued on the coordinator and reran all 8 tests in `StoreMigrationInstrumentedTest`; they passed on clean emulator 5558. The current locally packaged debug APK SHA-256 is `0a23d60ab18e01104a73c8b989598a44a19ecd7e0953f047936fffffaec89d5f`. Full latest-source CI run is pending.
-- Next: push this code milestone for one GitHub Actions run, update-install its stable-signed APK on API 26 without clearing the saved profile, and verify successful launch/sync plus preserved database rows. A physical device is unavailable.
+- The initial local Gradle run passed all 88 JVM tests, assembled the debug APK, and passed all 12 API 34 instrumentation tests. After tightening the regression assertion to prove the foreground thread was actually queued on the coordinator, all 8 tests in `StoreMigrationInstrumentedTest` passed again on clean emulator 5558.
+- Commit `6425117` passed Actions [42912446156](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42912446156): 88 JVM + 12 API 34 tests, APK build, stable signing and upload `13807803388`. APK SHA-256: `5851eb6ec4482ea09bd85f9d325c14b2b8189bdbfe7c4a314a48bc0d9ddd9521`; stable signer SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- `adb install -r` update-installed the CI APK on API 26 without uninstall/data clear. `firstInstallTime` stayed `2026-11-09 18:48:01`; `lastUpdateTime` became `2026-11-10 14:19:27` local. Before launch the DB had schema v11, 38,609 matches, 29,612 completed results, 0 forecast snapshots and 50 accumulator headers. After startup it retained 38,609 / 29,612 and created 62 forecast snapshots / 60 accumulator headers. OpenFootball remained `OK`/25,904 and OpenLigaDB `OK`/17,202. UI hierarchy showed both providers and cached match rows.
+- To test the actual overlap on API 26, I force-stopped the app and temporarily set only the test profile's two provider freshness timestamps to zero. On the next ordinary app open, the production scheduler enqueued the real connected WorkManager task while the Activity regenerated forecast/coupon history. The Worker completed OpenFootball `OK` at `22:27:11 UTC` and OpenLigaDB `OK` at `22:27:32 UTC`; `provider_sync_lock` was released, both provider rows returned to `OK`, and counts stayed at 38,609 matches / 29,612 completed results. The Activity remained resumed (PID 9185), 62 forecast snapshots / 60 accumulators remained, and no post-update SQLite lock or fatal exception appeared in logcat through `22:28:05 UTC`.
+- The full API 26 runtime overlap used a temporary freshness-only test setup; the Worker replaced those timestamps with real successful check times. No user rows were cleared or rolled back. A physical handset is unavailable.
+- Documentation-only follow-up commits skip the APK workflow through `paths-ignore` for `docs/**`, `AGENTS.md` and `README.md`, so recording this runtime evidence does not trigger another redundant build.
 
 ## 2026-11-10 — coalesce repeated bookmaker page callbacks (CI and API 34 runtime passed)
 

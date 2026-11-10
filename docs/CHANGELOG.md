@@ -1,10 +1,11 @@
 # Changelog
 
-## Unreleased — serialize foreground and Worker database writes (local tests passed; CI/API 26 pending)
+## Unreleased — serialize foreground and Worker database writes (CI and API 26 update-install passed)
 
 - Reproduced an API 26 v11 startup crash after a data-preserving update: `SQLiteDatabaseLockedException` when the foreground forecast ledger wrote while the WorkManager provider transaction was active. WAL opened correctly and saved match/result rows remained intact.
 - Serialize all `Store` mutations with a process-wide fair reentrant lock, and move forecast/coupon persistence off the main thread. Add an API 34 regression test that holds a background transaction and verifies the forecast write waits and commits.
-- Initial local full verification passed 88 JVM and 12 API 34 instrumentation tests and assembled the debug APK. After tightening the regression assertion, all 8 `StoreMigrationInstrumentedTest` tests passed again. Full latest-source CI and stable-signed API 26 update-install remain pending.
+- Commit `6425117` passed Actions [42912446156](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42912446156): 88 JVM + 12 API 34 tests, APK build, stable signing and artifact `13807803388`. The APK SHA-256 is `5851eb6ec4482ea09bd85f9d325c14b2b8189bdbfe7c4a314a48bc0d9ddd9521`; signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Stable-signed `adb install -r` update-installed over the data-bearing API 26 app. `firstInstallTime` stayed unchanged. After temporarily expiring only provider freshness timestamps in the test profile, a normal app open scheduled a real Worker; OpenFootball and OpenLigaDB completed `OK` at 22:27:11 / 22:27:32 UTC while the Activity remained resumed. The sync lock was released, counts remained 38,609 matches / 29,612 completed results, and no SQLite lock or fatal crash appeared. The Worker replaced the temporary timestamps with real successful check times.
 
 ## Unreleased — prevent duplicate bookmaker captures and refresh at expiry (CI and API 34 runtime passed)
 
