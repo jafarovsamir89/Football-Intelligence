@@ -10,6 +10,7 @@
 - Added tests for both visible-row formats, aliases, timezones, future/past/live handling, duplicates, inferred year, coupon isolation and chronological engine equivalence.
 - API 34 observed 39,330 merged matches/30,180 scores over 188 competitions and five seasons; the automatic walk-forward returned 19,078 forecasts (Brier 0.6105, Log Loss 1.0234) from 29,970 targets.
 - Documented that bookmaker source permission is not confirmed, no captured odds matched an exact local model fixture, and retrospective scores use current files rather than archived historical vintages.
+- Added a private stable personal-test signing key in repository Actions Secrets so future CI APK updates can preserve the locally stored database. The key is not stored in the repository or emitted to build logs.
 
 ## Unreleased — 2026-11-09
 

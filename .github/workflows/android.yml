@@ -29,6 +29,32 @@ jobs:
         run: ./gradlew --no-daemon :app:testDebugUnitTest
       - name: Build APK
         run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Sign APK with stable personal test key
+        env:
+          FI_DEBUG_SIGNING_KEYSTORE_B64: ${{ secrets.FI_DEBUG_SIGNING_KEYSTORE_B64 }}
+          FI_DEBUG_SIGNING_PASSWORD: ${{ secrets.FI_DEBUG_SIGNING_PASSWORD }}
+          FI_DEBUG_SIGNING_ALIAS: ${{ secrets.FI_DEBUG_SIGNING_ALIAS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$FI_DEBUG_SIGNING_KEYSTORE_B64" || -z "$FI_DEBUG_SIGNING_PASSWORD" || -z "$FI_DEBUG_SIGNING_ALIAS" ]]; then
+            echo "Signing secrets unavailable; keeping the default debug signature (for example, on an untrusted fork PR)."
+            exit 0
+          fi
+          key_file="$RUNNER_TEMP/football-intelligence-debug.p12"
+          signed_apk="$RUNNER_TEMP/app-debug-signed.apk"
+          printf '%s' "$FI_DEBUG_SIGNING_KEYSTORE_B64" | base64 --decode > "$key_file"
+          apksigner="$(find "$ANDROID_HOME/build-tools" -maxdepth 2 -type f -name apksigner | sort -V | tail -n 1)"
+          "$apksigner" sign \
+            --ks "$key_file" \
+            --ks-key-alias "$FI_DEBUG_SIGNING_ALIAS" \
+            --ks-pass "env:FI_DEBUG_SIGNING_PASSWORD" \
+            --key-pass "env:FI_DEBUG_SIGNING_PASSWORD" \
+            --out "$signed_apk" \
+            app/build/outputs/apk/debug/app-debug.apk
+          "$apksigner" verify --verbose --print-certs "$signed_apk"
+          mv "$signed_apk" app/build/outputs/apk/debug/app-debug.apk
+          rm -f "$key_file"
       - uses: actions/upload-artifact@v7
         with:
           name: football-intelligence-debug-apk

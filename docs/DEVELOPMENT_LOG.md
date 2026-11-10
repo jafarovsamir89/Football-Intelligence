@@ -175,11 +175,19 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed after the automatic walk-forward and quote freshness/deduplication changes: 62 JUnit tests, debug APK built.
 - API 34 emulator screenshots and UI hierarchy verified the main, coupon, offline and backtest screens. Repeated capture history displayed once per event per operator. The automatic backtest completed over the full local database without a UI-thread block; the displayed totals/metrics were 29,970 / 19,078 / Brier 0.6105 / Log Loss 1.0234.
 - Airplane-mode relaunch succeeded with previously synchronized local data. eTopaz/Misli quotes remain freshness-limited to 30 minutes.
-- Current revision is still uncommitted and its GitHub Actions run has not been launched. No API 26 or physical-device check was done. Existing v7→v8 data preservation was previously observed, but dedicated SQLite migration/instrumentation tests are not present.
+- Main implementation was committed/pushed as `4edec14`; GitHub Actions run `42729262549` passed all jobs and uploaded artifact `13723518681`. No API 26 or physical-device check was done. Existing v7→v8 data preservation was previously observed, but dedicated SQLite migration/instrumentation tests are not present.
 
 ### Next concrete work
 
-1. Review full diff and test reports, resolve stale documentation claims, and run final local build/test after documentation changes.
-2. Commit the zero-touch/bookmaker integration and automatic walk-forward as distinct major milestones.
-3. Push to the existing repository, wait for GitHub Actions, download and inspect its APK artifact; fix and repeat if CI reports an issue.
-4. Preserve these open limitations: operator terms do not affirm automated quote reuse; current 33 bookmaker snapshots do not join an exact local fixture; no operator quote is reused as a price for an unmatched local model pick; only one API 34 emulator was tested; historic source vintages are absent; no forecast outcomes have settled yet.
+1. Verify the stable test-signing workflow and run local tests/build before committing its follow-up.
+2. Push the workflow fix and wait for a second GitHub Actions run; download the new APK, compare certificate fingerprints, then update-install it over an already stable-signed API 34 install and confirm the SQLite database remains.
+3. Continue monitoring the latest clean-install sync to completion and record its final counts.
+4. Preserve these open limitations: operator terms do not affirm automated quote reuse; current 33 bookmaker event rows do not join an exact local fixture; no operator quote is reused as a price for an unmatched local model pick; only one API 34 emulator was tested; historic source vintages are absent; no forecast outcomes have settled yet.
+
+## 2026-11-09 — GitHub Actions artifact verification and stable update signing
+
+- Actions run [42729262549](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42729262549) completed successfully for `4edec14` in 3m51s. Unit tests, APK build and artifact upload all passed. Artifact ID `13723518681` downloaded as a 17,140,940-byte `az.simplesoft.footballintelligence` debug APK (version 0.1.0, minSdk 26, targetSdk 35).
+- Fresh CI artifact installed and launched after a clean uninstall. WorkManager started filling SQLite automatically; first complete DB inspection reached 5,394 matches/2,338 scored rows in 15 competitions while the long sync was still running. The standard WebViews stored eight Misli and 25 eTopaz rows. Earlier local-build fresh-install testing completed full sync to 39,330 rows; this CI build uses the same commit/source.
+- `adb install -r` from the CI artifact over the workstation-signed APK correctly rejected the mismatched debug certificate. To protect cached history on later APK updates, generated a private RSA test keystore and stored its keystore/password/alias only in GitHub Actions Secrets. Updated the workflow to sign the debug APK after Gradle. No signing key was added to the repo.
+- Validated the workflow's `apksigner` command locally by re-signing the CI APK. Certificate SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; that stable-signed APK installed on API 34 and opened the app. It must now be tested against the next Actions-signed APK to confirm same certificate and in-place DB preservation.
+- The follow-up workflow/README/diary edits are in progress and have not yet been committed or run in CI. The stable-signed local APK was clean-installed on the emulator and its first sync has begun.

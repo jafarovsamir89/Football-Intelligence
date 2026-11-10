@@ -30,7 +30,9 @@ Airplane-mode relaunch preserved the local schedule, source statuses and stored 
 
 ## CI / APK
 
-Earlier GitHub Actions runs [42711478723](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42711478723) and [42714011747](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42714011747) successfully ran tests, assembled a debug APK, and uploaded an artifact for prior commits. The current automatic-sync revision must be committed/pushed and its own Actions run checked before it is considered CI-verified.
+GitHub Actions run [42729262549](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42729262549) passed unit tests, `assembleDebug`, and artifact upload for commit `4edec14`. The downloaded artifact (`football-intelligence-debug-apk`, 17,140,940 bytes) reports package `az.simplesoft.footballintelligence`, version `0.1.0`, minSdk 26 and targetSdk 35. It installed after a clean uninstall on API 34, opened the main screen, started first-open sync, and captured 8 Misli plus 25 eTopaz rows. Its background history sync was still running at the first inspection (5,394 rows, 15 competitions); the equivalent local build had already been followed through to completion above.
+
+The first CI artifact used the runner's generated debug certificate. Attempting to update the local-key installation correctly failed with Android's signature-mismatch guard. A private test signing key has since been placed in repository Actions Secrets and the workflow now re-signs CI artifacts with it; a follow-up CI run and install-over-existing signature check are pending before that run becomes the recommended update artifact. The key itself is not checked into Git.
 
 ## Remaining verification gaps
 

@@ -25,9 +25,9 @@
 
 ## Android APK
 
-В GitHub Actions открой workflow **Build Android Debug APK** и запусти сборку. После успешного выполнения скачай artifact football-intelligence-debug-apk и установи app-debug.apk на Android. APK — тестовая debug-сборка, а не релиз для Play Store.
+Успешная сборка текущей ревизии: [GitHub Actions 42729262549](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42729262549), artifact `football-intelligence-debug-apk`. APK — тестовая debug-сборка, а не релиз для Play Store. Для установки с возможностью обновлять приложение без потери локальной базы скачивай artifact из Actions: дальнейшие CI APK будут подписываться одним приватным тестовым ключом; локальный APK с компьютера имеет другой debug-сертификат.
 
-Последняя локальная проверка: 62 JUnit-теста и `assembleDebug` прошли. APK установлен на API 34; текущая ревизия ещё ожидает коммита и проверки в GitHub Actions.
+Последняя локальная проверка: 62 JUnit-теста и `assembleDebug` прошли. Artifact Actions установлен на API 34 после чистой установки и автоматически начал заполнять локальную базу.
 
 ## Документация
 
