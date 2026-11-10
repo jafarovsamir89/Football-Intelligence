@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-10 — stabilize WorkManager offline instrumentation (local API 34 passed; CI pending)
+
+- The docs-only commit `61374ee` reran the full Actions pipeline. JVM tests passed, but API 34 instrumentation failed once in `immediateSyncRemainsQueuedWithoutNetworkAndDoesNotStartWorker` with `NoSuchElementException: List is empty` after a fixed two-second wait. No production source or database operation failed.
+- Replaced fixed-time assumptions around WorkManager enqueue with bounded polling for the unique active request (30-second timeout), and improved timeout diagnostics to include observed states. Applied the same wait to both unique request assertions in this test class.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 11 API 34 tests locally with zero failures/skips. Next: commit/push the test hardening and require a green Actions rerun.
+
 ## 2026-11-10 — SQLite concurrency fix, CI and live capture verified
 
 ### Finding

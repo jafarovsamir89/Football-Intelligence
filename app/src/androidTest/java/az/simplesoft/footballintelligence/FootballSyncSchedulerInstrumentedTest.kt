@@ -44,13 +44,11 @@ class FootballSyncSchedulerInstrumentedTest {
                 nowMillis = System.currentTimeMillis(),
             )
 
-            // Leave time for WorkManager's constraint tracker to observe the disconnected state.
-            Thread.sleep(2_000)
-            val immediate = activeWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME).single()
+            val immediate = awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME)
             assertEquals(WorkInfo.State.ENQUEUED, immediate.state)
             assertEquals(0, immediate.runAttemptCount)
             assertTrue(immediate.progress.keyValueMap.isEmpty())
-            val periodic = activeWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME).single()
+            val periodic = awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME)
             assertEquals(WorkInfo.State.ENQUEUED, periodic.state)
             assertEquals(0, periodic.runAttemptCount)
         } finally {
@@ -88,8 +86,8 @@ class FootballSyncSchedulerInstrumentedTest {
                 immediateInitialDelayMillis = safeTestDelay,
             )
 
-            val firstPeriodic = activeWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME).single()
-            val firstImmediate = activeWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME).single()
+            val firstPeriodic = awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME)
+            val firstImmediate = awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME)
             assertEquals(WorkInfo.State.ENQUEUED, firstPeriodic.state)
             assertEquals(WorkInfo.State.ENQUEUED, firstImmediate.state)
             assertEquals(NetworkType.CONNECTED, firstPeriodic.constraints.requiredNetworkType)
@@ -108,8 +106,14 @@ class FootballSyncSchedulerInstrumentedTest {
                 nowMillis = now,
                 immediateInitialDelayMillis = safeTestDelay,
             )
-            assertEquals(firstPeriodic.id, activeWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME).single().id)
-            assertEquals(firstImmediate.id, activeWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME).single().id)
+            assertEquals(
+                firstPeriodic.id,
+                awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_PERIODIC_NAME).id,
+            )
+            assertEquals(
+                firstImmediate.id,
+                awaitSingleActiveWork(manager, FootballSyncScheduler.UNIQUE_ONCE_NAME).id,
+            )
 
             cancelTestWork(manager)
             val freshNow = System.currentTimeMillis()
@@ -129,6 +133,23 @@ class FootballSyncSchedulerInstrumentedTest {
     private fun activeWork(manager: WorkManager, uniqueName: String): List<WorkInfo> =
         manager.getWorkInfosForUniqueWork(uniqueName).get(10, TimeUnit.SECONDS)
             .filter { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+
+    private fun awaitSingleActiveWork(manager: WorkManager, uniqueName: String): WorkInfo {
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(30)
+        var lastObserved = emptyList<WorkInfo>()
+        while (System.currentTimeMillis() < deadline) {
+            lastObserved = activeWork(manager, uniqueName)
+            check(lastObserved.size <= 1) {
+                "Expected one active request for $uniqueName, observed ${lastObserved.size}."
+            }
+            if (lastObserved.size == 1) return lastObserved.single()
+            Thread.sleep(100)
+        }
+        throw AssertionError(
+            "Timed out waiting for active request $uniqueName; " +
+                "observed states: ${manager.getWorkInfosForUniqueWork(uniqueName).get(10, TimeUnit.SECONDS).map { it.state }}",
+        )
+    }
 
     private fun cancelTestWork(manager: WorkManager) {
         manager.cancelUniqueWork(FootballSyncScheduler.UNIQUE_ONCE_NAME)

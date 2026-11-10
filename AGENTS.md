@@ -35,6 +35,8 @@ Continue the user's master request in `docs/DEVELOPMENT_LOG.md` and the roadmap 
 
 ## Current continuation point
 
+The product-code milestone `01706e9` and live API 34 capture are CI/runtime verified above. The following documentation-only commit `61374ee` reran the full workflow but hit one instrumentation failure in `immediateSyncRemainsQueuedWithoutNetworkAndDoesNotStartWorker`: the test called `.single()` after a fixed 2-second sleep and observed an empty WorkManager list. The test now polls for the persisted unique request for up to 30 seconds and reports observed states on timeout. Local API 34 instrumentation passes all 11 tests; commit/push and CI confirmation for this test stabilization are the immediate next steps.
+
 ### Latest runtime finding (2026-11-10)
 
 Commit `01706e9` passed Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921): 88 JVM tests, 11 API 34 instrumentation tests, APK build, stable signing and artifact upload. Artifact `13800473100` has signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Its APK was update-installed on the primary API 34 emulator using `adb install -r`, with no uninstall/data clear; the original first-install time remained unchanged. The pre-install DB had 39,181 matches, 184 competitions, 30,114 completed scores, 385 bookmaker snapshots, 85 virtual accumulators/494 legs and 62 forecasts/0 settlements.
