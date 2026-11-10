@@ -4,15 +4,15 @@
 
 ### Change
 
-- Added an Android instrumentation test that executes the real `AutomaticFootballSyncWorker` against a local rejecting HTTP proxy. The proxy selector routes only the worker's public catalog requests to loopback and closes them; no live provider request is made.
+- Added an Android instrumentation test that executes the real `AutomaticFootballSyncWorker` while airplane mode and Wi-Fi are disabled and `ConnectivityManager.activeNetwork` is null. A local rejecting HTTP proxy also receives both public catalog request routes and closes them; the test cannot reach a live provider even if Java ignores the proxy selector.
 - The worker runs with a random isolated SQLite filename and test context. The test verifies requests reached both `api.github.com` and `api.openligadb.de`, the worker returns WorkManager `Result.retry()`, both provider states report `ERROR` with no successful timestamp, and the sync lock is released. The proxy selector and temporary database are restored/deleted in `finally`.
 - This exercises the production decision from actual provider failures through the Worker's retry result. It does not yet exercise WorkManager's delayed retry scheduling/resumption.
 
 ### Verification and next action
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
-- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 9 API 34 instrumentation tests, 0 failures/errors/skips; the aggregate report completed in 12.117s. The separate Android test emulator returned to its original airplane/Wi-Fi settings, and the primary database was not used.
-- The new retry integration change is local only; commit and GitHub Actions verification are next. WorkManager delayed retry/backoff rescheduling remains a distinct gap.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 9 API 34 instrumentation tests, 0 failures/errors/skips; the aggregate report completed in 13.187s. The separate Android test emulator returned to its original airplane/Wi-Fi settings, and the primary database was not used.
+- First CI attempt [42771702073](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42771702073) was cancelled because proxy selection alone did not guarantee isolation on a networked GitHub emulator. This revision explicitly disables network access before executing the worker. Commit/push and a new CI run are next; WorkManager delayed retry/backoff rescheduling remains a distinct gap.
 
 ## 2026-11-10 — WorkManager offline gating instrumentation (CI and API 34 update-install passed)
 

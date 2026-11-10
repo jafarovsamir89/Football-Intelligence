@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
+import android.net.ConnectivityManager
+import android.os.ParcelFileDescriptor
+import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ListenableWorker
@@ -23,6 +26,7 @@ import java.net.URI
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -33,12 +37,28 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AutomaticFootballSyncWorkerInstrumentedTest {
     @Test fun workerReturnsRetryWhenBothProviderCatalogsFail() = runBlocking {
-        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val baseContext = instrumentation.targetContext
+        val connectivityManager = baseContext.getSystemService(ConnectivityManager::class.java)
         val databaseName = "fi-worker-retry-${UUID.randomUUID()}.db"
+        val wasAirplaneModeEnabled = Settings.Global.getInt(
+            baseContext.contentResolver,
+            Settings.Global.AIRPLANE_MODE_ON,
+            0,
+        ) == 1
+        val wasWifiEnabled = Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 1
         baseContext.deleteDatabase(databaseName)
         val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
 
         try {
+            if (!wasAirplaneModeEnabled) runShellCommand("cmd connectivity airplane-mode enable")
+            if (wasWifiEnabled) runShellCommand("cmd wifi set-wifi-enabled disabled")
+            waitUntil(timeoutMillis = TimeUnit.SECONDS.toMillis(10)) {
+                Settings.Global.getInt(baseContext.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1 &&
+                    Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 0 &&
+                    connectivityManager.activeNetwork == null
+            }
+
             LocalRejectingProxy().use { proxy ->
                 val worker = TestListenableWorkerBuilder<AutomaticFootballSyncWorker>(isolatedContext)
                     .setRunAttemptCount(1)
@@ -73,7 +93,34 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
                 }
             }
         } finally {
+            val isAirplaneModeEnabled = Settings.Global.getInt(
+                baseContext.contentResolver,
+                Settings.Global.AIRPLANE_MODE_ON,
+                0,
+            ) == 1
+            if (isAirplaneModeEnabled != wasAirplaneModeEnabled) {
+                runShellCommand(
+                    "cmd connectivity airplane-mode ${if (wasAirplaneModeEnabled) "enable" else "disable"}",
+                )
+            }
+            val isWifiEnabled = Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 1
+            if (isWifiEnabled != wasWifiEnabled) {
+                runShellCommand("cmd wifi set-wifi-enabled ${if (wasWifiEnabled) "enabled" else "disabled"}")
+            }
             baseContext.deleteDatabase(databaseName)
+        }
+    }
+
+    private fun runShellCommand(command: String): String {
+        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
+    }
+
+    private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMillis
+        while (!condition()) {
+            check(System.currentTimeMillis() < deadline) { "Timed out waiting for the test emulator to go offline." }
+            Thread.sleep(100)
         }
     }
 
