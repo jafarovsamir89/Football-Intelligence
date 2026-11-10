@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — retain provenance and scores across provider duplicates (local API 34 passed; CI pending)
+
+- Merge source labels, URLs and capture time for naturally matched fixtures even when the incoming provider has no result or no more precise kickoff.
+- Keep a settled score when an incomplete source arrives or a second provider reports a conflicting score. Promote date-only fixtures to an exact kickoff and final score when the incoming provider has valid timing/results.
+- Add two isolated SQLite Android instrumentation tests. Local verification: 88 JVM + 7 API 34 instrumentation tests and APK build passed. CI pending.
+
 ## Unreleased — freeze prospective forecast snapshots (CI and API 34 update-install passed)
 
 - Add SQLite v11 tables for immutable model-version/match/UTC-day forecast snapshots and independently updated result settlements. Score corrections change only the linked result, never historical probabilities.

@@ -1,5 +1,20 @@
 # Development log
 
+## 2026-11-10 — cross-provider duplicate provenance and score retention (local API 34 passed; CI pending)
+
+### Change
+
+- Extended natural-fixture merge so a duplicate from another provider contributes its source name, URL and latest capture time even when it does not supply a better kickoff or new score.
+- Preserve the already-settled score when a second provider has no result or reports a conflicting completed score. A valid incoming exact kickoff and result can still upgrade a date-only unresolved fixture without adding a second match row.
+- Added two isolated SQLite instrumentation tests: completed-match provenance merge plus score conflict/partial-refresh retention; date-only-to-exact kickoff and final-score promotion.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 7 instrumentation tests on the isolated API 34 emulator. Test databases are random, isolated, and deleted in `finally`; the primary API 34 user database was untouched.
+- `git diff --check` passed. Code and tests are local only; Actions check is pending.
+- Next: commit/push this stage, verify GitHub Actions, then update-install its CI APK over the existing app. Add WorkManager offline/retry integration coverage after cross-provider CI is green.
+
 ## 2026-11-10 — prospective forecast ledger and cutoff correction (CI and API 34 update-install passed)
 
 ### Change

@@ -281,10 +281,17 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                         val oldExact=old[6] as Int==1
                         val useIncomingResult=m.finished&&!oldFinished
                         val useIncomingKickoff=m.exactKickoff&&!oldExact
-                        if(useIncomingResult||useIncomingKickoff) {
+                        val oldNames=(old[5] as String).split(" + ").map { it.trim() }.filter { it.isNotEmpty() }
+                        val mergedName=(oldNames+m.sourceName).distinct().joinToString(" + ")
+                        val oldUrls=(old[8] as String?).orEmpty().split("\n").map { it.trim() }.filter { it.isNotEmpty() }
+                        val mergedUrls=(oldUrls+listOfNotNull(m.sourceUrl)).distinct()
+                        val mergedCapture=listOfNotNull(old[9] as Long?,m.capturedAtMillis).maxOrNull()
+                        val hasProvenanceUpdate=mergedName!=(old[5] as String)||
+                            mergedUrls.joinToString("\n")!=(old[8] as String?).orEmpty()||
+                            mergedCapture!=(old[9] as Long?)
+                        if(useIncomingResult||useIncomingKickoff||hasProvenanceUpdate) {
                             val oldAvailable=old[7] as Long?
                             val newAvailable=if(useIncomingResult) listOfNotNull(oldAvailable,m.availableAtMillis).maxOrNull() else oldAvailable
-                            val mergedName=listOf(old[5] as String,m.sourceName).distinct().joinToString(" + ")
                             val merged=ContentValues().apply {
                                 put("source_name",mergedName)
                                 if(useIncomingKickoff) {
@@ -295,10 +302,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                                     put("finished",1);put("home_score",m.homeScore);put("away_score",m.awayScore)
                                 }
                                 if(newAvailable==null) putNull("available_at") else put("available_at",newAvailable)
-                                val urls=listOfNotNull(old[8] as String?,m.sourceUrl).distinct()
-                                if(urls.isNotEmpty()) put("source_url",urls.joinToString("\n"))
-                                val captures=listOfNotNull(old[9] as Long?,m.capturedAtMillis).maxOrNull()
-                                if(captures!=null) put("captured_at",captures)
+                                if(mergedUrls.isNotEmpty()) put("source_url",mergedUrls.joinToString("\n"))
+                                if(mergedCapture!=null) put("captured_at",mergedCapture)
                             }
                             db.update("matches",merged,"id=?",arrayOf(naturalDuplicateId.toString()))
                         }

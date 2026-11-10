@@ -7,6 +7,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastEvaluator
+import az.simplesoft.footballintelligence.data.KickoffPrecision
+import az.simplesoft.footballintelligence.data.ProviderMatch
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -14,6 +16,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 
 @RunWith(AndroidJUnit4::class)
@@ -282,6 +286,184 @@ class StoreMigrationInstrumentedTest {
             context.deleteDatabase(databaseName)
         }
     }
+
+    @Test fun crossProviderDuplicateKeepsSettledScoreAndMergesProvenance() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-cross-provider-final-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val date = LocalDate.of(2025, 3, 1)
+        val kickoff = date.atTime(17, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val resultCaptured = kickoff + 3 * 60 * 60 * 1_000L
+        try {
+            Store(context, databaseName).use { store ->
+                store.upsertProviderMatches(
+                    listOf(
+                        providerMatch(
+                            providerId = "openligadb",
+                            providerMatchId = "99221",
+                            date = date,
+                            kickoffMillis = kickoff,
+                            precision = KickoffPrecision.INSTANT,
+                            homeGoals = 2,
+                            awayGoals = 1,
+                            availableAtMillis = resultCaptured,
+                            capturedAtMillis = resultCaptured,
+                            sourceUrl = "https://api.openligadb.de/match/99221",
+                        ),
+                    ),
+                )
+                store.upsertProviderMatches(
+                    listOf(
+                        providerMatch(
+                            providerId = "openfootball",
+                            providerMatchId = "2024-25:bl1:2025-03-01:Northbridge:Riverside",
+                            date = date,
+                            kickoffMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                            precision = KickoffPrecision.DATE_ONLY,
+                            homeGoals = null,
+                            awayGoals = null,
+                            availableAtMillis = null,
+                            capturedAtMillis = resultCaptured + 1_000,
+                            sourceUrl = "https://github.com/openfootball/football.json/blob/master/2024-25/bl1.json",
+                        ),
+                    ),
+                )
+                store.upsertProviderMatches(
+                    listOf(
+                        providerMatch(
+                            providerId = "openfootball",
+                            providerMatchId = "conflicting-copy",
+                            date = date,
+                            kickoffMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                            precision = KickoffPrecision.DATE_ONLY,
+                            homeGoals = 0,
+                            awayGoals = 4,
+                            availableAtMillis = resultCaptured + 2_000,
+                            capturedAtMillis = resultCaptured + 2_000,
+                            sourceUrl = "https://example.invalid/alternate-feed",
+                        ),
+                    ),
+                )
+
+                store.writableDatabase.rawQuery(
+                    "SELECT id,source_key,finished,home_score,away_score,source_name,source_url,exact_kickoff,available_at " +
+                        "FROM matches WHERE event_date=?",
+                    arrayOf(date.toString()),
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("openligadb:99221", cursor.getString(1))
+                    assertEquals(1, cursor.getInt(2))
+                    assertEquals(2, cursor.getInt(3))
+                    assertEquals(1, cursor.getInt(4))
+                    assertTrue(cursor.getString(5).contains("OpenLigaDB"))
+                    assertTrue(cursor.getString(5).contains("OpenFootball (CC0)"))
+                    val urls = cursor.getString(6).lines()
+                    assertTrue(urls.contains("https://api.openligadb.de/match/99221"))
+                    assertTrue(urls.contains("https://github.com/openfootball/football.json/blob/master/2024-25/bl1.json"))
+                    assertTrue(urls.contains("https://example.invalid/alternate-feed"))
+                    assertEquals(1, cursor.getInt(7))
+                    assertEquals(resultCaptured, cursor.getLong(8))
+                    assertFalse(cursor.moveToNext())
+                }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun crossProviderCompletedMatchFillsDateOnlyFixtureWithoutAddingDuplicate() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-cross-provider-fill-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val date = LocalDate.of(2025, 3, 8)
+        val kickoff = date.atTime(17, 0).toInstant(ZoneOffset.UTC).toEpochMilli()
+        val capture = kickoff + 2 * 60 * 60 * 1_000L
+        try {
+            Store(context, databaseName).use { store ->
+                store.upsertProviderMatches(
+                    listOf(
+                        providerMatch(
+                            providerId = "openfootball",
+                            providerMatchId = "fixture-date-only",
+                            date = date,
+                            kickoffMillis = date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli(),
+                            precision = KickoffPrecision.DATE_ONLY,
+                            homeGoals = null,
+                            awayGoals = null,
+                            availableAtMillis = null,
+                            capturedAtMillis = kickoff - 24 * 60 * 60 * 1_000L,
+                            sourceUrl = "https://github.com/openfootball/football.json/blob/master/2024-25/bl1.json",
+                        ),
+                    ),
+                )
+                store.upsertProviderMatches(
+                    listOf(
+                        providerMatch(
+                            providerId = "openligadb",
+                            providerMatchId = "99308",
+                            date = date,
+                            kickoffMillis = kickoff,
+                            precision = KickoffPrecision.INSTANT,
+                            homeGoals = 3,
+                            awayGoals = 0,
+                            availableAtMillis = capture,
+                            capturedAtMillis = capture,
+                            sourceUrl = "https://api.openligadb.de/match/99308",
+                        ),
+                    ),
+                )
+
+                store.writableDatabase.rawQuery(
+                    "SELECT source_key,finished,home_score,away_score,kickoff,exact_kickoff,source_name,source_url " +
+                        "FROM matches WHERE event_date=?",
+                    arrayOf(date.toString()),
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals("openfootball:fixture-date-only", cursor.getString(0))
+                    assertEquals(1, cursor.getInt(1))
+                    assertEquals(3, cursor.getInt(2))
+                    assertEquals(0, cursor.getInt(3))
+                    assertEquals(Instant.ofEpochMilli(kickoff).toString(), cursor.getString(4))
+                    assertEquals(1, cursor.getInt(5))
+                    assertTrue(cursor.getString(6).contains("OpenFootball (CC0)"))
+                    assertTrue(cursor.getString(6).contains("OpenLigaDB"))
+                    assertTrue(cursor.getString(7).contains("99308"))
+                    assertFalse(cursor.moveToNext())
+                }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    private fun providerMatch(
+        providerId: String,
+        providerMatchId: String,
+        date: LocalDate,
+        kickoffMillis: Long,
+        precision: KickoffPrecision,
+        homeGoals: Int?,
+        awayGoals: Int?,
+        availableAtMillis: Long?,
+        capturedAtMillis: Long,
+        sourceUrl: String,
+    ) = ProviderMatch(
+        providerId = providerId,
+        providerMatchId = providerMatchId,
+        competitionCode = "bl1",
+        competitionName = "Bundesliga",
+        season = "2024-25",
+        eventDate = date,
+        kickoffMillis = kickoffMillis,
+        kickoffPrecision = precision,
+        homeTeam = "Northbridge FC",
+        awayTeam = "Riverside United",
+        homeGoals = homeGoals,
+        awayGoals = awayGoals,
+        safeAvailableAtMillis = availableAtMillis,
+        sourceUrl = sourceUrl,
+        capturedAtMillis = capturedAtMillis,
+    )
 
     private fun createVersionOneDatabase(context: Context, name: String) {
         val db = context.openOrCreateDatabase(name, Context.MODE_PRIVATE, null)

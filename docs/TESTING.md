@@ -9,6 +9,8 @@ ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTes
 
 The v11 forecast-ledger revision passed locally: 88 JVM tests, all 5 Android instrumentation tests on API 34, and `assembleDebug`. Actions [42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211) passed all steps and uploaded the stable-signed APK. The update-installed artifact preserved 39,181 matches, 315 quote snapshots and all 59 prior accumulators/328 legs; after normal startup the totals were 69/384 because 10/56 new coupon records were generated. SQLite migrated to v11 and the UI showed 62 immutable future forecast snapshots with 0 settlements. Instrumentation covers v10→v11 table creation, once-per-day forecast immutability, delayed settlement until safe source/capture availability, result-source provenance and corrected scores without changing frozen probabilities.
 
+The current local cross-provider follow-up passes 88 JVM tests, all 7 API 34 instrumentation tests and `assembleDebug`. New isolated SQLite tests verify source-name/URL merging, no score erasure from incomplete or conflicting duplicates, and exact-kickoff/result promotion of a date-only row. GitHub Actions and update-install are pending.
+
 Commit `6faac0b` passed GitHub Actions run [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): **83 JUnit tests**, APK build, stable signing and artifact upload all passed. The signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable key. The artifact update-installed on API 34 and preserved the existing database.
 
 Coverage includes:
@@ -19,7 +21,7 @@ Coverage includes:
 - Football-Data CSV parsing/date availability for the optional settings import.
 - OpenFootball season planning, safe catalog paths, date-only vs scored records, duplicate rows, and catalog discovery.
 - OpenLigaDB football-only catalog filtering, kickoff/result parsing, current group and update timestamp parsing.
-- Conservative cross-provider same-date/team/home-away dedupe identity.
+- Conservative cross-provider same-date/team/home-away dedupe identity, provenance merging, settled-score retention on incomplete/conflicting updates, and date-only fixture promotion.
 - Misli visible-DOM 1X2 parsing, local timezone conversion, strict alias/orientation/date/kickoff fixture mapping, and rejection of expired, live-score, incomplete, ambiguous and conflicting rows.
 - Independent Misli/TOPAZ visible-page parsers, eTopaz inferred-year rules, exact alias/date/kickoff matching, operator isolation, expiry, and no fabricated odds.
 - Provider status freshness and latest-snapshot-per-event selection after repeated WebView reloads.
@@ -54,7 +56,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 ## Remaining verification gaps
 
-- SQLite v1→v11, v9→v11 and v10→v11 migration preservation, plus settled-score retention during incomplete refresh, have isolated instrumentation coverage. Cross-provider merge/score retention still needs dedicated instrumentation.
+- SQLite v1→v11, v9→v11 and v10→v11 migration preservation, plus cross-provider score retention during incomplete/conflicting refresh, have isolated instrumentation coverage. The tests use separate random database names.
 - The new WorkManager instrumentation verifies scheduled request constraints and freshness decisions without running the worker. Worker retry/backoff, actual offline gating, continuation execution, ETag/304, provider pacing and lock expiry still lack dedicated integration tests. API 26 has a separate observed real continuation run.
 
 Commit `92836d8` passed Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971): **84 JUnit tests**, **3 API 34 instrumentation tests**, APK build, stable signing and artifact upload. The instrumentation job confirmed the SQLite migration tests and WorkManager scheduler test on its API 34 emulator.
