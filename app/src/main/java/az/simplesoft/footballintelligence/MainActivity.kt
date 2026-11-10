@@ -33,6 +33,7 @@ import java.io.ByteArrayOutputStream
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -45,7 +46,14 @@ import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.CalibrationDiagnostics
+import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
+import az.simplesoft.footballintelligence.analytics.ProspectiveForecastObservation
+import az.simplesoft.footballintelligence.analytics.ProspectiveForecastEvaluator
+import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.historyAvailableAt
+import az.simplesoft.footballintelligence.analytics.isProspectiveForecastEligible
+import az.simplesoft.footballintelligence.analytics.conservativeResultAvailability
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
@@ -134,7 +142,7 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
     return Triple(p.home, p.draw, p.away)
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 10) {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 11) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER, source_key TEXT UNIQUE, source_name TEXT NOT NULL DEFAULT 'OpenLigaDB', exact_kickoff INTEGER NOT NULL DEFAULT 1, available_at INTEGER, source_url TEXT, event_date TEXT, season TEXT, captured_at INTEGER)")
         db.execSQL("CREATE INDEX matches_event_date_idx ON matches(event_date,home,away)")
@@ -146,6 +154,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         createCouponTables(db)
         createBookmakerTables(db)
         createAccumulatorTables(db)
+        createProspectiveForecastTables(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if(oldVersion<2) createHistoricalImportTables(db)
@@ -179,6 +188,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion==7) db.execSQL("ALTER TABLE bookmaker_odds_snapshots ADD COLUMN event_year_inferred INTEGER NOT NULL DEFAULT 0")
         if(oldVersion<9) createAccumulatorTables(db)
         else if(oldVersion<10) db.execSQL("ALTER TABLE virtual_accumulators ADD COLUMN selection_basis TEXT NOT NULL DEFAULT 'MODEL_RANKED'")
+        if(oldVersion<11) createProspectiveForecastTables(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -206,6 +216,23 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         db.execSQL("CREATE INDEX IF NOT EXISTS virtual_accumulators_history_idx ON virtual_accumulators(provider_id,leg_count,captured_at)")
         db.execSQL("CREATE TABLE IF NOT EXISTS virtual_accumulator_legs (id INTEGER PRIMARY KEY AUTOINCREMENT, accumulator_id INTEGER NOT NULL, match_id INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, scheduled_kickoff INTEGER NOT NULL, outcome TEXT NOT NULL, model_probability REAL NOT NULL, bookmaker_decimal_odds REAL, bookmaker_odds_captured_at INTEGER, UNIQUE(accumulator_id,match_id))")
         db.execSQL("CREATE INDEX IF NOT EXISTS virtual_accumulator_legs_match_idx ON virtual_accumulator_legs(match_id,accumulator_id)")
+    }
+    private fun createProspectiveForecastTables(db:SQLiteDatabase) {
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS prospective_forecast_snapshots (" +
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, model_version TEXT NOT NULL, match_id INTEGER NOT NULL, " +
+                "forecast_day_utc TEXT NOT NULL, forecasted_at INTEGER NOT NULL, kickoff_at INTEGER NOT NULL, " +
+                "competition TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, history_match_count INTEGER NOT NULL, " +
+                "home_probability REAL NOT NULL, draw_probability REAL NOT NULL, away_probability REAL NOT NULL, " +
+                "UNIQUE(model_version,match_id,forecast_day_utc))",
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS prospective_forecast_time_idx ON prospective_forecast_snapshots(forecasted_at,kickoff_at)")
+        db.execSQL(
+            "CREATE TABLE IF NOT EXISTS prospective_forecast_settlements (" +
+                "snapshot_id INTEGER PRIMARY KEY, settled_at INTEGER NOT NULL, result_available_at INTEGER NOT NULL, " +
+                "actual_outcome TEXT NOT NULL, home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL, " +
+                "result_source_name TEXT NOT NULL, result_source_url TEXT)",
+        )
     }
     fun upsert(matches: List<Match>) {
         val db = writableDatabase
@@ -241,7 +268,9 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                     candidates.singleOrNull()
                 } else null
                 if (existingId != null) {
-                    db.update("matches", values, "id=? AND (finished=0 OR (?=1 AND ? IS NOT NULL AND ? IS NOT NULL))",
+                    // Android binds whereArgs as text. Compare against text explicitly;
+                    // comparing this parameter to integer 1 silently rejects score corrections.
+                    db.update("matches", values, "id=? AND (finished=0 OR (?='1' AND ? IS NOT NULL AND ? IS NOT NULL))",
                         arrayOf(existingId.toString(), if (m.finished) "1" else "0", m.homeScore?.toString(), m.awayScore?.toString()))
                 } else if(naturalDuplicateId!=null) {
                     val old=db.rawQuery("SELECT league,kickoff,finished,home_score,away_score,source_name,exact_kickoff,available_at,source_url,captured_at,season FROM matches WHERE id=?",arrayOf(naturalDuplicateId.toString())).use { c ->
@@ -409,7 +438,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     fun historicalResultsBefore(league:String, cutoffMillis:Long):List<HistoricalMatch> {
         val result=mutableListOf<HistoricalMatch>()
         readableDatabase.rawQuery(
-            "SELECT home,away,kickoff,home_score,away_score,available_at,season FROM matches WHERE league=? AND finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL",
+            "SELECT home,away,kickoff,home_score,away_score,available_at,season,captured_at FROM matches WHERE league=? AND finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL",
             arrayOf(league)
         ).use { c ->
             while(c.moveToNext()) {
@@ -417,7 +446,10 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 val eventDate=Instant.ofEpochMilli(kickoff).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
                 if(!SeasonDateValidity.isPlausible(eventDate,if(c.isNull(6)) null else c.getString(6))) continue
                 if(!TeamDataQuality.isValidFixture(c.getString(0),c.getString(1))) continue
-                val availableAt=if(c.isNull(5)) kickoff else c.getLong(5)
+                val availableAt=conservativeResultAvailability(
+                    if(c.isNull(5)) null else c.getLong(5),
+                    if(c.isNull(7)) null else c.getLong(7),
+                ) ?: continue
                 if(kickoff<cutoffMillis && availableAt<cutoffMillis) result.add(HistoricalMatch(kickoff,c.getString(0),c.getString(1),c.getInt(3),c.getInt(4),availableAt))
             }
         }
@@ -426,7 +458,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     fun historicalResultsByLeague():Map<String,List<HistoricalMatch>> {
         val result=linkedMapOf<String,MutableList<HistoricalMatch>>()
         readableDatabase.rawQuery(
-            "SELECT league,home,away,kickoff,home_score,away_score,available_at,season FROM matches WHERE finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY league,kickoff",
+            "SELECT league,home,away,kickoff,home_score,away_score,available_at,season,captured_at FROM matches WHERE finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL ORDER BY league,kickoff",
             null,
         ).use { c ->
             while(c.moveToNext()) {
@@ -434,7 +466,10 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 val eventDate=Instant.ofEpochMilli(kickoff).atZone(java.time.ZoneOffset.UTC).toLocalDate().toString()
                 if(!SeasonDateValidity.isPlausible(eventDate,if(c.isNull(7)) null else c.getString(7))) continue
                 if(!TeamDataQuality.isValidFixture(c.getString(1),c.getString(2))) continue
-                val availableAt=if(c.isNull(6)) kickoff else c.getLong(6)
+                val availableAt=conservativeResultAvailability(
+                    if(c.isNull(6)) null else c.getLong(6),
+                    if(c.isNull(8)) null else c.getLong(8),
+                ) ?: continue
                 result.getOrPut(c.getString(0)) { mutableListOf() }.add(
                     HistoricalMatch(kickoff,c.getString(1),c.getString(2),c.getInt(4),c.getInt(5),availableAt),
                 )
@@ -480,6 +515,200 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             meanLogLoss=predictions.map { it.logLoss }.average().takeIf { predictions.isNotEmpty() },
             predictions=predictions,
         )
+    }
+    fun recordProspectiveForecastSnapshots(
+        forecasts:List<ForecastedMatch>,
+        nowMillis:Long=System.currentTimeMillis(),
+    ):Int {
+        if(forecasts.isEmpty()) return 0
+        val db=writableDatabase
+        var inserted=0
+        db.beginTransaction()
+        try {
+            for(forecast in forecasts) {
+                if(!TeamDataQuality.isValidFixture(forecast.homeTeam,forecast.awayTeam)) continue
+                if(!isProspectiveForecastEligible(
+                        forecast.forecastedAtMillis,
+                        forecast.kickoffMillis,
+                        nowMillis,
+                        forecast.historyMatchCount,
+                    )
+                ) continue
+                val currentMatch=db.rawQuery(
+                    "SELECT league,home,away,kickoff,finished,exact_kickoff FROM matches WHERE id=?",
+                    arrayOf(forecast.matchId.toString()),
+                ).use { c ->
+                    if(!c.moveToFirst()) null else {
+                        val kickoff=runCatching { Instant.parse(c.getString(3)).toEpochMilli() }.getOrNull()
+                        arrayOf<Any?>(c.getString(0),c.getString(1),c.getString(2),kickoff,c.getInt(4)==1,c.getInt(5)==1)
+                    }
+                } ?: continue
+                if(currentMatch[4] as Boolean || !(currentMatch[5] as Boolean)) continue
+                if(currentMatch[3] as Long? != forecast.kickoffMillis) continue
+                if(currentMatch[1] as String != forecast.homeTeam || currentMatch[2] as String != forecast.awayTeam) continue
+
+                val forecastDayUtc=Instant.ofEpochMilli(forecast.forecastedAtMillis)
+                    .atZone(ZoneOffset.UTC).toLocalDate().toString()
+                val values=ContentValues().apply {
+                    put("model_version",forecast.modelVersion)
+                    put("match_id",forecast.matchId)
+                    put("forecast_day_utc",forecastDayUtc)
+                    put("forecasted_at",forecast.forecastedAtMillis)
+                    put("kickoff_at",forecast.kickoffMillis)
+                    put("competition",forecast.competition.ifBlank { currentMatch[0] as String })
+                    put("home_team",forecast.homeTeam)
+                    put("away_team",forecast.awayTeam)
+                    put("history_match_count",forecast.historyMatchCount)
+                    put("home_probability",forecast.probabilities.home)
+                    put("draw_probability",forecast.probabilities.draw)
+                    put("away_probability",forecast.probabilities.away)
+                }
+                if(db.insertWithOnConflict(
+                        "prospective_forecast_snapshots",
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE,
+                    )!=-1L
+                ) inserted++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return inserted
+    }
+    fun settleProspectiveForecastSnapshots(nowMillis:Long=System.currentTimeMillis()):Int {
+        data class SettledResult(
+            val snapshotId:Long,
+            val forecastedAt:Long,
+            val availableAt:Long,
+            val outcome:String,
+            val homeGoals:Int,
+            val awayGoals:Int,
+            val sourceName:String,
+            val sourceUrl:String?,
+            val previousOutcome:String?,
+            val previousHomeGoals:Int?,
+            val previousAwayGoals:Int?,
+            val previousAvailableAt:Long?,
+            val previousSourceName:String?,
+            val previousSourceUrl:String?,
+        )
+        val results=mutableListOf<SettledResult>()
+        readableDatabase.rawQuery(
+            "SELECT s.id,s.forecasted_at,m.home,m.away,m.home_score,m.away_score," +
+                "CASE WHEN m.captured_at IS NULL THEN m.available_at WHEN m.available_at IS NULL THEN m.captured_at " +
+                "ELSE MAX(m.available_at,m.captured_at) END,m.kickoff,m.source_name,m.source_url," +
+                "r.actual_outcome,r.home_goals,r.away_goals,r.result_available_at,r.result_source_name,r.result_source_url " +
+                "FROM prospective_forecast_snapshots s JOIN matches m ON m.id=s.match_id " +
+                "LEFT JOIN prospective_forecast_settlements r ON r.snapshot_id=s.id " +
+                "WHERE m.finished=1 AND m.home_score IS NOT NULL AND m.away_score IS NOT NULL",
+            null,
+        ).use { c ->
+            while(c.moveToNext()) {
+                val home=c.getString(2)
+                val away=c.getString(3)
+                if(!TeamDataQuality.isValidFixture(home,away)) continue
+                val kickoff=runCatching { Instant.parse(c.getString(7)).toEpochMilli() }.getOrNull() ?: continue
+                if(c.isNull(6)) continue
+                val availableAt=c.getLong(6)
+                val forecastedAt=c.getLong(1)
+                if(availableAt>nowMillis||availableAt<=forecastedAt||availableAt<kickoff) continue
+                val homeGoals=c.getInt(4)
+                val awayGoals=c.getInt(5)
+                val outcome=when {
+                    homeGoals>awayGoals -> "H"
+                    homeGoals<awayGoals -> "A"
+                    else -> "D"
+                }
+                results+=SettledResult(
+                    c.getLong(0),
+                    forecastedAt,
+                    availableAt,
+                    outcome,
+                    homeGoals,
+                    awayGoals,
+                    c.getString(8),
+                    if(c.isNull(9)) null else c.getString(9),
+                    if(c.isNull(10)) null else c.getString(10),
+                    if(c.isNull(11)) null else c.getInt(11),
+                    if(c.isNull(12)) null else c.getInt(12),
+                    if(c.isNull(13)) null else c.getLong(13),
+                    if(c.isNull(14)) null else c.getString(14),
+                    if(c.isNull(15)) null else c.getString(15),
+                )
+            }
+        }
+        if(results.isEmpty()) return 0
+        val db=writableDatabase
+        var inserted=0
+        db.beginTransaction()
+        try {
+            for(result in results) {
+                val unchanged=result.outcome==result.previousOutcome&&
+                    result.homeGoals==result.previousHomeGoals&&
+                    result.awayGoals==result.previousAwayGoals&&
+                    result.availableAt==result.previousAvailableAt&&
+                    result.sourceName==result.previousSourceName&&
+                    result.sourceUrl==result.previousSourceUrl
+                if(unchanged) continue
+                val values=ContentValues().apply {
+                    put("snapshot_id",result.snapshotId)
+                    put("settled_at",nowMillis)
+                    put("result_available_at",result.availableAt)
+                    put("actual_outcome",result.outcome)
+                    put("home_goals",result.homeGoals)
+                    put("away_goals",result.awayGoals)
+                    put("result_source_name",result.sourceName)
+                    if(result.sourceUrl==null) putNull("result_source_url") else put("result_source_url",result.sourceUrl)
+                }
+                if(db.insertWithOnConflict(
+                        "prospective_forecast_settlements",
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE,
+                    )!=-1L
+                ) inserted++
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+        return inserted
+    }
+    fun prospectiveForecastHistory(limit:Int=100):List<ProspectiveForecastObservation> {
+        val result=mutableListOf<ProspectiveForecastObservation>()
+        readableDatabase.rawQuery(
+            "SELECT s.id,s.model_version,s.match_id,s.competition,s.home_team,s.away_team,s.forecasted_at,s.kickoff_at," +
+                "s.history_match_count,s.home_probability,s.draw_probability,s.away_probability," +
+                "r.actual_outcome,r.home_goals,r.away_goals,r.settled_at,r.result_available_at,r.result_source_name,r.result_source_url " +
+                "FROM prospective_forecast_snapshots s LEFT JOIN prospective_forecast_settlements r ON r.snapshot_id=s.id " +
+                "ORDER BY s.forecasted_at DESC,s.id DESC LIMIT ?",
+            arrayOf(limit.coerceIn(1,500).toString()),
+        ).use { c ->
+            while(c.moveToNext()) result+=ProspectiveForecastObservation(
+                snapshotId=c.getLong(0),
+                modelVersion=c.getString(1),
+                matchId=c.getInt(2),
+                competition=c.getString(3),
+                homeTeam=c.getString(4),
+                awayTeam=c.getString(5),
+                forecastedAtMillis=c.getLong(6),
+                kickoffMillis=c.getLong(7),
+                historyMatchCount=c.getInt(8),
+                probabilities=az.simplesoft.footballintelligence.analytics.OutcomeProbabilities(
+                    c.getDouble(9),c.getDouble(10),c.getDouble(11),
+                ),
+                actualOutcome=if(c.isNull(12)) null else c.getString(12),
+                homeGoals=if(c.isNull(13)) null else c.getInt(13),
+                awayGoals=if(c.isNull(14)) null else c.getInt(14),
+                settledAtMillis=if(c.isNull(15)) null else c.getLong(15),
+                resultAvailableAtMillis=if(c.isNull(16)) null else c.getLong(16),
+                resultSourceName=if(c.isNull(17)) null else c.getString(17),
+                resultSourceUrl=if(c.isNull(18)) null else c.getString(18),
+            )
+        }
+        return result
     }
     fun recordCouponCandidates(candidates:List<VirtualCouponCandidate>, nowMillis:Long=System.currentTimeMillis()):Int {
         val db=writableDatabase
@@ -1070,10 +1299,20 @@ class MainActivity:ComponentActivity() {
             orderedMatches.mapNotNull { match ->
                 val kickoff=runCatching { Instant.parse(match.kickoff).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
                 if(kickoff<=now) return@mapNotNull null
-                val history=historySnapshot[match.league].orEmpty().filter { it.kickoffMillis<kickoff&&it.availableAtMillis<kickoff }
-                val forecast=EloEngine.forecast(history,kickoff,match.home,match.away)
+                val history=historyAvailableAt(historySnapshot[match.league].orEmpty(),now)
+                val forecast=EloEngine.forecast(history,now,match.home,match.away)
                 val probabilities=forecast.probabilities ?: return@mapNotNull null
-                ForecastedMatch(match.id,match.home,match.away,kickoff,probabilities)
+                ForecastedMatch(
+                    matchId=match.id,
+                    homeTeam=match.home,
+                    awayTeam=match.away,
+                    kickoffMillis=kickoff,
+                    probabilities=probabilities,
+                    forecastedAtMillis=now,
+                    historyMatchCount=forecast.matchesUsed,
+                    modelVersion=CURRENT_ELO_MODEL_VERSION,
+                    competition=match.league,
+                )
             }
         }
     }
@@ -1089,12 +1328,21 @@ class MainActivity:ComponentActivity() {
     val accumulatorDrafts=remember(forecastedMatches,misliOdds,topazOdds) {
         VirtualCouponBuilder.buildAccumulators(forecastedMatches,oddsProviders.map { it.providerId to it.displayName },bookmakerCouponPrices)
     }
+    LaunchedEffect(forecastedMatches) {
+        val forecastSnapshotsAdded=store.recordProspectiveForecastSnapshots(forecastedMatches)
+        val forecastResultsSettled=store.settleProspectiveForecastSnapshots()
+        if(forecastSnapshotsAdded+forecastResultsSettled>0) revision++
+    }
     LaunchedEffect(modelPickDrafts,accumulatorDrafts) {
         val picksAdded=store.recordCouponCandidates(modelPickDrafts)
         val couponsAdded=store.recordAccumulatorDrafts(accumulatorDrafts)
         if(picksAdded+couponsAdded>0) revision++
     }
     val checkedCouponHistory=remember(revision) { store.loggedCouponPicks() }
+    val prospectiveForecastHistory=remember(revision) { store.prospectiveForecastHistory(100) }
+    val prospectiveForecastReport=remember(prospectiveForecastHistory) {
+        ProspectiveForecastEvaluator.evaluate(prospectiveForecastHistory)
+    }
     val accumulatorHistory=remember(revision) { store.virtualAccumulatorHistory() }
     val mapped=matches.associateBy { it.id }
     val settled=tickets.mapNotNull { t -> ticketMatches[t.matchId]?.let { m -> scoreResult(m)?.let { it to t } } }
@@ -1422,6 +1670,41 @@ class MainActivity:ComponentActivity() {
                     val resolved=pick.finished&&pick.homeGoals!=null&&pick.awayGoals!=null
                     val actual=if(!resolved) "Ожидает результата" else "Результат ${pick.homeGoals}:${pick.awayGoals} · ${if(scoreResult(Match(pick.matchId,"","","","",true,pick.homeGoals,pick.awayGoals))==pick.outcome) "совпало" else "не совпало"}"
                     Text("${pick.providerId} · ${pick.homeTeam} — ${pick.awayTeam} · ${labelOutcome(pick.outcome)} ${(pick.modelProbability*100).toInt()}% · $actual",style=MaterialTheme.typography.bodySmall)
+                }
+                HorizontalDivider()
+                Text("Замороженные прогнозы модели",fontWeight=FontWeight.Bold)
+                Text(
+                    "Модель ${CURRENT_ELO_MODEL_VERSION}. Сохраняется один неизменяемый снимок на матч, версию и UTC-день до kickoff; итог записывается отдельно, когда результат стал доступен. Это будущая проверка без оценки прибыли.",
+                    style=MaterialTheme.typography.bodySmall,
+                )
+                Text(
+                    "Снимков в последних ${prospectiveForecastHistory.size}: проверено результатов ${prospectiveForecastReport.settledCount}" +
+                        (prospectiveForecastReport.meanBrierScore?.let {
+                            " · Brier ${"%.4f".format(it)} · Log Loss ${"%.4f".format(prospectiveForecastReport.meanLogLoss)} · попадание наиболее вероятного ${"%.1f".format((prospectiveForecastReport.topOutcomeAccuracy ?: 0.0)*100)}% (n=${prospectiveForecastReport.settledCount})"
+                        } ?: " · для оценки ждём завершившиеся матчи"),
+                    style=MaterialTheme.typography.bodySmall,
+                )
+                if(prospectiveForecastHistory.isEmpty()) {
+                    Text("Первые прогнозы появятся после автоматического расчёта матчей с достаточной предматчевой историей.",style=MaterialTheme.typography.bodySmall)
+                } else {
+                    prospectiveForecastHistory.take(20).forEach { snapshot ->
+                        val captured=niceTime(Instant.ofEpochMilli(snapshot.forecastedAtMillis).toString())
+                        val probabilities=snapshot.probabilities
+                        val actual=if(snapshot.actualOutcome==null) {
+                            "ожидает доступного результата"
+                        } else {
+                            val scores="${snapshot.homeGoals}:${snapshot.awayGoals}"
+                            val mostLikely=listOf("H","D","A")[probabilities.values().indices.maxBy { probabilities.values()[it] }]
+                            val available=snapshot.resultAvailableAtMillis?.let {
+                                " · доступен ${niceTime(Instant.ofEpochMilli(it).toString())}"
+                            }.orEmpty()
+                            "${labelOutcome(snapshot.actualOutcome)} $scores · ${if(mostLikely==snapshot.actualOutcome) "совпало" else "не совпало"} · ${snapshot.resultSourceName ?: "источник не указан"}$available"
+                        }
+                        Text(
+                            "$captured · ${snapshot.homeTeam} — ${snapshot.awayTeam} · ${"%.1f".format(probabilities.home*100)}/${"%.1f".format(probabilities.draw*100)}/${"%.1f".format(probabilities.away*100)}% · история ${snapshot.historyMatchCount} · $actual",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
               }
               3 -> Column(Modifier.fillMaxSize().padding(14.dp)) {

@@ -1,5 +1,21 @@
 # Development log
 
+## 2026-11-10 — prospective forecast ledger and cutoff correction (local API 34 passed; CI pending)
+
+### Change
+
+- Added SQLite v11 `prospective_forecast_snapshots` and `prospective_forecast_settlements`. Snapshots are immutable per model version, fixture and UTC date; score/source corrections update only the independent settlement record. The UI now shows frozen probabilities, history size, result provenance, settled count, and prospective Brier / Log Loss / top-pick accuracy only after results are captured.
+- Live Elo forecasts now use only historical matches whose kickoff and conservative availability precede the actual calculation cutoff. Conservative availability is the later of source availability and local capture time; un-timestamped results are excluded from live forecasts.
+- Added v10→v11 migration coverage and regression tests for one-snapshot-per-day, delayed settlement, source provenance, score corrections and frozen probabilities.
+- The new settlement test exposed an existing `Store.upsert` bug: Android SQLite binds `whereArgs` as text, while the completed-score correction condition compared the bound value with integer `1`. Changed the comparison to `'1'`; corrected provider scores now reach the result history.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 5 instrumentation tests on the isolated API 34 emulator. SQLite fixture DBs use random names and are deleted in `finally`; the primary app database was not touched.
+- `git diff --check` passed after the final code and docs edits. Result XML totals: 88 JVM tests + 5 Android instrumentation tests, 0 failures/errors/skips. GitHub Actions, stable-signed APK update-install, schema v11 check and preservation of existing match/bookmaker/accumulator counts are pending.
+- Next: commit and push this milestone, verify Actions, then update-install the CI artifact on the existing API 34 app without uninstalling or clearing its database. Inspect snapshot count and rendered section; report zero if no eligible future fixture was captured.
+
 ## 2026-11-10 — WorkManager queue instrumentation (CI and local API 34 passed)
 
 ### Change

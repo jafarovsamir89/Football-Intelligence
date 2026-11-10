@@ -6,6 +6,10 @@ data class ForecastedMatch(
     val awayTeam: String,
     val kickoffMillis: Long,
     val probabilities: OutcomeProbabilities,
+    val forecastedAtMillis: Long = 0L,
+    val historyMatchCount: Int = 0,
+    val modelVersion: String = CURRENT_ELO_MODEL_VERSION,
+    val competition: String = "",
 )
 
 data class VirtualCouponPick(
