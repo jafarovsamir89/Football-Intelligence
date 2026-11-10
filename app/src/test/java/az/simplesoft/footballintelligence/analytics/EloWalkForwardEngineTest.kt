@@ -57,6 +57,38 @@ class EloWalkForwardEngineTest {
         assertEquals(report.predictions[0].probabilities, report.predictions[1].probabilities)
     }
 
+    @Test fun streamingWalkForwardMatchesIndependentAsOfFitsAcrossAvailabilityBatches() {
+        val history = listOf(
+            HistoricalMatch(10, "Alpha", "Beta", 3, 0, availableAtMillis = 100),
+            HistoricalMatch(11, "Gamma", "Delta", 0, 2, availableAtMillis = 100),
+            HistoricalMatch(20, "Beta", "Gamma", 1, 1, availableAtMillis = 150),
+            HistoricalMatch(30, "Delta", "Alpha", 0, 1, availableAtMillis = 250),
+        )
+        val targets = listOf(
+            WalkForwardTarget("at-availability", 100, "Alpha", "Beta", 0, 0),
+            WalkForwardTarget("after-first-batch", 120, "Alpha", "Gamma", 1, 0),
+            WalkForwardTarget("same-cutoff-a", 200, "Alpha", "Beta", 1, 0),
+            WalkForwardTarget("same-cutoff-b", 200, "Gamma", "Delta", 0, 1),
+            WalkForwardTarget("after-second-batch", 300, "Delta", "Alpha", 0, 0),
+        )
+        val report = EloWalkForwardEngine.evaluate(
+            history,
+            targets,
+            minimumHistoryMatches = 0,
+            minimumMatchesPerTeam = 0,
+        )
+
+        assertEquals(targets.size, report.forecastCount)
+        targets.forEach { target ->
+            val expected = EloEngine.predict1x2(
+                EloEngine.fit(history, target.forecastCutoffMillis),
+                target.homeTeam,
+                target.awayTeam,
+            )
+            assertEquals(expected, report.predictions.single { it.targetId == target.id }.probabilities)
+        }
+    }
+
     @Test fun insufficientHistorySkipsTargetsAndLeavesMetricsEmpty() {
         val report = EloWalkForwardEngine.evaluate(
             history = emptyList(),

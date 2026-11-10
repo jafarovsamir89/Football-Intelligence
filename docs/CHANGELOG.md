@@ -1,8 +1,27 @@
 # Changelog
 
+## Unreleased — zero-touch multi-source data, Misli/TOPAZ, and automatic model checks
+
+- Added API 34 verified first-open OpenFootball/OpenLigaDB sync across five seasons and dynamically discovered competitions, with local cache/status presentation.
+- Added ordinary Android WebView collectors for public Misli and eTopaz pages. They parse visible future 1X2 lines, preserve timestamps/source URLs, and hide prices older than 30 minutes. No login, private endpoint, or protection bypass is used.
+- Added separate operator adapters, exact fixture matching and event-year inference for eTopaz dates without a year. SQLite v8 stores bookmaker snapshots, sync state, and year-inferred provenance.
+- Repeated page refreshes now retain quote history but display/use only the newest fresh snapshot for each event and operator; stale capture status is distinguished from fresh upcoming lines.
+- Added automatic competition-specific walk-forward metrics for cached results; streaming availability batches preserve strict as-of cutoffs and make the 30k-row dataset practical.
+- Added tests for both visible-row formats, aliases, timezones, future/past/live handling, duplicates, inferred year, coupon isolation and chronological engine equivalence.
+- API 34 observed 39,330 merged matches/30,180 scores over 188 competitions and five seasons; the automatic walk-forward returned 19,078 forecasts (Brier 0.6105, Log Loss 1.0234) from 29,970 targets.
+- Documented that bookmaker source permission is not confirmed, no captured odds matched an exact local model fixture, and retrospective scores use current files rather than archived historical vintages.
+
 ## Unreleased — 2026-11-09
 
-- Added a standalone date-bucketed Elo walk-forward screen over imported results, with safe-availability filtering and mean Brier/Log Loss. It explicitly does not claim a market baseline or validated edge.
+- Added WorkManager first-open and 24-hour best-effort refresh with network constraints, unique work, retry/backoff, DB sync lease and OpenLigaDB request pacing.
+- Added OpenFootball five-season automatic JSON discovery/download with ETag/cache; added dynamic OpenLigaDB catalogs for five calendar-year seasons, change checks and bounded continuation.
+- Added provider freshness/error/provenance storage, capture and safe-availability timestamps, date-only kickoff handling, conservative cross-source fixture dedupe and SQLite migrations through v6.
+- Moved CSV import to Settings → Additional; normal first launch no longer requires files, odds entry, tipster input or a refresh tap.
+- Added separate Misli and TOPAZ provider status adapters for public WebView captures; quote reuse permission remains unconfirmed.
+- Added separate model-only Misli/TOPAZ coupon drafts and one-time pre-match pick logs with automatic result checking. No combined price, payout or joint probability is fabricated.
+- Added a completed-match results history and main-screen per-source check/success freshness.
+- Added unit tests for source parsers, dedup identity, unavailable bookmaker providers and model-only coupon construction.
+- Added a standalone date-bucketed Elo walk-forward screen over automatic sources and imported results, with safe-availability filtering and mean Brier/Log Loss. It explicitly does not claim a market baseline or validated edge.
 - Added explicit Android document-picker import for Football-Data-style CSV completed results, a v1→v2 SQLite migration, import provenance log, duplicate suppression, and a conservative two-day availability bound for date-only rows.
 - Added CSV parsing tests for quoted/semicolon files, UTF-8 and Windows-1252 decoding, invalid/unfinished rows, duplicate rows, two-digit years, and date-only availability.
 - Added an experimental Elo 1X2 baseline fitted only from same-league results strictly before kickoff; suppresses forecasts below the documented history thresholds and labels the model uncalibrated.
