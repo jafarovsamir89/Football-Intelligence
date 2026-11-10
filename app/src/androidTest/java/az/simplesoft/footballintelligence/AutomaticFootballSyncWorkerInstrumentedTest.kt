@@ -4,29 +4,17 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
-import android.net.ConnectivityManager
-import android.os.ParcelFileDescriptor
-import android.provider.Settings
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ListenableWorker
 import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.OpenFootballJsonParser
 import az.simplesoft.footballintelligence.data.OpenLigaDbParser
-import java.io.Closeable
+import az.simplesoft.footballintelligence.data.ProviderFileCache
 import java.io.File
 import java.io.IOException
-import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Proxy
-import java.net.ProxySelector
-import java.net.ServerSocket
-import java.net.SocketAddress
-import java.net.URI
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -37,90 +25,58 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class AutomaticFootballSyncWorkerInstrumentedTest {
     @Test fun workerReturnsRetryWhenBothProviderCatalogsFail() = runBlocking {
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val baseContext = instrumentation.targetContext
-        val connectivityManager = baseContext.getSystemService(ConnectivityManager::class.java)
+        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "fi-worker-retry-${UUID.randomUUID()}.db"
-        val wasAirplaneModeEnabled = Settings.Global.getInt(
-            baseContext.contentResolver,
-            Settings.Global.AIRPLANE_MODE_ON,
-            0,
-        ) == 1
-        val wasWifiEnabled = Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 1
         baseContext.deleteDatabase(databaseName)
         val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
 
         try {
-            if (!wasAirplaneModeEnabled) runShellCommand("cmd connectivity airplane-mode enable")
-            if (wasWifiEnabled) runShellCommand("cmd wifi set-wifi-enabled disabled")
-            waitUntil(timeoutMillis = TimeUnit.SECONDS.toMillis(30)) {
-                Settings.Global.getInt(baseContext.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1 &&
-                    Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 0 &&
-                    connectivityManager.activeNetwork == null
-            }
+            val failingClient = AlwaysFailingProviderHttpClient()
+            val worker = TestListenableWorkerBuilder<AutomaticFootballSyncWorker>(isolatedContext)
+                .setRunAttemptCount(1)
+                .build()
+            worker.providerHttpClient = failingClient
 
-            LocalRejectingProxy().use { proxy ->
-                val worker = TestListenableWorkerBuilder<AutomaticFootballSyncWorker>(isolatedContext)
-                    .setRunAttemptCount(1)
-                    .build()
+            val result = worker.doWork()
 
-                val result = worker.doWork()
-
-                assertEquals(ListenableWorker.Result.retry().javaClass, result.javaClass)
-                assertTrue(
-                    "OpenFootball should be routed to the local failing proxy.",
-                    "api.github.com" in proxy.requestedHosts,
-                )
-                assertTrue(
-                    "OpenLigaDB should be routed to the local failing proxy.",
-                    "api.openligadb.de" in proxy.requestedHosts,
-                )
-                Store(baseContext, databaseName).use { store ->
-                    val summaries = store.providerSyncSummaries().associateBy { it.providerId }
-                    val openFootball = summaries.getValue(OpenFootballJsonParser.PROVIDER_ID)
-                    val openLigaDb = summaries.getValue(OpenLigaDbParser.PROVIDER_ID)
-                    assertEquals("ERROR", openFootball.status)
-                    assertEquals("ERROR", openLigaDb.status)
-                    assertNull(openFootball.lastSuccessAtMillis)
-                    assertNull(openLigaDb.lastSuccessAtMillis)
-                    store.writableDatabase.rawQuery(
-                        "SELECT COUNT(*) FROM provider_sync_lock WHERE id=1",
-                        null,
-                    ).use { cursor ->
-                        assertTrue(cursor.moveToFirst())
-                        assertEquals(0, cursor.getInt(0))
-                    }
+            assertEquals(ListenableWorker.Result.retry().javaClass, result.javaClass)
+            assertTrue(
+                "OpenFootball should request its season catalogs through the injected client.",
+                failingClient.requestedUrls.any {
+                    it.startsWith("https://api.github.com/repos/openfootball/football.json/contents/")
+                },
+            )
+            assertTrue(
+                "OpenLigaDB should request its league catalogs through the injected client.",
+                failingClient.requestedUrls.any { it.startsWith("https://api.openligadb.de/getavailableleagues/") },
+            )
+            Store(baseContext, databaseName).use { store ->
+                val summaries = store.providerSyncSummaries().associateBy { it.providerId }
+                val openFootball = summaries.getValue(OpenFootballJsonParser.PROVIDER_ID)
+                val openLigaDb = summaries.getValue(OpenLigaDbParser.PROVIDER_ID)
+                assertEquals("ERROR", openFootball.status)
+                assertEquals("ERROR", openLigaDb.status)
+                assertNull(openFootball.lastSuccessAtMillis)
+                assertNull(openLigaDb.lastSuccessAtMillis)
+                store.writableDatabase.rawQuery(
+                    "SELECT COUNT(*) FROM provider_sync_lock WHERE id=1",
+                    null,
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
                 }
             }
         } finally {
-            val isAirplaneModeEnabled = Settings.Global.getInt(
-                baseContext.contentResolver,
-                Settings.Global.AIRPLANE_MODE_ON,
-                0,
-            ) == 1
-            if (isAirplaneModeEnabled != wasAirplaneModeEnabled) {
-                runShellCommand(
-                    "cmd connectivity airplane-mode ${if (wasAirplaneModeEnabled) "enable" else "disable"}",
-                )
-            }
-            val isWifiEnabled = Settings.Global.getInt(baseContext.contentResolver, Settings.Global.WIFI_ON, 0) == 1
-            if (isWifiEnabled != wasWifiEnabled) {
-                runShellCommand("cmd wifi set-wifi-enabled ${if (wasWifiEnabled) "enabled" else "disabled"}")
-            }
             baseContext.deleteDatabase(databaseName)
         }
     }
 
-    private fun runShellCommand(command: String): String {
-        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
-        return ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
-    }
+    private class AlwaysFailingProviderHttpClient : ProviderHttpClient {
+        val requestedUrls = ConcurrentLinkedQueue<String>()
 
-    private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean) {
-        val deadline = System.currentTimeMillis() + timeoutMillis
-        while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "Timed out waiting for the test emulator to go offline." }
-            Thread.sleep(100)
+        override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
+            requestedUrls.add(url)
+            throw IOException("Simulated provider catalog failure.")
         }
     }
 
@@ -144,43 +100,5 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
             factory: SQLiteDatabase.CursorFactory?,
             errorHandler: DatabaseErrorHandler?,
         ): SQLiteDatabase = super.openOrCreateDatabase(databaseName, mode, factory, errorHandler)
-    }
-
-    private class LocalRejectingProxy : Closeable {
-        private val originalSelector = ProxySelector.getDefault()
-        private val running = AtomicBoolean(true)
-        private val server = ServerSocket(0, 16, InetAddress.getLoopbackAddress())
-        val requestedHosts = ConcurrentLinkedQueue<String>()
-        private val acceptThread = Thread {
-            while (running.get()) {
-                val socket = runCatching { server.accept() }.getOrNull() ?: break
-                runCatching { socket.close() }
-            }
-        }.apply {
-            name = "football-test-rejecting-proxy"
-            isDaemon = true
-            start()
-        }
-
-        init {
-            val proxyAddress = InetSocketAddress(InetAddress.getLoopbackAddress(), server.localPort)
-            val localProxy = Proxy(Proxy.Type.HTTP, proxyAddress)
-            ProxySelector.setDefault(
-                object : ProxySelector() {
-                    override fun select(uri: URI): List<Proxy> {
-                        uri.host?.let(requestedHosts::add)
-                        return listOf(localProxy)
-                    }
-                    override fun connectFailed(uri: URI, address: SocketAddress, error: IOException) = Unit
-                },
-            )
-        }
-
-        override fun close() {
-            ProxySelector.setDefault(originalSelector)
-            running.set(false)
-            runCatching { server.close() }
-            runCatching { acceptThread.join(1_000) }
-        }
     }
 }

@@ -1,5 +1,18 @@
 # Development log
 
+## 2026-11-10 — make Worker failure instrumentation network-proof (local API 34 passed; CI pending)
+
+### Finding and correction
+
+- The documentation-only CI rerun [42778440884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42778440884) failed in `workerReturnsRetryWhenBothProviderCatalogsFail`: OpenFootball returned `PARTIAL`, not `ERROR`. This proves the previous combination of airplane mode, `activeNetwork == null`, and a default `ProxySelector` did not guarantee that no public HTTP response reached the worker. The prior claim that this test could not reach live sources was too strong; the CI failure is recorded rather than hidden.
+- Replaced the loopback network proxy with an injected `ProviderHttpClient` on the real `AutomaticFootballSyncWorker`. The fake records the OpenFootball and OpenLigaDB catalog URLs and throws a simulated I/O error. It has no socket or HTTP implementation, so this worker test can no longer contact either public host. The worker still exercises catalog error handling, persisted provider statuses, retry selection and sync-lock release against a random database.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, androidTest compilation and APK assembly.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 10 API 34 instrumentation tests, 0 failures/errors/skips. The Worker test reached both fake catalog URL routes; the app user database and radio state were untouched by that test.
+- The previous backoff test itself passed locally and in CI run [42777428309](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42777428309), but the subsequent Actions rerun failed at the old proxy-based provider failure test. This deterministic network-free replacement passes locally; commit/push and a complete CI rerun remain.
+
 ## 2026-11-10 — WorkManager retry/backoff rescheduling (CI and API 34 update-install passed)
 
 ### Change
@@ -20,7 +33,7 @@
 
 ### Change
 
-- Added an Android instrumentation test that executes the real `AutomaticFootballSyncWorker` while airplane mode and Wi-Fi are disabled and `ConnectivityManager.activeNetwork` is null. A local rejecting HTTP proxy also receives both public catalog request routes and closes them; the test cannot reach a live provider even if Java ignores the proxy selector.
+- The initial version of the Android instrumentation test ran the real `AutomaticFootballSyncWorker` with airplane mode/Wi-Fi disabled and a local rejecting proxy. A later CI rerun showed this setup did not guarantee network isolation; see the newer entry above. The current test injects a client that cannot make HTTP requests.
 - The worker runs with a random isolated SQLite filename and test context. The test verifies requests reached both `api.github.com` and `api.openligadb.de`, the worker returns WorkManager `Result.retry()`, both provider states report `ERROR` with no successful timestamp, and the sync lock is released. The proxy selector and temporary database are restored/deleted in `finally`.
 - This exercises the production decision from actual provider failures through the Worker's retry result. WorkManager's separate delayed scheduling/resumption was added and verified in the following development-log entry.
 

@@ -106,6 +106,8 @@ object FootballSyncScheduler {
 }
 
 class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    internal var providerHttpClient: ProviderHttpClient = PublicJsonClient()
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = Store(applicationContext)
         var syncLockAcquired = false
@@ -123,7 +125,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         var continuationNeeded = false
         val summaryText = mutableListOf<String>()
 
-        val openFootball = runCatching { OpenFootballSync(store).sync(today, startedAt) }
+        val openFootball = runCatching { OpenFootballSync(store, providerHttpClient).sync(today, startedAt) }
         openFootball.onSuccess { outcome ->
             store.saveProviderSync(
                 ProviderSyncSummary(
@@ -146,7 +148,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         }
         setProgress(workDataOf("stage" to "OpenLigaDB", "openFootballRecords" to (openFootball.getOrNull()?.records ?: 0)))
 
-        val openLiga = runCatching { OpenLigaDbSync(store).sync(today, startedAt) }
+        val openLiga = runCatching { OpenLigaDbSync(store, providerHttpClient).sync(today, startedAt) }
         openLiga.onSuccess { outcome ->
             store.saveProviderSync(
                 ProviderSyncSummary(
@@ -204,7 +206,7 @@ private data class SyncOutcome(
     val errors: List<String>,
 )
 
-private data class HttpResult(
+internal data class ProviderHttpResult(
     val statusCode: Int,
     val body: String,
     val etag: String?,
@@ -213,8 +215,12 @@ private data class HttpResult(
 
 private fun safeError(error: Throwable): String = (error.message ?: error.javaClass.simpleName).take(400)
 
-private class PublicJsonClient {
-    fun get(url: String, cache: ProviderFileCache? = null): HttpResult {
+internal interface ProviderHttpClient {
+    fun get(url: String, cache: ProviderFileCache? = null): ProviderHttpResult
+}
+
+private class PublicJsonClient : ProviderHttpClient {
+    override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
@@ -227,10 +233,10 @@ private class PublicJsonClient {
             cache?.lastModified?.let { connection.setRequestProperty("If-Modified-Since", it) }
             val code = connection.responseCode
             if (code == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                return HttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
+                return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
             }
             if (code == HttpURLConnection.HTTP_NOT_FOUND) {
-                return HttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
+                return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
             }
             if (code !in 200..299) throw IOException("HTTP $code for ${URL(url).host}")
             val input = connection.inputStream
@@ -244,7 +250,7 @@ private class PublicJsonClient {
                     output.write(buffer, 0, count)
                 }
             }
-            return HttpResult(
+            return ProviderHttpResult(
                 code,
                 output.toString(StandardCharsets.UTF_8.name()),
                 connection.getHeaderField("ETag"),
@@ -256,8 +262,7 @@ private class PublicJsonClient {
     }
 }
 
-private class OpenFootballSync(private val store: Store) {
-    private val http = PublicJsonClient()
+private class OpenFootballSync(private val store: Store, private val http: ProviderHttpClient) {
     private val recentFileTtl = TimeUnit.HOURS.toMillis(24)
     private val historicalFileTtl = TimeUnit.DAYS.toMillis(30)
     private val currentCatalogTtl = TimeUnit.HOURS.toMillis(24)
@@ -368,8 +373,7 @@ private class OpenFootballSync(private val store: Store) {
     }
 }
 
-private class OpenLigaDbSync(private val store: Store) {
-    private val http = PublicJsonClient()
+private class OpenLigaDbSync(private val store: Store, private val http: ProviderHttpClient) {
     private var lastRequestAtMillis = 0L
     private val weeklyFullSyncTtl = TimeUnit.DAYS.toMillis(7)
     private val checkTtl = TimeUnit.HOURS.toMillis(12)
@@ -512,7 +516,7 @@ private class OpenLigaDbSync(private val store: Store) {
         return normalized
     }
 
-    private fun throttledGet(url: String, cache: ProviderFileCache? = null): HttpResult {
+    private fun throttledGet(url: String, cache: ProviderFileCache? = null): ProviderHttpResult {
         val waitMillis = MIN_OPENLIGA_REQUEST_GAP_MS - (System.currentTimeMillis() - lastRequestAtMillis)
         if (waitMillis > 0) Thread.sleep(waitMillis)
         lastRequestAtMillis = System.currentTimeMillis()

@@ -6,11 +6,10 @@
 - Extend airplane-mode/Wi-Fi transition waits to 30 seconds after CI [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) exposed a transient timeout at the previous 10-second limit.
 - Verification: 88 JVM tests and all 10 API 34 instrumentation tests passed locally and in Actions [42777428309](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42777428309), with APK build, stable signing and artifact upload. Update-install without data clear preserved schema v11, 39,181 matches, 184 competitions, 385 quote snapshots, 71 accumulators/402 legs and 62 forecast snapshots/0 settlements.
 
-## Unreleased — verify provider-failure retry routing (CI and API 34 update-install passed)
+## Unreleased — make provider-failure retry test network-proof (local API 34 passed; CI pending)
 
-- Add an isolated API 34 integration test for the production `AutomaticFootballSyncWorker`: airplane mode and Wi-Fi are disabled, a local rejecting proxy receives both provider catalog routes, and a random test database is removed afterward.
-- Verify both provider errors lead the real Worker to `Result.retry()`, persist error states without false successful timestamps, and release the database sync lease.
-- Verification: 88 JVM and 9 API 34 instrumentation tests passed locally and in Actions [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), along with APK build, stable signing and artifact upload. Update-install on the existing API 34 app retained all recorded data. Direct delayed-retry coverage was added in the following unreleased entry.
+- Run the real `AutomaticFootballSyncWorker` with an injected `ProviderHttpClient` that records OpenFootball and OpenLigaDB catalog URLs and always throws locally. It cannot open sockets; the test verifies persisted `ERROR` states, WorkManager `Result.retry()` and sync-lock release using a random isolated database.
+- The old proxy-based implementation passed the first Actions run [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), but rerun [42778440884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42778440884) observed `PARTIAL`, proving public responses could still reach that test. The injected-client replacement passes all 10 API 34 tests locally; a new complete CI run is pending.
 
 ## Unreleased — retain provenance and scores across provider duplicates (CI and API 34 update-install passed)
 
