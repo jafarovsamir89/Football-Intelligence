@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — delay the first periodic sync (local tests passed; CI pending)
+
+- On a clean API 34 install, the new 24-hour periodic request started immediately alongside the stale-data app-open request. The one-time request then retried the provider lock while the first full import ran.
+- Delay only the first periodic execution by 24 hours; the app-open request still imports immediately when source freshness is missing/stale. Add scheduler instrumentation asserting both interval and initial delay.
+- Local verification passed 88 JVM + 12 API 34 tests and APK assembly. A clean-install runtime check and GitHub Actions run remain pending.
+
 ## Unreleased — serialize foreground and Worker database writes (CI and API 26 update-install passed)
 
 - Reproduced an API 26 v11 startup crash after a data-preserving update: `SQLiteDatabaseLockedException` when the foreground forecast ledger wrote while the WorkManager provider transaction was active. WAL opened correctly and saved match/result rows remained intact.

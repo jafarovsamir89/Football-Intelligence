@@ -86,7 +86,10 @@ object FootballSyncScheduler {
             PeriodicWorkRequestBuilder<AutomaticFootballSyncWorker>(
                 PERIODIC_SYNC_INTERVAL_HOURS,
                 TimeUnit.HOURS,
-            ).setConstraints(constraints),
+            )
+                // Periodic work may run immediately on first enqueue; app-open work handles stale data now.
+                .setInitialDelay(PERIODIC_SYNC_INTERVAL_HOURS, TimeUnit.HOURS)
+                .setConstraints(constraints),
         ).build()
         manager.enqueueUniquePeriodicWork(PERIODIC_SYNC_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
 

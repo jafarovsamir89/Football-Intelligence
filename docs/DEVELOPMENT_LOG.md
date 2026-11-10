@@ -1,5 +1,18 @@
 # Development log
 
+## 2026-11-10 — avoid duplicate first-run WorkManager sync (local suite passed; CI pending)
+
+### Finding and change
+
+- A clean API 34 install of the latest stable APK queued two `AutomaticFootballSyncWorker` requests: the 24-hour periodic request and the stale-data app-open request. WorkManager ran the periodic request on first enqueue; the immediate request then retried every backoff interval while the first worker held the provider sync lock. This created unnecessary attempts and a second full refresh after the initial import.
+- Android's current [WorkManager documentation](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#delayed-work) states the first periodic execution may be immediate and that an initial delay applies only to the first run. Set the periodic request's initial delay to its 24-hour interval; stale first-open data still uses the immediate, connected one-time request. Added instrumentation coverage for the periodic initial delay.
+
+### Local verification and next step
+
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleDebug` passed: 88 JVM tests, all 12 API 34 instrumentation tests, and APK assembly.
+- A separate clean API 34 acceptance installation is still running the pre-fix first sync. At 2026-11-10 14:40 local it had 20,166 matches / 15,137 completed scores, with one periodic worker holding the sync lock and its one-time request backing off. Misli captured 7 visible prematch rows; eTopaz reported `UNAVAILABLE`. No SQLite/fatal error appeared.
+- Next: commit and push the scheduler fix, verify Actions, then install the new signed APK on a clean API 34 emulator and confirm one immediate Worker plus a periodic request delayed 24 hours. Continue the in-flight first-run import long enough to record final data counts.
+
 ## 2026-11-10 — serialize Store writers after API 26 startup crash (CI and API 26 update-install passed)
 
 ### Finding

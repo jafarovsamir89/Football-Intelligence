@@ -96,6 +96,10 @@ class FootballSyncSchedulerInstrumentedTest {
                 TimeUnit.HOURS.toMillis(PERIODIC_SYNC_INTERVAL_HOURS),
                 firstPeriodic.periodicityInfo?.repeatIntervalMillis,
             )
+            assertEquals(
+                TimeUnit.HOURS.toMillis(PERIODIC_SYNC_INTERVAL_HOURS),
+                firstPeriodic.initialDelayMillis,
+            )
             assertEquals(safeTestDelay, firstImmediate.initialDelayMillis)
             assertEquals(0, firstImmediate.runAttemptCount)
 
