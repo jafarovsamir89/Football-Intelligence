@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased — protect foreground odds capture from SQLite contention (local API 34 passed; CI pending)
+## Unreleased — protect foreground odds capture from SQLite contention (CI and API 34 runtime passed)
 
 - Reproduced a `SQLiteDatabaseLockedException` when first-open WorkManager sync and bookmaker WebView capture read/write the single-connection store at the same time.
 - Enable SQLite WAL and remove the duplicate foreground startup relink; the Worker still relinks unmatched snapshots after each provider sync segment.
-- Add a randomized SQLite concurrency instrumentation test. Local verification passed 88 JVM + 11 API 34 instrumentation tests, Android test compilation and APK assembly. The change is not yet committed or Actions-verified; a connected runtime quote-capture recheck remains open.
-- A separate test emulator had no active network and returned WebView's internal `chromewebdata/` page; this was not treated as evidence of bookmaker blocking. Latest saved public prices (10 Misli, 25 TOPAZ at 07:21 UTC; 0/7 exact fixture links) are stale.
+- Add a randomized SQLite concurrency instrumentation test. Local verification and Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921) passed 88 JVM + 11 API 34 instrumentation tests, APK assembly, stable signing and artifact upload for `01706e9`.
+- Stable-signed APK update-installed with `adb install -r` on the data-bearing API 34 emulator. The first-install time and 39,181 matches / 30,114 completed results were preserved. New normal foreground capture succeeded: Misli 9 visible rows/0 exact local links and TOPAZ 25/7 at 20:33 UTC. Both statuses displayed `LIVE`; no SQLite lock error recurred. Prices expire in 30 minutes. A separate offline harness's `chromewebdata/` output is not evidence of bookmaker blocking.
 
 ## Unreleased — make Worker failure test network-proof (CI and API 34 update-install passed)
 
@@ -19,7 +19,7 @@
 - Extend airplane-mode/Wi-Fi transition waits to 30 seconds after CI [42774937884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42774937884) exposed a transient timeout at the previous 10-second limit.
 - Verification: 88 JVM tests and all 10 API 34 instrumentation tests passed locally and in Actions [42777428309](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42777428309), with APK build, stable signing and artifact upload. Update-install without data clear preserved schema v11, 39,181 matches, 184 competitions, 385 quote snapshots, 71 accumulators/402 legs and 62 forecast snapshots/0 settlements.
 
-## Unreleased — make provider-failure retry test network-proof (local API 34 passed; CI pending)
+## Unreleased — make provider-failure retry test network-proof (CI and API 34 passed)
 
 - Run the real `AutomaticFootballSyncWorker` with an injected `ProviderHttpClient` that records OpenFootball and OpenLigaDB catalog URLs and always throws locally. It cannot open sockets; the test verifies persisted `ERROR` states, WorkManager `Result.retry()` and sync-lock release using a random isolated database.
 - The old proxy-based implementation passed the first Actions run [42773538883](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42773538883), but rerun [42778440884](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42778440884) observed `PARTIAL`, proving public responses could still reach that test. The injected-client replacement passes all 10 API 34 tests locally; a new complete CI run is pending.

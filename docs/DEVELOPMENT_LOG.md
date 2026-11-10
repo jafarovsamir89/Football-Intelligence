@@ -1,10 +1,10 @@
 # Development log
 
-## 2026-11-10 — SQLite concurrency diagnosis and WAL fix (local API 34 passed; CI pending)
+## 2026-11-10 — SQLite concurrency fix, CI and live capture verified
 
 ### Finding
 
-- After update-installing CI commit `8d5ab00` (Actions [42889711265](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42889711265)), I reopened the API 34 app to verify the next public odds capture. The app's prior successful WebView snapshot was from 07:21 UTC and had expired. At 20:00 UTC, while WorkManager was importing current football data, both new captures were saved as `ERROR: database is locked`.
+- After update-installing CI commit `8d5ab00` (Actions [42889711265](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42889711265)), reopening the API 34 app to verify the next public odds capture reproduced `ERROR: database is locked` while WorkManager was importing current football data.
 - Android logcat showed `SQLiteConnectionPool` with one active connection and foreground reads waiting 30–60 seconds. The Compose startup relink duplicated work already performed by the sync Worker after provider import, adding another large database scan during the same window.
 - The separate instrumentation emulator 5558 has no active default network (Wi-Fi radio initially off; `active default network: none`; public ping unreachable). Its `chromewebdata/` WebView result is therefore an offline harness condition, not evidence of a bookmaker blocking or redirecting the page. The emulator radio was restored to its original Wi-Fi-off state.
 
@@ -13,14 +13,16 @@
 - Enabled SQLite WAL in `Store` so foreground reads can continue against the last committed snapshot during provider writes. Removed the redundant foreground startup relink; the Worker relinks unmatched quotes after each provider sync segment.
 - Added a randomized-database Android instrumentation regression that holds one Store's write transaction open and verifies a second Store can read the committed snapshot within three seconds. Existing production schema and user rows are not migrated or deleted.
 - Added safe provider-route diagnostics that report only public host/path (never query parameters) when a page URL is outside its expected route.
-- Passed `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`: 88 JVM tests, Android test compilation, APK assembly. `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 11 API 34 instrumentation tests with zero failures/errors/skips. `git diff --check` passed.
-- The code/docs changes are not yet committed or CI-verified. The latest successful public-page capture remains the 07:21 UTC snapshot: Misli 10 rows / 0 exact links; TOPAZ 25 / 7 exact links. Those prices are stale and no new live price is claimed.
+- Local verification passed: 88 JVM tests, Android test compilation, APK assembly and all 11 API 34 instrumentation tests. Commit `01706e9` then passed Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921), with the same 88 + 11 test counts, APK build, stable signing and artifact upload `13800473100`.
+- Downloaded artifact signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable certificate. `adb install -r` update-installed on the API 34 primary emulator; first-install time was unchanged and no app data was cleared. The old database had 39,181 matches, 30,114 completed scores, 385 quote snapshots, 85 accumulators/494 legs and 62 forecast snapshots. After normal app startup it retained 39,181/30,114 and 62/0; new captures raised totals to 419 quote snapshots and 90 accumulators/522 legs.
+- At 2026-11-10 20:33 UTC, visible public WebView captures completed as `LIVE` without a SQLite lock: Misli 9 lines/0 exact local links, TOPAZ 25/7. Portugal—Denmark (local match 85257) showed TOPAZ H/D/A 1.47/4.24/5.14. The main screen showed both live states. Fresh quotes expired after 30 minutes, so treat this as capture evidence, not a current price after that window. No prospective forecast has settled.
+- Opened the Coupons tab after capture: it showed the live provider counts and a separate two-leg TOPAZ draft using England—Croatia at 1.23 and Portugal—Denmark at 1.47, each labeled with the 12:33:33 local capture time. Elo marginals were 51.9% and 59.7%; the joint display used 12–52% Fréchet bounds. This confirms source-backed prices were visibly tied to the same operator and capture time; Misli had no exact local fixture and no price-backed Misli draft.
 
 ### Source rights review and next action
 
 - Rechecked official [Misli robots.txt](https://www.misli.az/robots.txt): it permits `/` for crawlers and disallows account, shared-coupon and live-detail paths. That is not an odds-reuse license. Read the current [eTopaz terms](https://etopaz.az/terms-conditions): they frame a BAL LINE subscriber/wagering agreement and limit subscriber-account use, but contain no express automated-reuse permission for anonymous public odds. Do not infer either permission or prohibition beyond the text.
 - Read the requested [reference scraper](https://github.com/aliabbasov99/ai-football-prediction/blob/main/backend/scripts/scrape_misli_all.py): it uses `undetected_chromedriver`, stealth arguments, page scrolling, BeautifulSoup selectors, explicit aliases and fuzzy `SequenceMatcher` thresholds. No code or evasion mechanism was copied; this app keeps normal public WebView rendering and exact reviewed aliases.
-- Next: commit/push WAL and diagnostics; wait for green Actions, download and verify its stable-signed artifact, update-install on the connected primary API 34 emulator without clearing its 39k-match DB, and repeat first-open sync plus visible bookmaker capture after WorkManager finishes.
+- Next: continue monitoring fresh app-open captures and future forecast settlements; verify WAL/update preservation on API 26 and a physical device when available. Keep automatic odds-reuse rights marked unconfirmed and do not bypass site controls.
 
 ## 2026-11-10 — isolate Worker failure instrumentation from network (CI and API 34 update-install passed)
 
