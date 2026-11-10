@@ -56,6 +56,25 @@ internal fun isAppOpenSyncStale(mostRecentSuccessAtMillis: Long?, nowMillis: Lon
         mostRecentSuccessAtMillis <= 0L ||
         nowMillis - mostRecentSuccessAtMillis >= TimeUnit.HOURS.toMillis(APP_OPEN_SYNC_STALE_AFTER_HOURS)
 
+internal fun automaticSyncStageMessage(stage: String?): String = when (stage) {
+    "waiting_for_sync_lock" -> "Ожидается завершение другой синхронизации; локальная база остаётся доступной."
+    "OpenFootball" -> "Загружается история и расписание OpenFootball…"
+    "OpenLigaDB" -> "Обновляются футбольные лиги OpenLigaDB…"
+    "continuation_queued" -> "Сегмент завершён; импорт продолжится автоматически."
+    "complete" -> "Синхронизация источников завершена."
+    else -> "Идёт автоматическая синхронизация источников…"
+}
+
+internal fun openLigaSyncStatus(successfulLeagues: Int, hasErrors: Boolean, continuationNeeded: Boolean): String {
+    require(successfulLeagues >= 0)
+    return when {
+        successfulLeagues == 0 && continuationNeeded && !hasErrors -> "DEFERRED"
+        successfulLeagues == 0 -> "ERROR"
+        hasErrors -> "PARTIAL"
+        else -> "OK"
+    }
+}
+
 object FootballSyncScheduler {
     fun scheduleOnAppOpen(context: Context) {
         val appContext = context.applicationContext
@@ -120,6 +139,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             return@withContext Result.retry()
         }
         syncLockAcquired = true
+        setProgress(workDataOf("stage" to "OpenFootball"))
         val startedAt = System.currentTimeMillis()
         val today = LocalDate.now(ZoneOffset.UTC)
         val seasonCount = 5
@@ -470,11 +490,11 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
             return SyncOutcome("ERROR", 0, null, true, false, listOf("OpenLigaDB football catalogs were unavailable."))
         }
         return SyncOutcome(
-            status = when {
-                successfulLeagues == 0 -> "ERROR"
-                errors.isNotEmpty() -> "PARTIAL"
-                else -> "OK"
-            },
+            status = openLigaSyncStatus(
+                successfulLeagues,
+                errors.any { it != SYNC_CONTINUATION_MESSAGE },
+                continuationNeeded,
+            ),
             records = recordCount,
             successAtMillis = System.currentTimeMillis().takeIf { successfulLeagues > 0 },
             retryNeeded = retryNeeded,

@@ -1321,9 +1321,11 @@ class MainActivity:ComponentActivity() {
     val syncSummaries=remember(revision) { store.providerSyncSummaries() }
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
+    val activeSyncStage=(oneTimeSync+periodicSync).firstOrNull { it.state==WorkInfo.State.RUNNING }
+        ?.progress?.getString("stage")
     val lastSuccessfulSync=syncSummaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull()
     val syncStatusText=when {
-        syncBusy -> "Идёт автоматическая синхронизация источников…"
+        syncBusy -> automaticSyncStageMessage(activeSyncStage)
         syncQueued -> "Автоматическая синхронизация стоит в очереди WorkManager; возможна системная задержка или ожидание сети. Локальная база доступна."
         lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
         else -> "Автоматическая синхронизация запланирована; ожидается сеть или первый успешный ответ источника."

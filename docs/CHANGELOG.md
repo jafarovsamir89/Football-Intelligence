@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — explain provider sync progress during first-run imports (local suite passed; Actions pending)
+
+- Publish the active OpenFootball/OpenLigaDB stage to the main screen so long bounded WorkManager runs have a useful status message.
+- Label OpenLigaDB `DEFERRED` when an automatic continuation is queued before the source begins importing leagues. Keep `ERROR` for actual no-progress failures and `PARTIAL` for completed work with provider errors.
+- Add tests for provider stage text and deferred-vs-error status. The bundled local run passed 91 JVM tests with no failures and assembled the debug APK; Actions/API 34 instrumentation are pending.
+
 ## Unreleased — delay the first periodic sync (CI and clean-install scheduling check passed)
 
 - On a clean API 34 install, the new 24-hour periodic request started immediately alongside the stale-data app-open request. The one-time request then retried the provider lock while the first full import ran.

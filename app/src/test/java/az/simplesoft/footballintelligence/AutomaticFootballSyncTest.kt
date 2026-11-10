@@ -24,6 +24,20 @@ class AutomaticFootballSyncTest {
         assertEquals(SyncNextStep.RETRY, decideSyncNextStep(retryNeeded = false, continuationNeeded = false, anySuccess = false))
     }
 
+    @Test fun activeSyncStageExplainsWhichProviderIsRunning() {
+        assertEquals("Загружается история и расписание OpenFootball…", automaticSyncStageMessage("OpenFootball"))
+        assertEquals("Обновляются футбольные лиги OpenLigaDB…", automaticSyncStageMessage("OpenLigaDB"))
+        assertEquals("Идёт автоматическая синхронизация источников…", automaticSyncStageMessage(null))
+    }
+
+    @Test fun openLigaBudgetContinuationIsDeferredRatherThanAnError() {
+        assertEquals("DEFERRED", openLigaSyncStatus(successfulLeagues = 0, hasErrors = false, continuationNeeded = true))
+        assertEquals("ERROR", openLigaSyncStatus(successfulLeagues = 0, hasErrors = true, continuationNeeded = false))
+        assertEquals("ERROR", openLigaSyncStatus(successfulLeagues = 0, hasErrors = true, continuationNeeded = true))
+        assertEquals("PARTIAL", openLigaSyncStatus(successfulLeagues = 1, hasErrors = true, continuationNeeded = false))
+        assertEquals("OK", openLigaSyncStatus(successfulLeagues = 1, hasErrors = false, continuationNeeded = false))
+    }
+
     @Test fun appOpenRefreshBecomesDueAtEightHoursAndMissingSuccessIsStale() {
         val now = 10 * TimeUnit.DAYS.toMillis(1)
         val eightHours = TimeUnit.HOURS.toMillis(APP_OPEN_SYNC_STALE_AFTER_HOURS)

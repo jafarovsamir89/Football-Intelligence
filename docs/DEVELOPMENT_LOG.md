@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-10 — show provider progress during long first-run sync (local suite passed; Actions pending)
+
+- The fresh-install run confirmed automatic eight-minute WorkManager continuations, but the main sync banner showed only a generic message for the whole segment. When OpenFootball exhausted the shared segment budget before OpenLigaDB imported any league, OpenLigaDB's interim summary was `ERROR` despite the continuation being queued normally.
+- The Worker now publishes its current provider stage from the start. The main-screen sync banner maps that stage to a short user-facing message. OpenLigaDB now reports `DEFERRED` when it has no completed league only because a clean continuation is queued; actual failures without progress remain `ERROR`, and partial completed work with failures remains `PARTIAL`.
+- Added unit coverage for stage messages and the provider-status distinction. The bundled `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed: 91 JVM tests, 0 failures/errors/skips, APK assembly succeeded. The fresh API 34 import remains active on emulator 5558 and was not reinstalled; latest inspection showed 12,947 matches / 7,955 completed scores across 26 league labels, with OpenFootball catalogs cached for 2026-27, 2025-26 and 2024-25. OpenLigaDB is still deferred behind the queued continuation, which is the exact no-error state covered by the new classifier test. Actions/API 34 instrumentation are pending for this code revision.
+
 ## 2026-11-10 — avoid duplicate first-run WorkManager sync (CI passed; clean-install scheduling confirmed)
 
 ### Finding and change
