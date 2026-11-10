@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — timestamped same-bookmaker accumulators and source-quality filtering
+
+- Added separately selected TOPAZ/Misli virtual accumulators in sizes 2/3/5/8/10; actual combined odds are displayed only when each leg has a complete fresh quote from that same provider and an exact local fixture.
+- Record per-leg quote capture time, model marginals, coupon selection basis, combined actual decimal price when evidenced, and Fréchet bounds for joint probability without assuming independent matches.
+- Persist accumulator history and settle only against local match results; postponement/kickoff changes are not treated as losses. ROI is omitted unless the full same-provider coupon price and final results exist.
+- Place price-backed drafts first. Reject stale (>30-minute), future-dated, untimestamped, invalid, or unmapped lines at the coupon-builder boundary.
+- Exclude known placeholder team names from provider writes, match lists, fixture links, predictions and performance calculations; reject new placeholder parser rows while keeping legacy IDs/data intact.
+- Use v10 SQLite migration to add selection basis and preserve existing database contents.
+- API 34 POC latest capture observed 10 Misli/25 TOPAZ visible rows; seven TOPAZ fixtures joined local matches. Portugal—Denmark match 85257 had an actual TOPAZ 1.45/4.31/5.29 capture. No reuse license or profitability is claimed.
+- Added regression tests for accumulator dimensions, per-provider isolation, timestamps, stale/future quotes, placeholder rejection, settlement and performance reports.
+
 ## Unreleased — zero-touch multi-source data, Misli/TOPAZ, and automatic model checks
 
 - Added API 34 verified first-open OpenFootball/OpenLigaDB sync across five seasons and dynamically discovered competitions, with local cache/status presentation.

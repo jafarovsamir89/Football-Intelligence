@@ -3,6 +3,7 @@ package az.simplesoft.footballintelligence.data
 import org.json.JSONArray
 import org.json.JSONObject
 import az.simplesoft.footballintelligence.analytics.normalizeProviderTimestampUtc
+import az.simplesoft.footballintelligence.analytics.TeamDataQuality
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
@@ -79,7 +80,7 @@ object OpenLigaDbParser {
             val kickoffMillis = runCatching { Instant.parse(kickoffText).toEpochMilli() }.getOrNull() ?: continue
             val home = row.optJSONObject("team1")?.optString("teamName").orEmpty().trim()
             val away = row.optJSONObject("team2")?.optString("teamName").orEmpty().trim()
-            if (home.isBlank() || away.isBlank() || home.equals(away, ignoreCase = true)) continue
+            if (!TeamDataQuality.isValidFixture(home,away)) continue
             val score = finalScore(row.optJSONArray("matchResults"))
             val key = "$PROVIDER_ID:$providerMatchId"
             if (!seen.add(key)) continue

@@ -5,6 +5,7 @@ import org.json.JSONArray
 import java.time.LocalDate
 import java.time.ZoneOffset
 import java.util.Locale
+import az.simplesoft.footballintelligence.analytics.TeamDataQuality
 
 data class OpenFootballCompetitionFile(
     val season: String,
@@ -72,7 +73,7 @@ object OpenFootballJsonParser {
             val date = runCatching { LocalDate.parse(row.optString("date")) }.getOrNull() ?: continue
             val home = row.optString("team1").trim()
             val away = row.optString("team2").trim()
-            if (home.isBlank() || away.isBlank() || canonicalTeam(home) == canonicalTeam(away)) continue
+            if (!TeamDataQuality.isValidFixture(home,away) || canonicalTeam(home) == canonicalTeam(away)) continue
             val round = row.optString("round").trim()
             val homeGoals = row.optJSONObject("score")?.optJSONArray("ft")?.let { score ->
                 if (score.length() < 2) null else score.optInt(0, -1).takeIf { it >= 0 }

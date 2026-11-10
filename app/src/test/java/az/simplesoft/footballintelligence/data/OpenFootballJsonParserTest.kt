@@ -77,4 +77,12 @@ class OpenFootballJsonParserTest {
         )
         assertEquals(listOf("en.1.json"), files.map { it.fileName })
     }
+
+    @Test fun rejectsPlaceholderTeamNamesFromPublicFiles() {
+        val rows=OpenFootballJsonParser.parse(
+            """{"matches":[{"round":"Matchday 1","date":"2026-08-20","team1":"Empty Stands Dummy Team","team2":"Altona 93"}]}""",
+            "2026-27","en.1.json","https://example.test/en.1.json",1L,
+        )
+        assertTrue(rows.isEmpty())
+    }
 }

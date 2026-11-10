@@ -34,10 +34,10 @@ class VirtualCouponBuilderTest {
             ForecastedMatch(2,"C","D",200L,OutcomeProbabilities(.1,.2,.7)),
         )
         val quotes=mapOf(
-            "misli" to mapOf(1 to ThreeWayDecimalOdds(2.0,3.2,4.0),2 to ThreeWayDecimalOdds(4.0,3.0,3.0)),
-            "topaz" to mapOf(1 to ThreeWayDecimalOdds(1.8,3.5,4.2)),
+            "misli" to mapOf(1 to ThreeWayDecimalOdds(2.0,3.2,4.0,1_000),2 to ThreeWayDecimalOdds(4.0,3.0,3.0,1_000)),
+            "topaz" to mapOf(1 to ThreeWayDecimalOdds(1.8,3.5,4.2,1_000)),
         )
-        val coupons=VirtualCouponBuilder.buildModelOnly(forecasts,listOf("misli" to "Misli","topaz" to "TOPAZ"),quotes)
+        val coupons=VirtualCouponBuilder.buildModelOnly(forecasts,listOf("misli" to "Misli","topaz" to "TOPAZ"),quotes,nowMillis=2_000)
         val misli=coupons.first { it.providerId=="misli" }
         val topaz=coupons.first { it.providerId=="topaz" }
 

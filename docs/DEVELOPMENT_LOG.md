@@ -129,6 +129,31 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 3. Review/cover migration and dedupe behavior, fix issues, rerun local tests/build.
 4. Commit/push this major milestone, inspect Actions and download the artifact, then continue with automatic-source walk-forward and remaining reliability/test gaps.
 
+## 2026-11-09 — timestamped bookmaker coupons and source-quality filtering (local tests passed; CI pending)
+
+### Implemented and verified locally
+
+- Rechecked the full API 34 working installation after exact quote relinking. On the latest foreground pass, Misli returned 9 visible future 1X2 rows and TOPAZ returned 25. Misli had 0 exact local forecast links; 7 TOPAZ snapshots linked to local fixtures by reviewed aliases, home/away order, date and kickoff. The ordinary visible-page WebView path was used; no login, hidden endpoint, stealth, or control bypass was used.
+- Verified a real TOPAZ fixture example in SQLite: Portugal—Denmark maps to local match 85257; the captured 1/X/2 was 1.45 / 4.31 / 5.29. The Elo home estimate was 59.1%; basic normalized market home probability was 62.1%. This is a timestamped observation, not a guarantee of a currently open line or model advantage.
+- Added separate provider-specific priced accumulator drafts. Current capture produced TOPAZ sizes 2, 3 and 5 only; the matching rows had same-provider combined prices 1.75, 2.09 and 26.87. For the two-leg example, England—Croatia H at 1.21 plus Portugal—Denmark H at 1.45 yielded 1.75 combined and 9.9–50.8% Fréchet bounds. No independence assumption or profit promise is made. Misli had no sufficiently large set of linked priced matches, so only its model-ranked drafts were available.
+- The UI places complete same-operator priced drafts before model-only drafts, shows each quote's capture time, and withholds combined odds unless all legs have a fresh, exact same-operator line. Old snapshots remain hidden from price selection after 30 minutes. Model-only drafts show marginals and joint-probability Fréchet bounds without synthesizing price or multiplying probabilities.
+- Added durable SQLite v9/v10 virtual accumulator history and result settlement: pending/partial/win/loss, schedule changes over 30 minutes, invalid placeholder legs, Wilson interval, and same-operator virtual ROI only for fully settled coupons with a complete recorded line. No future coupon result has settled yet.
+- Found 566 legacy database rows with placeholder identities such as `Empty Stands Dummy Team`. They remain stored for migration safety but are filtered from visible match/history lists, fixture matching, forecasts, picks, accumulators and walk-forward; new parser/upsert paths reject them. Existing invalid accumulator records are marked `INVALID` rather than counted as losses. Full post-filter walk-forward figures have not yet been recomputed.
+- Tightened coupon construction itself to reject prices without a timestamp, older than 30 minutes, or timestamped in the future, even if a caller passes them. Repeated captures with identical quote values retain the independent quote snapshot history but do not create a duplicate coupon record; a changed price creates a new priced draft. Priced drafts are sorted ahead of model-only choices.
+
+### Verification notes
+
+- API 34 SQLite v10 migration was locally update-installed with the stable test key and preserved 39,181 match rows, 30,090 completed-score rows, saved odds and coupon history. Current database showed three TOPAZ price-backed coupon rows (2/3/5 legs) and separate Misli/TOPAZ model-ranked drafts.
+- The update install correctly hid expired quotes as `STALE`, then automatic foreground WebViews refreshed without a button press. The later capture returned Misli 10 and TOPAZ 25; exact local links were 0/10 and 7/25. Portugal—Denmark match 85257 retained the real TOPAZ 1.45 / 4.31 / 5.29 line at 2026-11-10 02:36:36 UTC. The line has since passed its 30-minute TTL and is not a current quote.
+- Re-ran the automatic walk-forward from the Backtest tab after filtering legacy placeholders: 29,588 targets, 19,185 forecasts, 10,403 skipped for insufficient history, mean Brier 0.6106, mean Log Loss 1.0235. Compared with old count, 502 scored placeholder rows were removed from targets; forecast count and scores happened to remain the same. Scores are still retrospective, uncalibrated, and not evidence of advantage.
+- Inspected the Compose screens: home shows source freshness and sync time; the coupon tab now shows concise provider status/count/link totals and keeps the lengthy raw public odds list collapsed by default. Coupon drafts show provider, capture time, per-leg marginals and prices, and Fréchet bounds without an independence assumption.
+- Regression coverage now exercises coupon sizes, provider isolation, quote timestamps, stale/future timestamp rejection, placeholder filtering, accumulator settlement and historical metrics. Full `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed: 75 tests, 0 failures/errors and APK build successful. Stable-key `adb install -r` over the API 34 installation preserved SQLite v10 and 39,181 match rows. GitHub Actions current revision remains pending.
+
+### Next steps
+
+1. Commit and push this substantial stage, wait for GitHub Actions, download the CI APK, verify its certificate and update-install over the existing app without losing SQLite. Record the CI run.
+2. Add dedicated migration/WorkManager tests and API 26 verification; keep odds-reuse permission and device/timezone compatibility clearly open.
+
 ## 2026-11-09 — Misli WebView proof and first clean-install capture (local build passed; data sync still running)
 
 ### Implemented

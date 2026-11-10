@@ -61,4 +61,16 @@ class OpenLigaDbParserTest {
             Instant.parse("2026-11-09T20:00:00Z").toEpochMilli(),"https://api.openligadb.de/getmatchdata/x/2026")
         assertTrue(rows.isEmpty())
     }
+
+    @Test fun rejectsSourcePlaceholderTeams() {
+        val json="""[
+          {"matchID":997,"matchDateTimeUTC":"2026-11-13T18:30:00Z",
+           "team1":{"teamName":"Empty Stands Dummy Team"},"team2":{"teamName":"Altona 93"},"matchResults":[]},
+          {"matchID":998,"matchDateTimeUTC":"2026-11-13T20:30:00Z",
+           "team1":{"teamName":"Arsenal"},"team2":{"teamName":"TBD"},"matchResults":[]}
+        ]"""
+        val rows=OpenLigaDbParser.parseMatches(json,OpenLigaLeague(1,"League","x","2026"),
+            Instant.parse("2026-11-09T20:00:00Z").toEpochMilli(),"https://api.openligadb.de/getmatchdata/x/2026")
+        assertTrue(rows.isEmpty())
+    }
 }

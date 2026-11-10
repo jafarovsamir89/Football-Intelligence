@@ -16,13 +16,19 @@ data class VirtualCouponPick(
     val outcome: String,
     val modelProbability: Double,
     val bookmakerDecimalOdds: Double? = null,
+    val bookmakerOddsCapturedAtMillis: Long? = null,
 )
 
 data class ThreeWayDecimalOdds(
     val home: Double,
     val draw: Double,
     val away: Double,
+    val capturedAtMillis: Long? = null,
 )
+
+data class JointProbabilityBounds(val lower: Double, val upper: Double)
+
+enum class CouponSelectionBasis { MODEL_RANKED, MATCHED_FRESH_BOOKMAKER_ODDS }
 
 data class VirtualCouponCandidate(
     val providerId: String,
@@ -30,6 +36,10 @@ data class VirtualCouponCandidate(
     val picks: List<VirtualCouponPick>,
     /** Null unless source odds exist; probability is not a bookmaker price or payout. */
     val combinedDecimalOdds: Double? = null,
+    val requestedLegCount: Int = picks.size,
+    /** Fréchet bounds from marginal probabilities; no independence assumption is made. */
+    val jointProbabilityBounds: JointProbabilityBounds? = null,
+    val selectionBasis: CouponSelectionBasis = CouponSelectionBasis.MODEL_RANKED,
 )
 
 data class LoggedCouponPick(
@@ -47,15 +57,21 @@ data class LoggedCouponPick(
 )
 
 object VirtualCouponBuilder {
+    val supportedAccumulatorSizes = listOf(2, 3, 5, 8, 10)
+    const val BOOKMAKER_QUOTE_FRESHNESS_MILLIS = 30L * 60L * 1000L
+
     /** Builds separate model-only drafts. It deliberately does not multiply probabilities or invent odds. */
     fun buildModelOnly(
         forecasts: List<ForecastedMatch>,
         providers: List<Pair<String, String>>,
         oddsByProvider: Map<String, Map<Int, ThreeWayDecimalOdds>> = emptyMap(),
+        nowMillis: Long = System.currentTimeMillis(),
     ): List<VirtualCouponCandidate> {
-        val ordered = forecasts.distinctBy { it.matchId }.sortedBy { it.kickoffMillis }
+        val ordered = forecasts.distinctBy { it.matchId }
+            .filter { TeamDataQuality.isValidFixture(it.homeTeam, it.awayTeam) }
+            .sortedBy { it.kickoffMillis }
         return providers.map { (providerId, providerName) ->
-            val providerOdds=oddsByProvider[providerId].orEmpty()
+            val providerOdds=oddsByProvider[providerId].orEmpty().filterValues { it.isFreshValidThreeWay(nowMillis) }
             val picks = ordered.map { forecast ->
                 val (outcome, probability) = listOf(
                     "H" to forecast.probabilities.home,
@@ -72,6 +88,7 @@ object VirtualCouponBuilder {
                     outcome,
                     probability,
                     decimalOdds,
+                    prices?.capturedAtMillis,
                 )
             }
             val combined=if(picks.isNotEmpty()&&picks.all { it.bookmakerDecimalOdds!=null })
@@ -80,4 +97,59 @@ object VirtualCouponBuilder {
             VirtualCouponCandidate(providerId, providerName, picks, combined)
         }
     }
+
+    /**
+     * Builds only supported accumulator sizes for which there are enough eligible fixtures.
+     * The strongest available model marginals are selected first; no filler legs are added.
+     */
+    fun buildAccumulators(
+        forecasts: List<ForecastedMatch>,
+        providers: List<Pair<String, String>>,
+        oddsByProvider: Map<String, Map<Int, ThreeWayDecimalOdds>> = emptyMap(),
+        nowMillis: Long = System.currentTimeMillis(),
+    ): List<VirtualCouponCandidate> {
+        val eligible = forecasts.distinctBy { it.matchId }
+            .filter { TeamDataQuality.isValidFixture(it.homeTeam, it.awayTeam) }
+        return providers.flatMap { (providerId, providerName) ->
+            val providerOdds = oddsByProvider[providerId].orEmpty().filterValues { it.isFreshValidThreeWay(nowMillis) }
+            val modelPool = eligible.map { forecast -> forecast.toPick(providerOdds[forecast.matchId]) }
+            val pricedPool = eligible.filter { forecast -> providerOdds[forecast.matchId] != null }
+                .map { forecast -> forecast.toPick(providerOdds[forecast.matchId]) }
+            buildSizedDrafts(providerId,providerName,pricedPool,CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) +
+                buildSizedDrafts(providerId,providerName,modelPool,CouponSelectionBasis.MODEL_RANKED)
+        }
+            .sortedBy { if (it.selectionBasis == CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) 0 else 1 }
+    }
+
+    private fun buildSizedDrafts(
+        providerId:String,
+        providerName:String,
+        pool:List<VirtualCouponPick>,
+        selectionBasis:CouponSelectionBasis,
+    ):List<VirtualCouponCandidate> {
+        val ordered=pool.sortedWith(compareByDescending<VirtualCouponPick> { it.modelProbability }.thenBy { it.kickoffMillis })
+        return supportedAccumulatorSizes.mapNotNull { size ->
+            if(ordered.size<size) return@mapNotNull null
+            val selected=ordered.take(size).sortedBy { it.kickoffMillis }
+            val combinedOdds=if(selected.all { it.bookmakerDecimalOdds?.let { odds -> odds.isFinite()&&odds>1.0 }==true })
+                selected.fold(1.0) { total,pick -> total*(pick.bookmakerDecimalOdds ?: 1.0) }.takeIf { it.isFinite() }
+            else null
+            val probabilities=selected.map { it.modelProbability }
+            val bounds=JointProbabilityBounds(
+                lower=maxOf(0.0,probabilities.sum()-(selected.size-1)),
+                upper=probabilities.min(),
+            )
+            VirtualCouponCandidate(providerId,providerName,selected,combinedOdds,size,bounds,selectionBasis)
+        }
+    }
+
+    private fun ForecastedMatch.toPick(prices:ThreeWayDecimalOdds?):VirtualCouponPick {
+        val (outcome,probability)=listOf("H" to probabilities.home,"D" to probabilities.draw,"A" to probabilities.away).maxBy { it.second }
+        val odds=when(outcome) { "H"->prices?.home;"D"->prices?.draw;else->prices?.away }
+        return VirtualCouponPick(matchId,homeTeam,awayTeam,kickoffMillis,outcome,probability,odds,prices?.capturedAtMillis)
+    }
+
+    private fun ThreeWayDecimalOdds.isFreshValidThreeWay(nowMillis:Long):Boolean = capturedAtMillis!=null&&
+        isFreshQuote(capturedAtMillis,nowMillis,BOOKMAKER_QUOTE_FRESHNESS_MILLIS)&&
+        listOf(home,draw,away).all { it.isFinite()&&it>1.0 }
 }

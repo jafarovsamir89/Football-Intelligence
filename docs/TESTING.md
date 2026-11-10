@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-The current local revision passed this command on 2026-11-09. It completed **62 JUnit tests** and built `app/build/outputs/apk/debug/app-debug.apk`.
+The current local revision passed the full `:app:testDebugUnitTest :app:assembleDebug` command with **75 JUnit tests** and a successful APK build. The matching CI artifact is still pending.
 
 Coverage includes:
 
@@ -19,12 +19,15 @@ Coverage includes:
 - Misli visible-DOM 1X2 parsing, local timezone conversion, strict alias/orientation/date/kickoff fixture mapping, and rejection of expired, live-score, incomplete, ambiguous and conflicting rows.
 - Independent Misli/TOPAZ visible-page parsers, eTopaz inferred-year rules, exact alias/date/kickoff matching, operator isolation, expiry, and no fabricated odds.
 - Provider status freshness and latest-snapshot-per-event selection after repeated WebView reloads.
-- Coupon draft separation, most-probable outcome selection, stable match dedupe/order, and null bookmaker price/combined odds.
+- Coupon draft separation, most-probable outcome selection, stable match dedupe/order, same-provider pricing, quote timestamps and fresh-only accumulator construction, stale/future quote rejection, Fréchet bounds, settlement and price-backed performance summaries.
+- Rejection of placeholder team identities in source parsers, read-side lists and historical evaluation.
 - Streaming chronological walk-forward equivalence with independent as-of Elo fits, shared availability batches, and future-result exclusion.
 
-The final CI APK was update-installed on API 34 (`OBD_API_34`) without uninstalling the prior same-key app. SQLite v8 was preserved. The complete automatic sync took multiple WorkManager attempts: the worker recorded `PARTIAL` and retried at the 8-minute runtime boundary, then completed with both providers `OK`. Final SQLite totals were 39,181 merged matches, 30,090 completed results, 184 competitions, with season keys from `2022` through `2026-27`. OpenFootball reported 25,904 rows and OpenLigaDB 17,776; provider overlap is merged locally. No invalid 1970 kickoff placeholders remained in the final database.
+The previous CI APK was update-installed on API 34 (`OBD_API_34`) without uninstalling the prior same-key app. The latest local schema v10 update also preserved SQLite. The complete automatic sync took multiple WorkManager attempts: the worker recorded `PARTIAL` and retried at the 8-minute runtime boundary, then completed with both providers `OK`. SQLite totals are 39,181 merged rows, 30,090 completed-result rows, 184 competitions, season keys `2022` through `2026-27`; provider source counts are OpenFootball 25,904 and OpenLigaDB 17,776. Current code rejects 566 previously stored placeholder-identity rows from reads, model input and backtests (kept in the database for ID/migration safety). Recompute the post-filter automatic walk-forward before reporting performance; older metrics are obsolete.
 
-The WebView POC stored Misli and TOPAZ snapshots and UEFA schedule checks confirmed five Misli Women's Champions League rows and the TOPAZ Türkiye–Belgium Nations League row. The final screen inspection found nine current Misli lines and an `UNAVAILABLE` eTopaz status because the page returned only its public home page. Stored operator snapshots had no exact local fixture IDs; model comparisons were not attached. On the final Backtest screen, the automatic source walk-forward returned 30,090 targets, 19,185 forecasts, 10,905 skipped for insufficient history, mean Brier 0.6106, and mean Log Loss 1.0235. These retrospective metrics use current source files and date-only availability assumptions. Forty prospective model coupon picks remained unsettled.
+The latest standard WebView capture on API 34 stored 10 Misli and 25 TOPAZ future lines; 7 TOPAZ snapshots matched exact local fixtures, 0 Misli lines did. Portugal—Denmark maps to fixture 85257 with 1.45/4.31/5.29; latest capture time was 2026-11-10 02:36:36 UTC and is now over 30 minutes old. TOPAZ price-backed virtual coupons for 2/3/5 legs stored same-provider combined prices 1.75/2.09/26.87 and per-leg quote capture times. UI screenshots confirmed quote details are collapsed by default, separate model-only and price-backed bases, per-leg model marginals, no independence assumption, and withheld combined odds without a complete fresh line. No coupon outcomes had settled at inspection time.
+
+After placeholder exclusion, the installed Backtest screen reported 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106 and Log Loss 1.0235. These are still retrospective scores from current source snapshots, not archived vintages or future calibration evidence.
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes. No API 26 emulator or physical phone has yet been used.
 
@@ -36,9 +39,9 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 ## Remaining verification gaps
 
-- SQLite v1–v6 upgrade preservation and cross-provider merge/score retention need instrumentation coverage.
+- SQLite v1–v10 upgrade preservation and cross-provider merge/score retention still need dedicated instrumentation coverage, despite local v10 update-install preservation.
 - WorkManager lock contention/retry has been corrected and end-to-end first-run continuation across the 8-minute boundary was observed on API 34; dedicated WorkManager integration tests for enqueue, network constraints, ETag/304, pacing, and lock expiry are still absent.
 - First-open API 34 sync is verified, but should be repeated on API 26/physical hardware.
-- Misli and TOPAZ WebViews were cross-checked against UEFA upcoming fixtures; explicit permission to automate local odds reuse remains unconfirmed, and none of the captured bookmaker events joined an exact local forecast.
+- Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
 - Compose accessibility, layout on small screens, Android 8/API 26 execution, large database performance, and offline refresh behavior need device checks.
 - The automatic-source walk-forward is retrospective on current files. Calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.
