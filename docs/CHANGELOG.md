@@ -1,12 +1,12 @@
 # Changelog
 
-## Unreleased — freeze prospective forecast snapshots (local verification passed; CI pending)
+## Unreleased — freeze prospective forecast snapshots (CI and API 34 update-install passed)
 
 - Add SQLite v11 tables for immutable model-version/match/UTC-day forecast snapshots and independently updated result settlements. Score corrections change only the linked result, never historical probabilities.
 - Build live forecast history strictly from matches kicked off and available to this installation before the forecast cutoff. For imported/source rows, conservative availability is the later of source availability and local capture time; rows without a trustworthy timestamp are excluded.
 - Display prospective settled-only Brier, Log Loss, top-outcome accuracy, frozen probabilities, history sample size, result source and availability time in the app. No profit metric is computed.
 - Fix score corrections being silently rejected because Android SQLite bound a text `whereArgs` value compared to integer `1`; add a regression assertion that the corrected score reaches settlement while the forecast remains frozen.
-- Verification: 88 JVM tests, 5 API 34 instrumentation tests, and debug APK assembly passed locally. CI and update-install preservation check remain pending.
+- Verification: 88 JVM tests, 5 API 34 instrumentation tests, and debug APK assembly passed locally. Actions [42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211) passed tests, APK build, stable signing and artifact upload. API 34 update-install preserved all 39,181 matches, all 315 quote snapshots, and all previous 59 accumulators/328 legs; the app then created 10 new accumulator snapshots. The UI stored 62 future forecasts and showed 0 settled results.
 
 ## Unreleased — verify WorkManager scheduling without network side effects
 

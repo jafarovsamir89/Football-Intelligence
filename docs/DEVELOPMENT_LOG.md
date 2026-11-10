@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — prospective forecast ledger and cutoff correction (local API 34 passed; CI pending)
+## 2026-11-10 — prospective forecast ledger and cutoff correction (CI and API 34 update-install passed)
 
 ### Change
 
@@ -13,8 +13,10 @@
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 88 JVM tests, instrumentation compilation and APK assembly.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 5 instrumentation tests on the isolated API 34 emulator. SQLite fixture DBs use random names and are deleted in `finally`; the primary app database was not touched.
-- `git diff --check` passed after the final code and docs edits. Result XML totals: 88 JVM tests + 5 Android instrumentation tests, 0 failures/errors/skips. GitHub Actions, stable-signed APK update-install, schema v11 check and preservation of existing match/bookmaker/accumulator counts are pending.
-- Next: commit and push this milestone, verify Actions, then update-install the CI artifact on the existing API 34 app without uninstalling or clearing its database. Inspect snapshot count and rendered section; report zero if no eligible future fixture was captured.
+- `git diff --check` passed after final edits. Local result XML totals: 88 JVM + 5 Android instrumentation tests, 0 failures/errors/skips. Commit `22f88f5` passed Actions [42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211), including JVM tests, all 5 API 34 instrumentation tests, APK build, stable signing and artifact upload.
+- Verified CI signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; update-installed the artifact on the existing API 34 emulator with no uninstall/data clear. Schema upgraded v10→v11. Matches stayed 39,181 and bookmaker snapshots stayed 315; all 59 previous accumulator headers and 328 legs remained (current totals 69/384 because the app created 10 fresh snapshots/56 legs). No result loss.
+- MainActivity resumed without a fatal log. The home screen retained `openfootball OK`/25,904 and `openligadb OK`/17,776. Foreground WebView showed 9 Misli lines (0 exact fixture links) and 25 TOPAZ lines (7 exact links). The coupon UI rendered the new forecast ledger: 62 frozen future snapshots, 0 settled; it correctly says the app is waiting for completed results. No prospective score is claimed.
+- Next: continue with isolated cross-provider duplicate/provenance tests and ensure a second source cannot erase a settled result or create a duplicate fixture; then add actual WorkManager offline/retry integration coverage.
 
 ## 2026-11-10 — WorkManager queue instrumentation (CI and local API 34 passed)
 

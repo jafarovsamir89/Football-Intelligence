@@ -7,7 +7,7 @@
 ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest
 ```
 
-The current v11 forecast-ledger revision passed locally: 88 JVM tests, all 5 Android instrumentation tests on API 34, and `assembleDebug`. Instrumentation covers v10→v11 table creation, an immutable once-per-day forecast snapshot, delayed settlement until a result's safe source/capture availability, result-source provenance, and corrected scores without changing frozen probabilities. GitHub Actions and update-install preservation checks remain pending.
+The v11 forecast-ledger revision passed locally: 88 JVM tests, all 5 Android instrumentation tests on API 34, and `assembleDebug`. Actions [42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211) passed all steps and uploaded the stable-signed APK. The update-installed artifact preserved 39,181 matches, 315 quote snapshots and all 59 prior accumulators/328 legs; after normal startup the totals were 69/384 because 10/56 new coupon records were generated. SQLite migrated to v11 and the UI showed 62 immutable future forecast snapshots with 0 settlements. Instrumentation covers v10→v11 table creation, once-per-day forecast immutability, delayed settlement until safe source/capture availability, result-source provenance and corrected scores without changing frozen probabilities.
 
 Commit `6faac0b` passed GitHub Actions run [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): **83 JUnit tests**, APK build, stable signing and artifact upload all passed. The signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable key. The artifact update-installed on API 34 and preserved the existing database.
 

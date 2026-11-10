@@ -29,7 +29,9 @@
 
 ## Android APK
 
-Последняя успешная CI-сборка до текущей работы: [GitHub Actions 42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971) для `92836d8`: 84 unit-теста, 3 API 34 instrumentation теста, APK, стабильная подпись и artifact upload. Текущая локальная ревизия добавляет v11 журнал прогнозов; локально прошли 88 JVM-тестов, 5 API 34 instrumentation тестов и APK build, Actions проверка ещё ожидается. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK — тестовая debug-сборка, не релиз Play Store.
+Последняя успешная CI-сборка: [GitHub Actions 42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211) для `22f88f5`: 88 JVM-тестов, 5 API 34 instrumentation тестов, APK, стабильная подпись и artifact upload. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK — тестовая debug-сборка, не релиз Play Store.
+
+После update-install v11 на API 34 база сохранила 39 181 матч и 315 снимков коэффициентов; все прежние 59 virtual accumulators/328 legs остались на месте. При открытии приложение записало 62 неизменяемых предматчевых прогноза; 0 из них пока имеют завершённый результат. В интерфейсе показано, что анализ точности ждёт результаты.
 
 На API 34 экран walk-forward отобразил 19 185 прогнозов, mean one-vs-rest ECE 2,2% (П1 3,1%, X 0,9%, П2 2,5%) и раскрываемые reliability bins. Это диагностика ретроспективной выборки, не калибровка. На API 26 Android 8 полный zero-touch sync прошёл: SQLite v10 хранит 38 609 матчей, 29 588 результатов в 183 соревнованиях; OpenFootball `OK`/25 904, OpenLigaDB `OK`/17 202, обработано 214 лиг-сезонов. Обычное продолжение после восьмиминутного сегмента отработало без exponential backoff. Ограничение: WebView этого API 26 эмулятора не вернул видимого текста для Misli/TOPAZ, поэтому там `ERROR` и нет реальных коэффициентов. На API 34 обычный WebView ранее захватил публичные линии. Физический телефон ещё не проверялся.
 
