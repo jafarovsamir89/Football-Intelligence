@@ -4,7 +4,7 @@
 
 - Allow a test-specific Store database name while retaining the unchanged production default.
 - Add AndroidJUnitRunner integration coverage for v1→v10 and v9→v10 migrations, preservation of settled results and user records, and the v10 selection-basis default. Tests were executed on an isolated API 34 emulator.
-- Add API 34 Android Emulator Runner instrumentation execution to GitHub Actions. Local API 34 run passed two instrumentation tests; CI verification is pending.
+- Add API 34 Android Emulator Runner instrumentation execution to GitHub Actions. Both migration tests passed locally and in Actions run [42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588). The stable-signed artifact update-installed on API 34; database counts stayed at 39,181 matches, 197 bookmaker snapshots, 59 accumulators and 328 legs.
 
 ## Unreleased — retrospective Elo reliability diagnostics
 

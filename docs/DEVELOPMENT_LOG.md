@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — isolated SQLite migration instrumentation (local API 34 passed; CI pending)
+## 2026-11-10 — isolated SQLite migration instrumentation (CI and API 34 update-install passed)
 
 ### Change
 
@@ -12,7 +12,9 @@
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed locally; 83 JVM unit tests passed and instrumentation source compiled.
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` ran on the separate, previously app-empty `memora_synthetic_capture` API 34 emulator: 2 tests passed. Test DB names contain random UUIDs and are deleted in `finally`; the pre-existing API 34 app database was not touched.
-- GitHub Actions is not yet run for this instrumentation/workflow change. Push the milestone, verify emulator boot and connected test execution in Actions, and fix any runner issue. Then add dedicated WorkManager scheduling/worker integration coverage; the current pure retry-routing tests and API 26 continuation observation do not replace it.
+- Pushed as `fb65bcc`; GitHub Actions [42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588) passed JVM tests, both API 34 instrumentation tests, APK build, stable signing and artifact upload.
+- Verified the downloaded APK certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Update-install on the existing API 34 emulator succeeded without uninstall or clearing data; before/after SQLite counts matched: 39,181 matches, 197 bookmaker snapshots, 59 accumulators and 328 accumulator legs. MainActivity launched and remained resumed without a fatal exception.
+- Next: add dedicated WorkManager enqueue/constraint integration coverage; the current pure retry-routing tests and API 26 continuation observation do not replace it. Then implement immutable versioned prospective forecast snapshots.
 
 ## 2026-11-10 — retrospective one-vs-rest calibration diagnostics (CI and API 34 runtime passed)
 

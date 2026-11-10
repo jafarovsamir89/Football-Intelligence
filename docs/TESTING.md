@@ -34,7 +34,7 @@ After placeholder exclusion, the installed Backtest screen reported 29,588 targe
 
 The `6faac0b` CI APK was installed on API 34. Backtest reported one-vs-rest macro ECE 2.2% across 19,185 forecasts; by outcome, home 3.1%, draw 0.9%, away 2.5%. The expanded occupied-bin rows were visible with mean predicted probability, observed frequency and sample count. SQLite counts before and after install matched: 39,181 matches, 197 bookmaker snapshots, 59 accumulators. This UI check demonstrates execution against the local dataset only; it is not a prospective calibration result.
 
-Two SQLite migration instrumentation tests passed on a separate API 34 emulator without an installed Football Intelligence package. Random test database names were deleted after execution; the existing API 34 app cache was not touched. They cover v1→v10 preservation and v9→v10 selection-basis migration. The current workflow change that provisions API 34 for these tests still awaits its Actions result.
+Two SQLite migration instrumentation tests passed on a separate API 34 emulator and in GitHub Actions run [42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588). Random test database names were deleted after execution. The downloaded stable-signed artifact was update-installed on the existing API 34 app without uninstall or data clear; SQLite counts before/after were identical: 39,181 matches, 197 bookmaker snapshots, 59 accumulators and 328 legs. MainActivity launched without a fatal exception.
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
 
@@ -50,7 +50,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 ## Remaining verification gaps
 
-- SQLite v1–v10 upgrade preservation and cross-provider merge/score retention still need dedicated instrumentation coverage, despite local v10 update-install preservation.
+- SQLite v1→v10 and v9→v10 migration preservation, plus settled-score retention during incomplete refresh, have isolated instrumentation coverage. Cross-provider merge/score retention still needs dedicated instrumentation.
 - WorkManager lock contention/retry is covered by existing logic; pure routing tests cover success, continuation and retry decisions. API 26 verified the actual enqueue and completion path across a normal runtime boundary. Dedicated WorkManager integration tests for network constraints, ETag/304, pacing and lock expiry remain absent.
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.

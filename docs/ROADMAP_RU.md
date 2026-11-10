@@ -16,19 +16,20 @@
 - eTopaz не указывает год события; парсер принимает следующий календарный occurrence лишь в пределах 90 дней и явно отмечает выведенный год. Türkiye–Belgium cross-check по времени прошёл через расписание Лиги наций УЕФА.
 - API 34 first-run sync через WorkManager retries собрал 39 181 объединённую строку из 184 соревнований; OpenFootball 25 904 / OpenLigaDB 17 776. Найдены 566 legacy placeholder rows, которые сохраняются, но исключены из экранов, моделей и бэктеста. После фильтрации walk-forward: 29 588 целей, 19 185 прогнозов, 10 403 пропуска по истории, Brier 0.6106, Log Loss 1.0235. Это ретроспективная оценка текущих файлов, не подтверждение будущего качества или прибыли.
 - Walk-forward показывает one-vs-rest reliability bins для П1/X/П2, среднее расхождение ECE и размеры выборок в занятых корзинах. Это описательная ретроспективная диагностика, без преобразования вероятностей.
-- AndroidJUnitRunner проверяет миграции SQLite v1→v10 и v9→v10 на изолированной тестовой базе, сохранение исходов и виртуальных записей. Локально оба теста прошли на отдельном API 34 AVD; новое GitHub Actions provisioning эмулятора ожидает CI-проверки.
+- AndroidJUnitRunner проверяет миграции SQLite v1→v10 и v9→v10 на изолированной тестовой базе, сохранение исходов и виртуальных записей. Оба теста прошли локально и на API 34 эмуляторе GitHub Actions. CI APK обновил существующую API 34 установку; все четыре счётчика базы совпали до/после.
 - CSV-импорт доступен только в настройках и не нужен основному сценарию. Walk-forward по CSV остаётся дополнительным; основной отчёт использует локальную автоматическую историю.
 
 ## Проверки текущей ревизии
 
 - API 34 fresh install, многократная WorkManager sync и офлайн-перезапуск проверены ранее; новый SQLite v10 update install сохранил существующую базу.
+- Commit `fb65bcc` прошёл Actions [42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588): CI API 34 запустил 2 SQLite instrumentation теста, собрал APK, подписал и загрузил artifact. Update-install сохранил 39 181 матч, 197 bookmaker snapshots, 59 accumulators и 328 legs.
 - Commit `e8c3a33` прошёл CI [42752522409](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42752522409): 79 unit-тестов локально, APK и стабильная подпись в CI. Обновление того же APK на API 26 сохранило SQLite v10/32 680 исходных строк. Первый Worker завершился `SUCCESS` на границе 8 минут, созданный child-worker немедленно продолжил и тоже завершился `SUCCESS`. Финальная база API 26: 38 609 матчей, 29 588 результатов, 183 соревнования; OpenFootball `OK`/25 904, OpenLigaDB `OK`/17 202, обработано 214 league-season состояний. Оба bookmaker WebView на API 26 всё ещё показывают `ERROR` без видимых данных; свежих котировок нет и цены не подставляются.
 - Commit `6faac0b` прошёл Actions [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): 83 теста, APK, стабильная подпись и artifact upload. На API 34 UI показал 19 185 ретроспективных прогнозов и one-vs-rest ECE: общий 2.2%, П1 3.1%, X 0.9%, П2 2.5%; SQLite сохранила 39 181 матч, 197 bookmaker snapshots, 59 accumulator rows при update-install.
 - На capture 04:21 UTC составлен двухисходный same-book TOPAZ купон и проверено сопоставление Portugal—Denmark. Снимок цены ограничен 30-минутной свежестью; статус `LIVE` означает только технический capture. Не обнаружена явная лицензия на повторное использование котировок.
 
 ## Оставшиеся инженерные задачи
 
-1. Расширить instrumentation на WorkManager enqueue/retry/offline constraints, cross-provider merge и запускать на API 26/физическом телефоне.
+1. Расширить instrumentation на WorkManager enqueue/retry/network constraints и cross-provider merge; отдельно проверить API 26 и физический телефон, если устройство появится.
 2. Проверить цены и сопоставление на дополнительных захватах/timezone и на актуальном Android WebView; условия автоматического reuse Misli/eTopaz остаются неясными. Не обходить защиту.
 3. Собирать будущие снимки и результаты по мере завершения матчей; обсуждать калибровку и market baseline только после независимого периода.
 
