@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — prevent duplicate bookmaker captures and refresh at expiry (CI and API 34 runtime passed)
+
+- Coalesce repeated `onPageFinished` callbacks with a synchronized provider capture gate and one reload timer per WebView. If the app opens while odds are still fresh, schedule page loading when the 30-minute window expires, provided the app stays foregrounded.
+- Add a unit regression for in-progress duplicate suppression and the interval boundary. Local verification: 88 JVM + 11 API 34 instrumentation tests and APK assembly passed. Actions [42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554) passed and uploaded stable-signed APK `13805066252`.
+- Update-install preserved the API 34 SQLite profile. The automatic refresh fired once per site at 21:34:53 / 21:35:11 UTC. Both public pages had no verified upcoming prematch 1X2 rows, so status became `UNAVAILABLE` and no odds were added. No repeat, crash or SQLite contention appeared.
+
 ## Unreleased — protect foreground odds capture from SQLite contention (CI and API 34 runtime passed)
 
 - Reproduced a `SQLiteDatabaseLockedException` when first-open WorkManager sync and bookmaker WebView capture read/write the single-connection store at the same time.

@@ -1,5 +1,25 @@
 # Development log
 
+## 2026-11-10 — coalesce repeated bookmaker page callbacks (CI and API 34 runtime passed)
+
+### Finding and change
+
+- During an API 34 foreground run, eTopaz emitted several `onPageFinished` callbacks and the old collector stored four 25-row batches within 30 seconds. This made redundant public-page reads and duplicated the capture history. The same persisted profile held 128 Misli and 400 TOPAZ snapshots before this fix.
+- Added a synchronized per-WebView capture gate: concurrent callbacks are coalesced, each operator gets one capture per 30-minute freshness interval, and only one reload timer is scheduled. If the app opens while stored quotes are still fresh, the public page now loads automatically when that freshness expires as long as the app stays foregrounded.
+- Added a JVM regression test for duplicate callbacks, in-progress suppression, and the 30-minute boundary. Existing rendering, timestamp and provider-specific safeguards remain in force.
+
+### Verification
+
+- Local `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed. API 34 emulator 5558 ran all 11 instrumentation tests successfully. Together the local suite has 88 JVM tests and 11 Android tests.
+- Commit `fd51aa4` passed GitHub Actions [42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554): 88 JVM + 11 API 34 tests, APK build, stable signing and artifact upload `13805066252`. APK SHA-256 `4bd05b6d68a1a0441e420af4eae7babfaa6d9cd5591a8729adf41dd3d3bdb08a`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- The stable-signed CI APK update-installed on the existing API 34 emulator with `adb install -r`; first-install time remained `2026-11-09 16:44:24`, the previous database remained in place, and the app relaunched. It retained 39,181 matches / 30,114 completed scores, 90 accumulators / 522 legs, and 62 forecasts / 0 settlements.
+- Left the app foregrounded beyond stored quote expiry. The automatic Misli check completed once at `2026-11-10 21:34:53 UTC`; eTopaz completed once at `21:35:11 UTC`. Both public pages returned no verifiable future prematch 1X2 lines, so the app set both statuses to `UNAVAILABLE` and added zero odds rows. Counts remained Misli 128 / TOPAZ 400; no stale price was presented as current. Status timestamps and counts remained unchanged for over a minute afterward, the process stayed alive, and logcat showed no SQLite lock or fatal app exception.
+- A fresh screenshot showed cached fixtures plus both unavailable provider statuses; automatic football source state and offline match history remained available. No access control was bypassed, and explicit bookmaker quote reuse rights remain unconfirmed.
+
+### Next concrete work
+
+- Continue API 26 WAL compatibility checks when a network-enabled API 26 test environment is available, and use a physical Android device if one becomes available. Keep the latest WebView statuses honest: both operators were unavailable on the latest capture; earlier 21:04–21:05 quotes are expired history only.
+
 ## 2026-11-10 — stabilize WorkManager offline instrumentation (CI and API 34 passed)
 
 - The docs-only commit `61374ee` reran the full Actions pipeline. JVM tests passed, but API 34 instrumentation failed once in `immediateSyncRemainsQueuedWithoutNetworkAndDoesNotStartWorker` with `NoSuchElementException: List is empty` after a fixed two-second wait. No production source or database operation failed.
