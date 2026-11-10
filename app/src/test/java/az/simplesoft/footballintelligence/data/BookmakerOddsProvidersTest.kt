@@ -27,6 +27,19 @@ class BookmakerOddsProvidersTest {
         assertEquals("STALE",visibleBookmakerStatus(OddsProviderStatus.LIVE,now-30L*60*1000-1,2,now))
     }
 
+    @Test fun foregroundCaptureGateCoalescesPageCallbacksAndEnforcesRefreshWindow() {
+        val gate=ForegroundBookmakerCaptureGate(intervalMillis=30_000)
+        assertTrue(gate.tryStart(1_000))
+        assertTrue(gate.isCaptureInProgress())
+        assertEquals(false,gate.tryStart(1_001))
+
+        gate.finish(1_010)
+        assertEquals(false,gate.isCaptureInProgress())
+        assertEquals(30_000L,gate.millisUntilAllowed(1_010))
+        assertEquals(false,gate.tryStart(31_009))
+        assertTrue(gate.tryStart(31_010))
+    }
+
     @Test fun newestSnapshotReplacesRepeatedRefreshForSameEventButKeepsOperatorsSeparate() {
         fun quote(provider:String,captured:Long,price:Double)=BookmakerOddsSnapshot(
             provider,"event-1","https://example.org/football",captured,2_000,"1X2","Home","Away",

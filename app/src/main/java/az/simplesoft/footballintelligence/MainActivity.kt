@@ -90,6 +90,8 @@ import az.simplesoft.footballintelligence.data.latestBookmakerSnapshotsPerEvent
 import az.simplesoft.footballintelligence.data.MisliVisiblePage
 import az.simplesoft.footballintelligence.data.FixtureIdentity
 import az.simplesoft.footballintelligence.data.uniqueExactFixtureMatchId
+import az.simplesoft.footballintelligence.data.BOOKMAKER_CAPTURE_INTERVAL_MILLIS
+import az.simplesoft.footballintelligence.data.ForegroundBookmakerCaptureGate
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 
@@ -1053,8 +1055,7 @@ class MainActivity:ComponentActivity() {
     val latestOnCaptured by rememberUpdatedState(onCaptured)
     val previousCheck=remember(store) { store.bookmakerSyncState("misli")?.lastCheckedAtMillis }
     val now=System.currentTimeMillis()
-    val shouldLoad=previousCheck==null || now-previousCheck>=30L*60*1000
-    if(!shouldLoad) return
+    val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { MisliOddsProvider() }
     val handler=remember { Handler(Looper.getMainLooper()) }
     val webView=remember(activity) {
@@ -1062,18 +1063,40 @@ class MainActivity:ComponentActivity() {
             settings.javaScriptEnabled=true
             settings.domStorageEnabled=true
             webViewClient=object:WebViewClient() {
-                private var capturePending=false
+                private val captureGate=ForegroundBookmakerCaptureGate()
+                private var reloadScheduled=false
+
+                private fun scheduleReload(view:WebView,delayMillis:Long) {
+                    if(reloadScheduled) return
+                    reloadScheduled=true
+                    handler.postDelayed({
+                        reloadScheduled=false
+                        if(!activity.isFinishing) view.reload()
+                    },delayMillis.coerceAtLeast(0L))
+                }
+
+                private fun finishCapture(view:WebView,capturedAtMillis:Long) {
+                    captureGate.finish(capturedAtMillis)
+                    latestOnCaptured()
+                    scheduleReload(view,BOOKMAKER_CAPTURE_INTERVAL_MILLIS)
+                }
+
                 override fun onPageFinished(view:WebView,url:String) {
                     val uri=runCatching { java.net.URI(url) }.getOrNull()
                     if(uri==null || uri.host !in setOf("misli.az","www.misli.az") || uri.path!="/idman-novleri/futbol") return
+                    val pageFinishedAt=System.currentTimeMillis()
+                    if(!captureGate.tryStart(pageFinishedAt)) {
+                        if(!captureGate.isCaptureInProgress()) {
+                            scheduleReload(view,captureGate.millisUntilAllowed(pageFinishedAt))
+                        }
+                        return
+                    }
                     handler.removeCallbacksAndMessages(null)
-                    capturePending=true
+                    reloadScheduled=false
                     handler.postDelayed({
-                        if(!capturePending) return@postDelayed
                         view.evaluateJavascript(
                             "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
                         ) { encoded ->
-                            capturePending=false
                             val checkedAt=System.currentTimeMillis()
                             try {
                                 val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
@@ -1092,17 +1115,15 @@ class MainActivity:ComponentActivity() {
                                         val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
                                         store.saveBookmakerCapture("misli",checkedAt,status,result.snapshots,result.detail)
                                     } catch(error:Exception) {
-                                        store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.")
+                                        runCatching { store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.") }
                                     }
                                     activity.runOnUiThread {
-                                        latestOnCaptured()
-                                        handler.postDelayed({ if(!activity.isFinishing) view.reload() },30L*60*1000)
+                                        finishCapture(view,checkedAt)
                                     }
                                 }.start()
                             } catch(error:Exception) {
-                                store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.")
-                                latestOnCaptured()
-                                handler.postDelayed({ if(!activity.isFinishing) view.reload() },30L*60*1000)
+                                runCatching { store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.") }
+                                finishCapture(view,checkedAt)
                             }
                         }
                     },4_000)
@@ -1113,7 +1134,10 @@ class MainActivity:ComponentActivity() {
                     return uri==null || uri.scheme!="https" || uri.host !in setOf("misli.az","www.misli.az")
                 }
             }
-            loadUrl("https://www.misli.az/idman-novleri/futbol")
+            val publicUrl="https://www.misli.az/idman-novleri/futbol"
+            if(initialLoadDelay==0L) loadUrl(publicUrl) else handler.postDelayed({
+                if(!activity.isFinishing) loadUrl(publicUrl)
+            },initialLoadDelay)
         }
     }
     androidx.compose.runtime.DisposableEffect(webView) {
@@ -1131,8 +1155,8 @@ class MainActivity:ComponentActivity() {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
     val previousCheck=remember(store) { store.bookmakerSyncState("topaz")?.lastCheckedAtMillis }
-    val shouldLoad=previousCheck==null || System.currentTimeMillis()-previousCheck>=30L*60*1000
-    if(!shouldLoad) return
+    val now=System.currentTimeMillis()
+    val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { TopazOddsProvider() }
     val handler=remember { Handler(Looper.getMainLooper()) }
     val webView=remember(activity) {
@@ -1140,23 +1164,44 @@ class MainActivity:ComponentActivity() {
             settings.javaScriptEnabled=true
             settings.domStorageEnabled=true
             webViewClient=object:WebViewClient() {
-                private var capturePending=false
+                private val captureGate=ForegroundBookmakerCaptureGate()
+                private var reloadScheduled=false
+
+                private fun scheduleReload(view:WebView,delayMillis:Long) {
+                    if(reloadScheduled) return
+                    reloadScheduled=true
+                    handler.postDelayed({
+                        reloadScheduled=false
+                        if(!activity.isFinishing) view.reload()
+                    },delayMillis.coerceAtLeast(0L))
+                }
+
+                private fun finishCapture(view:WebView,capturedAtMillis:Long) {
+                    captureGate.finish(capturedAtMillis)
+                    latestOnCaptured()
+                    scheduleReload(view,BOOKMAKER_CAPTURE_INTERVAL_MILLIS)
+                }
+
                 override fun onPageFinished(view:WebView,url:String) {
                     val uri=runCatching { java.net.URI(url) }.getOrNull()
                     if(uri==null||uri.host !in setOf("etopaz.az","www.etopaz.az")||uri.path!="/home") return
+                    val pageFinishedAt=System.currentTimeMillis()
+                    if(!captureGate.tryStart(pageFinishedAt)) {
+                        if(!captureGate.isCaptureInProgress()) {
+                            scheduleReload(view,captureGate.millisUntilAllowed(pageFinishedAt))
+                        }
+                        return
+                    }
                     handler.removeCallbacksAndMessages(null)
-                    capturePending=true
+                    reloadScheduled=false
                     // This clicks an ordinary visible tab by its exact accessible label; it does
                     // not navigate to a private route or inject any bookmaker request.
                     handler.postDelayed({
-                        if(!capturePending) return@postDelayed
                         view.evaluateJavascript("""(function(){const els=[...document.querySelectorAll('button,[role="tab"],[role="button"],a,div,span')];const el=els.find(e=>e.innerText?.trim()==='İdman'&&e.getClientRects().length&&e.clientWidth>0&&e.clientHeight>0);if(!el)return false;el.click();return true;})()""") {
                             handler.postDelayed({
-                                if(!capturePending) return@postDelayed
                                 view.evaluateJavascript(
                                     "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
                                 ) { encoded ->
-                                    capturePending=false
                                     val checkedAt=System.currentTimeMillis()
                                     try {
                                         val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
@@ -1172,17 +1217,15 @@ class MainActivity:ComponentActivity() {
                                                 val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
                                                 store.saveBookmakerCapture("topaz",checkedAt,status,result.snapshots,result.detail)
                                             } catch(error:Exception) {
-                                                store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.")
+                                                runCatching { store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.") }
                                             }
                                             activity.runOnUiThread {
-                                                latestOnCaptured()
-                                                handler.postDelayed({ if(!activity.isFinishing) view.reload() },30L*60*1000)
+                                                finishCapture(view,checkedAt)
                                             }
                                         }.start()
                                     } catch(error:Exception) {
-                                        store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.")
-                                        latestOnCaptured()
-                                        handler.postDelayed({ if(!activity.isFinishing) view.reload() },30L*60*1000)
+                                        runCatching { store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.") }
+                                        finishCapture(view,checkedAt)
                                     }
                                 }
                             },3_000)
@@ -1195,7 +1238,10 @@ class MainActivity:ComponentActivity() {
                     return uri==null||uri.scheme!="https"||uri.host !in setOf("etopaz.az","www.etopaz.az")
                 }
             }
-            loadUrl("https://etopaz.az/home?sport-id=1%3Asr%3Asport%3A1")
+            val publicUrl="https://etopaz.az/home?sport-id=1%3Asr%3Asport%3A1"
+            if(initialLoadDelay==0L) loadUrl(publicUrl) else handler.postDelayed({
+                if(!activity.isFinishing) loadUrl(publicUrl)
+            },initialLoadDelay)
         }
     }
     androidx.compose.runtime.DisposableEffect(webView) {

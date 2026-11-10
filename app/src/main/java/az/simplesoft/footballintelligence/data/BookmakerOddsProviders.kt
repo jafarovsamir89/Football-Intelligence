@@ -21,7 +21,7 @@ fun visibleBookmakerStatus(
     if(status==null) return "ОЖИДАЕТ ПРОВЕРКИ"
     if(status!=OddsProviderStatus.LIVE) return status.name
     val checked=lastCheckedAtMillis ?: return OddsProviderStatus.STALE.name
-    if(checked>nowMillis+60_000L || nowMillis-checked>30L*60*1000) return OddsProviderStatus.STALE.name
+    if(checked>nowMillis+60_000L || nowMillis-checked>BOOKMAKER_CAPTURE_INTERVAL_MILLIS) return OddsProviderStatus.STALE.name
     return if(freshUpcomingCount>0) OddsProviderStatus.LIVE.name else "НЕТ БУДУЩИХ ЛИНИЙ"
 }
 
@@ -57,6 +57,36 @@ fun latestBookmakerSnapshotsPerEvent(snapshots:List<BookmakerOddsSnapshot>):List
     snapshots.groupBy { it.providerId to it.eventId }.values.mapNotNull { rows ->
         rows.maxByOrNull { it.capturedAtMillis }
     }.sortedBy { it.kickoffMillis }
+
+internal const val BOOKMAKER_CAPTURE_INTERVAL_MILLIS = 30L * 60 * 1000
+
+/** Coalesces duplicate WebView page-finished callbacks into one capture per freshness window. */
+internal class ForegroundBookmakerCaptureGate(
+    private val intervalMillis: Long = BOOKMAKER_CAPTURE_INTERVAL_MILLIS,
+) {
+    private var captureInProgress = false
+    private var nextAllowedAtMillis = 0L
+
+    init {
+        require(intervalMillis > 0L)
+    }
+
+    @Synchronized fun tryStart(nowMillis: Long): Boolean {
+        if (captureInProgress || nowMillis < nextAllowedAtMillis) return false
+        captureInProgress = true
+        return true
+    }
+
+    @Synchronized fun finish(capturedAtMillis: Long) {
+        captureInProgress = false
+        nextAllowedAtMillis = capturedAtMillis + intervalMillis
+    }
+
+    @Synchronized fun isCaptureInProgress(): Boolean = captureInProgress
+
+    @Synchronized fun millisUntilAllowed(nowMillis: Long): Long =
+        (nextAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+}
 
 private fun publicRouteLabel(rawUrl:String):String = runCatching {
     val uri=java.net.URI(rawUrl)
