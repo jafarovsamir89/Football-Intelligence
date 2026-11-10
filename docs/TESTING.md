@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Commit `3cdcd96` passed GitHub Actions run [42747055613](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42747055613): **75 JUnit tests**, APK build, stable signing and artifact upload. The current uncommitted follow-up also passed `:app:testDebugUnitTest :app:assembleDebug` (75 tests, 0 failures/errors/skips). It closes temporary SQLite helpers, moves the match/recent-result list queries to IO, and improves queued-sync status text; it still needs CI.
+Commit `c7bf03c` passed GitHub Actions run [42749108983](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42749108983): **75 JUnit tests**, APK build, stable signing and artifact upload. Downloaded CI APK signer SHA-256 matched the stable key and update-install on API 34 preserved the database. The revision closes temporary SQLite helpers, moves match/recent-result list queries to IO, and improves queued-sync status text.
 
 Coverage includes:
 
@@ -31,7 +31,7 @@ After placeholder exclusion, the installed Backtest screen reported 29,588 targe
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
 
-The CI-signed artifact for `3cdcd96` was update-installed on Android 8 / API 26 and opened without a fatal exception. The update interrupted a prior worker; the nine-minute sync lease and WorkManager retry backoff delayed continuation despite validated emulator network connectivity. Without further APK updates, sync progressed to OpenFootball `OK`/25,904 and OpenLigaDB `PARTIAL`/306, with 26,449 total local rows at the latest check. Full API 26 sync is still not claimed. Both bookmaker WebViews reported no visible page text and status `ERROR` on this emulator. The CI cold launch skipped 44 frames once during JIT startup; on the later local build the main match sort moved to IO. No physical handset has been tested.
+The CI-signed artifact for `3cdcd96` was update-installed on Android 8 / API 26 and opened without a fatal exception. The update interrupted a prior worker; the nine-minute sync lease and WorkManager retry backoff delayed continuation despite validated emulator network connectivity. Without further APK updates, sync progressed by 2026-11-10 03:29 UTC to OpenFootball `OK`/25,904 and OpenLigaDB `PARTIAL`/5,463, with 29,490 total local rows and 57 OpenLigaDB league states. The lock was released and another continuation is expected; full API 26 sync is still not claimed. The new `c7bf03c` CI artifact was intentionally not installed on API 26 during active sync. Both bookmaker WebViews reported no visible page text and status `ERROR` on this emulator. The CI cold launch skipped 44 frames once during JIT startup; on the later local build the main match sort moved to IO. No physical handset has been tested.
 
 ## CI / APK
 
