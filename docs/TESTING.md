@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Commit `e8c3a33` passed GitHub Actions run [42752522409](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42752522409): the local suite passed **79 JUnit tests**, and CI passed APK build, stable signing and artifact upload. The downloaded APK signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable key. The artifact update-installed on API 26 and preserved SQLite v10 and its existing match rows.
+Commit `6faac0b` passed GitHub Actions run [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): **83 JUnit tests**, APK build, stable signing and artifact upload all passed. The signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the stable key. The artifact update-installed on API 34 and preserved the existing database.
 
 Coverage includes:
 
@@ -30,6 +30,8 @@ After installing `e8c3a33` on API 34, a standard WebView capture at 2026-11-10 0
 
 After placeholder exclusion, the installed Backtest screen reported 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106 and Log Loss 1.0235. These are still retrospective scores from current source snapshots, not archived vintages or future calibration evidence.
 
+The `6faac0b` CI APK was installed on API 34. Backtest reported one-vs-rest macro ECE 2.2% across 19,185 forecasts; by outcome, home 3.1%, draw 0.9%, away 2.5%. The expanded occupied-bin rows were visible with mean predicted probability, observed frequency and sample count. SQLite counts before and after install matched: 39,181 matches, 197 bookmaker snapshots, 59 accumulators. This UI check demonstrates execution against the local dataset only; it is not a prospective calibration result.
+
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
 
 Repeated this offline check after installing the `e8c3a33` CI APK on API 34: disabling Wi-Fi and mobile data made `ping 1.1.1.1` fail as expected, while the Compose UI hierarchy still contained cached match rows and source statuses. SQLite retained 39,181 matches, 72 Misli quote snapshots, 125 TOPAZ snapshots and 59 accumulators. Networking was restored after the check.
@@ -49,4 +51,4 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
 - Compose accessibility and physical-device layout remain unverified. API 26 cold start skipped 44 frames during initial JIT compilation on the latest CI APK. On a local API 34 cold start after moving the 39k match-list query to IO, 68 frames were skipped during JIT startup, the activity reached `Displayed` in 3.6s, and its Compose controls were present in the UI hierarchy; no fresh ANR or SQLite-helper leak was logged. Repeat cold/warm measurements remain open.
-- The automatic-source walk-forward is retrospective on current files. Calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.
+- The automatic-source walk-forward is retrospective on current files. Prospective calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.

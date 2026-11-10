@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-10 — retrospective one-vs-rest calibration diagnostics (local test/build passed; CI/runtime pending)
+## 2026-11-10 — retrospective one-vs-rest calibration diagnostics (CI and API 34 runtime passed)
 
 ### Change
 
@@ -12,8 +12,10 @@
 ### Verification and next action
 
 - `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed: 83 unit tests, APK assembled. `git diff --check` passed before commit.
-- Current-revision GitHub Actions and runtime presentation have not yet been inspected. Next: commit and push this milestone, download the stable-signed artifact, update-install on API 34 without clearing its database, run the Backtest screen and inspect actual reliability summaries/bins. Then update this entry with verified CI/runtime evidence.
-- Roadmap remains open for Android database/WorkManager instrumentation and immutable, versioned prospective forecast snapshots. Reliability ECE is retrospective only.
+- Committed/pushed as `6faac0b`; GitHub Actions [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129) passed unit tests, APK build, stable signature and artifact upload. Downloaded the CI APK and confirmed certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- Update-installed that artifact over API 34 via `adb install -r`, without uninstall or data clear. Database counts before/after were identical: 39,181 matches, 197 bookmaker snapshots, 59 virtual accumulators.
+- Opened Backtest on API 34 and waited for the local walk-forward to finish. The saved data produced 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106, Log Loss 1.0235; macro one-vs-rest ECE 2.2%, with home 3.1%, draw 0.9%, and away 2.5%. The expanded view exposed actual occupied bins with mean probability, observed frequency and sample count. This evidence confirms screen/runtime execution, not prospective model quality. No app fatal exception appeared in the inspected log.
+- Remaining work: add Android database/WorkManager instrumentation and immutable, versioned forecast snapshots for prospective settlement. The current reliability ECE remains retrospective only.
 
 ## 2026-11-10 — avoid exponential delays between first-run import segments
 
