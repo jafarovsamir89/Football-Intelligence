@@ -22,6 +22,7 @@ Coverage includes:
 - Coupon draft separation, most-probable outcome selection, stable match dedupe/order, same-provider pricing, quote timestamps and fresh-only accumulator construction, stale/future quote rejection, Fréchet bounds, settlement and price-backed performance summaries.
 - Rejection of placeholder team identities in source parsers, read-side lists and historical evaluation.
 - Streaming chronological walk-forward equivalence with independent as-of Elo fits, shared availability batches, and future-result exclusion.
+- Equal-width one-vs-rest calibration bins: per-outcome sample sizes, observed frequencies, mean predicted probabilities, bin edge handling and empty-input behavior.
 
 The API 34 database has 39,181 merged rows, 30,090 completed-result rows, 184 competitions, season keys `2022` through `2026-27`; provider source counts are OpenFootball 25,904 and OpenLigaDB 17,776. Current code rejects 566 previously stored placeholder-identity rows from reads, model input and backtests (kept in the database for ID/migration safety). The installed app recomputed post-filter automatic walk-forward: 29,588 targets, 19,185 forecasts and 10,403 insufficient-history skips. Older unfiltered figures are obsolete.
 

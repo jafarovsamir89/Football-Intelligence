@@ -1,5 +1,20 @@
 # Development log
 
+## 2026-11-10 — retrospective one-vs-rest calibration diagnostics (local test/build passed; CI/runtime pending)
+
+### Change
+
+- The walk-forward already reported Brier and Log Loss but did not expose whether predicted outcome probabilities aligned with observed frequencies. Added `CalibrationDiagnostics`: equal-width probability bins for home/draw/away one-vs-rest channels, per-outcome expected calibration error (ECE), macro mean ECE, observed frequency, average predicted probability and sample size.
+- Added four unit tests for reliability values, probability-1 final-bin inclusion, score-to-outcome mapping, empty input, and bin-count validation. The initial test fixture expected 0.80 and 0.90 values to share a 10% bin; the assertion fixture was corrected to two values in the same 80–90% bin. Final local run passed 83 tests and assembled the debug APK.
+- The automatic and optional imported Backtest reports now show the three per-outcome ECE summaries and an expandable list of occupied bins. Copy explicitly says this describes the retrospective sample; it does not calibrate probabilities or establish future quality.
+- Updated roadmap, architecture, limitations, testing and changelog. Corrected an old zero-touch status paragraph that described eTopaz as unavailable despite the later API 34 capture.
+
+### Verification and next action
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed: 83 unit tests, APK assembled. `git diff --check` passed before commit.
+- Current-revision GitHub Actions and runtime presentation have not yet been inspected. Next: commit and push this milestone, download the stable-signed artifact, update-install on API 34 without clearing its database, run the Backtest screen and inspect actual reliability summaries/bins. Then update this entry with verified CI/runtime evidence.
+- Roadmap remains open for Android database/WorkManager instrumentation and immutable, versioned prospective forecast snapshots. Reliability ECE is retrospective only.
+
 ## 2026-11-10 — avoid exponential delays between first-run import segments
 
 ### Finding and change

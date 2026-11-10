@@ -44,6 +44,7 @@ import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
+import az.simplesoft.footballintelligence.analytics.CalibrationDiagnostics
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
@@ -1448,6 +1449,7 @@ class MainActivity:ComponentActivity() {
                     Text("Автоматическая база: целей ${report.targetCount} · рассчитано прогнозов ${report.forecastCount} · пропущено из-за малого прошлого сэмпла ${report.skippedForInsufficientHistory}",fontWeight=FontWeight.SemiBold)
                     if(report.meanBrierScore==null||report.meanLogLoss==null) Text("Пока недостаточно предматчевой истории для проверяемого прогноза.",style=MaterialTheme.typography.bodySmall)
                     else Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
+                    WalkForwardCalibrationSummary(report)
                     Text("Срез рассчитан отдельно в границах соревнований. Результат не является обещанием прибыли.",style=MaterialTheme.typography.bodySmall)
                 }
                 HorizontalDivider()
@@ -1475,6 +1477,7 @@ class MainActivity:ComponentActivity() {
                         } else {
                             Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
                         }
+                        WalkForwardCalibrationSummary(report)
                         Text("Результаты показывают только качество вероятностных оценок на этом локальном файле; они не доказывают преимущество, прибыль или превосходство над букмекерами.",style=MaterialTheme.typography.bodySmall)
                     }
                 }
@@ -1500,5 +1503,39 @@ class MainActivity:ComponentActivity() {
 @Composable fun OutcomeSelect(value:String,onChange:(String)->Unit) {
     Row(horizontalArrangement=Arrangement.spacedBy(8.dp)) {
         listOf("H","D","A").forEach { v -> FilterChip(selected=value==v,onClick={onChange(v)},label={Text(labelOutcome(v))}) }
+    }
+}
+
+@Composable
+private fun WalkForwardCalibrationSummary(report:EloWalkForwardReport) {
+    if(report.predictions.isEmpty()) return
+    val calibration=remember(report) { CalibrationDiagnostics.evaluateWalkForward(report.predictions) }
+    var expanded by remember(report) { mutableStateOf(false) }
+    val ece=calibration.meanOneVsRestEce?.let { "%.1f".format(it*100) } ?: "н/д"
+    Column(verticalArrangement=Arrangement.spacedBy(3.dp)) {
+        Text("Калибровочная диагностика: mean one-vs-rest ECE $ece% · ${calibration.predictionCount} прогнозов",fontWeight=FontWeight.SemiBold)
+        calibration.outcomes.forEach { outcome ->
+            val outcomeEce=outcome.expectedCalibrationError?.let { "%.1f".format(it*100) } ?: "н/д"
+            Text("${outcome.outcome.label}: ECE $outcomeEce% · n=${outcome.sampleCount}",style=MaterialTheme.typography.bodySmall)
+        }
+        Text("Равные интервалы вероятности 0–100%; ECE показывает среднее расхождение прогноза и частоты исхода в занятых корзинах. Это описание ретроспективной выборки, не калибровка модели.",style=MaterialTheme.typography.labelSmall)
+        TextButton(onClick={expanded=!expanded},contentPadding=PaddingValues(0.dp)) {
+            Text(if(expanded) "Скрыть корзины" else "Показать занятые корзины")
+        }
+        if(expanded) {
+            calibration.outcomes.forEach { outcome ->
+                if(outcome.occupiedBins.isNotEmpty()) {
+                    Text("${outcome.outcome.label} · средняя вероятность / частота / число",fontWeight=FontWeight.Medium,style=MaterialTheme.typography.labelMedium)
+                    outcome.occupiedBins.forEach { bin ->
+                        Text(
+                            "${"%.0f".format(bin.lowerInclusive*100)}–${"%.0f".format(bin.upperBound*100)}% · " +
+                                "${"%.1f".format(bin.meanPredictedProbability*100)}% / " +
+                                "${"%.1f".format(bin.observedFrequency*100)}% / ${bin.sampleCount}",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
+        }
     }
 }

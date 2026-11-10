@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — retrospective Elo reliability diagnostics
+
+- Add tested one-vs-rest reliability bins for home/draw/away forecasts, including sample sizes, mean predicted probability, observed frequency, and mean ECE.
+- Show the diagnostics and occupied bins for automatic and optional imported walk-forward reports; explicitly label them retrospective and not a calibration transform.
+- Local verification: 83 JUnit tests and `assembleDebug` passed. API 34 runtime/UI and current-revision CI verification are pending.
+
 ## Unreleased — queue bounded sync continuation without retry backoff
 
 - Separate the normal eight-minute work budget from actual provider/network failures. At the budget boundary, append another connected one-time Worker to the unique chain with `APPEND_OR_REPLACE` and complete the current Worker; failed requests still return `Result.retry()` and keep WorkManager backoff.
