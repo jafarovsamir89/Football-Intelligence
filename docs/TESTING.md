@@ -6,7 +6,7 @@
 ./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
 ```
 
-Commit `c7bf03c` passed GitHub Actions run [42749108983](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42749108983): **75 JUnit tests**, APK build, stable signing and artifact upload. Downloaded CI APK signer SHA-256 matched the stable key and update-install on API 34 preserved the database. The revision closes temporary SQLite helpers, moves match/recent-result list queries to IO, and improves queued-sync status text.
+Commit `c7bf03c` passed GitHub Actions run [42749108983](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42749108983): **75 JUnit tests**, APK build, stable signing and artifact upload. Downloaded CI APK signer SHA-256 matched the stable key and update-install on API 34 preserved the database. The later documentation-only commit `0fac233` also passed full Actions run [42749894995]. The tested app code closes temporary SQLite helpers, moves match/recent-result list queries to IO, and improves queued-sync status text.
 
 Coverage includes:
 
@@ -30,6 +30,8 @@ The latest standard WebView capture on API 34 stored 10 Misli and 25 TOPAZ futur
 After placeholder exclusion, the installed Backtest screen reported 29,588 targets, 19,185 forecasts, 10,403 insufficient-history skips, Brier 0.6106 and Log Loss 1.0235. These are still retrospective scores from current source snapshots, not archived vintages or future calibration evidence.
 
 Offline relaunch was checked with Wi-Fi and mobile data disabled; `ping 1.1.1.1` returned `Network is unreachable`, while cached fixtures and provider statuses remained visible. Stored odds expire from the fresh display after 30 minutes.
+
+Repeated this offline check after installing the `c7bf03c` CI APK on API 34: disabling Wi-Fi and mobile data made `ping 1.1.1.1` fail as expected, while the Compose UI hierarchy still contained cached match rows and source statuses. Networking was restored after the check.
 
 The CI-signed artifact for `3cdcd96` was update-installed on Android 8 / API 26 and opened without a fatal exception. The update interrupted a prior worker; the nine-minute sync lease and WorkManager retry backoff delayed continuation despite validated emulator network connectivity. Without further APK updates, sync progressed by 2026-11-10 03:29 UTC to OpenFootball `OK`/25,904 and OpenLigaDB `PARTIAL`/5,463, with 29,490 total local rows and 57 OpenLigaDB league states. The lock was released and another continuation is expected; full API 26 sync is still not claimed. The new `c7bf03c` CI artifact was intentionally not installed on API 26 during active sync. Both bookmaker WebViews reported no visible page text and status `ERROR` on this emulator. The CI cold launch skipped 44 frames once during JIT startup; on the later local build the main match sort moved to IO. No physical handset has been tested.
 

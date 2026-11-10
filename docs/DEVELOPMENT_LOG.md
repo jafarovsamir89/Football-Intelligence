@@ -183,6 +183,12 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 - API 26 was left on the previous CI APK after its install interrupted a prior Worker, allowing WorkManager to resume uninterrupted. Latest readable state at 2026-11-10 03:29 UTC: 29,490 merged rows, OpenFootball `OK`/25,904, OpenLigaDB `PARTIAL`/5,463 and 57 league states. The worker released its lock after the bounded attempt and awaits continuation. Emulator network validation/ping succeeds. Full OpenLigaDB/API 26 completion remains pending; do not install a new APK over an active attempt.
 - Next: let API 26's continuation reach provider `OK` or a repeatable provider limit, inspecting it without reinstalling. After that, update-install the `c7bf03c` CI artifact on API 26 to verify same-signature data preservation and the new SQLite lifecycle. API 26 bookmaker WebView remains `ERROR` with no visible text; no bypass. No physical handset is available.
 
+## 2026-11-09 — offline CI-artifact and diary CI verification
+
+- Documentation/status follow-up was pushed as `0fac233`; Actions run [42749894995](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42749894995) passed the full 75-test, APK build, signing and upload workflow. It contains no app-code changes; app-code artifact validation remains run `42749108983` for `c7bf03c`.
+- Re-tested offline behavior on the API 34 installation of the stable-signed `c7bf03c` CI APK. Wi-Fi and mobile data were disabled; `ping 1.1.1.1` returned `Network is unreachable`; Compose accessibility hierarchy continued to expose cached match cards and provider source states. Networking was restored immediately after inspection.
+- API 26 sync is still continuing without APK updates. Its last committed diary snapshot remains 29,490 merged rows / OpenFootball `OK` 25,904 / OpenLigaDB `PARTIAL` 5,463 / 57 league states at 03:29 UTC. Backoff delay was visible in WorkManager scheduling; no full API 26 result is claimed yet.
+
 ## 2026-11-09 — Misli WebView proof and first clean-install capture (local build passed; data sync still running)
 
 ### Implemented
