@@ -179,10 +179,7 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 
 ### Next concrete work
 
-1. Commit and push the worker retry-on-lock fix and its documentation.
-2. Wait for the Actions run; download its APK, compare the stable certificate fingerprint, and update-install over the current same-key API 34 app.
-3. Verify the waiting worker retries once the existing sync lease expires, then follow the complete automatic sync until both providers report `OK`; update the final counts.
-4. Preserve these open limitations: operator terms do not affirm automated quote reuse; current 33 bookmaker event rows do not join an exact local fixture; no operator quote is reused as a price for an unmatched local model pick; only one API 34 emulator was tested; historic source vintages are absent; no forecast outcomes have settled yet.
+The next items in this historical checkpoint were completed and recorded in the final verification entry below. Open limitations remain: operator terms do not affirm automated quote reuse; no stored bookmaker event joins an exact local fixture; no operator quote is reused as a price for an unmatched local model pick; only one API 34 emulator was tested; historic source vintages are absent; no forecast outcomes have settled yet.
 
 ## 2026-11-09 — GitHub Actions artifact verification and stable update signing
 
@@ -192,3 +189,20 @@ The first run caught an incorrect test fixture: the supposed underround Shin exa
 - Actions run [42731002068](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42731002068) passed including stable signing. The downloaded APK's certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935` matched the temporary test key. `adb install -r` updated the existing stable-signed app without uninstall; SQLite v8 and the 33 bookmaker snapshots remained. During this update, the active worker was interrupted while its 9-minute SQLite lease persisted.
 - Fixed lease contention: a worker that cannot acquire the sync lease now reports `waiting_for_sync_lock` and returns `Result.retry()` instead of falsely completing. The updated local build passed `:app:testDebugUnitTest` and `:app:assembleDebug` with 62 JUnit tests; its sync-lock fix still needs a CI run and update-install verification.
 - The current stable-signed emulator database has 8,894 match rows and 4,417 scored rows at the last inspection; its interrupted provider sync has not yet been confirmed complete. WorkManager had previously marked two contending workers `SUCCESS`, motivating the retry fix. No final counts should be inferred until provider completion states are inspected.
+
+## 2026-11-09 — stable APK acceptance, retried full sync, offline and backtest verification
+
+### Work completed
+
+- Committed and pushed the lease-contention fix as `5a64c43`. A worker unable to acquire the SQLite sync lease now sets progress to `waiting_for_sync_lock` and returns `Result.retry()` rather than silently reporting success.
+- Actions run [42731992205](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42731992205) completed successfully: 62 unit tests, debug APK build, stable signing and artifact upload. Downloaded artifact certificate SHA-256 matched the stable CI key (`da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`). The APK update-installed over the previous same-key API 34 app without uninstall; SQLite v8 and bookmaker snapshots were preserved.
+- The final APK performed a clean source sync over multiple bounded WorkManager runs. An initial worker and one continuation reported `PARTIAL` at the eight-minute runtime boundary; WorkManager retried automatically and the final attempt reported `SUCCESS`. Both final provider records are `OK`: OpenFootball 25,904 rows and OpenLigaDB 17,776. Five cached OpenLigaDB catalogs contained 214 league-season entries. SQLite contains 39,181 merged match rows, 30,090 finished results, and 184 distinct competitions, with season keys from `2022` through `2026-27`. No 1970 date placeholders remained.
+- On the final Backtest screen, automatic walk-forward returned 30,090 targets, 19,185 forecasts, 10,905 skipped for insufficient prior history, mean Brier 0.6106 and mean Log Loss 1.0235. The computation completed without blocking the screen. It is retrospective on present source files with conservative date-only availability, not archived historical vintages or evidence of future accuracy/profit.
+- Verified true offline relaunch with airplane mode plus Wi-Fi and mobile data disabled. `ping 1.1.1.1` returned `Network is unreachable`; the main screen still displayed cached fixtures and source statuses. Network access was restored after the check.
+- After the final sync, a foreground bookmaker check displayed nine fresh Misli lines (`LIVE`) and marked TOPAZ/eTopaz `UNAVAILABLE` because the page returned only the public home page. Stored snapshot history contained 17 Misli captures across 9 events and 25 TOPAZ events; none had an exact local match ID. Earlier POC captured both operators and UEFA schedule cross-checks remain in the preceding entry. Explicit reuse permissions remain unconfirmed; no access controls were bypassed.
+
+### Final verification and remaining limits
+
+- The official CI artifact for `5a64c43` passed, verified the same stable signature and successfully updated an installed app with preserved data.
+- API 34 first launch reached both source `OK` states and the expected broad multi-season database. Unit tests and APK build are green.
+- No physical handset or API 26 execution was performed. Dedicated SQLite migration and WorkManager integration tests remain future work. Current Misli/eTopaz terms do not affirm automatic odds reuse, and current public bookmaker events do not map to local model fixtures; the app correctly makes no model comparison for them.

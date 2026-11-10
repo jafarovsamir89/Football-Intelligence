@@ -14,6 +14,10 @@
 
 ## Unreleased — 2026-11-09
 
+- Final API 34 verification: GitHub Actions 42731992205 passed tests/build/stable signing; update install preserved SQLite and bounded retries completed both football providers.
+- Final sync stored 39,181 merged matches/30,090 scored results across 184 competitions; walk-forward returned 19,185 forecasts (Brier 0.6106, Log Loss 1.0235) from 30,090 targets.
+- Verified offline relaunch with Wi-Fi/mobile data disabled. Last WebView check showed 9 Misli rows and TOPAZ/eTopaz unavailable on its public home page; unmatched or unavailable prices are never presented as model-comparable.
+
 - Added WorkManager first-open and 24-hour best-effort refresh with network constraints, unique work, retry/backoff, DB sync lease and OpenLigaDB request pacing.
 - Added OpenFootball five-season automatic JSON discovery/download with ETag/cache; added dynamic OpenLigaDB catalogs for five calendar-year seasons, change checks and bounded continuation.
 - Added provider freshness/error/provenance storage, capture and safe-availability timestamps, date-only kickoff handling, conservative cross-source fixture dedupe and SQLite migrations through v6.
