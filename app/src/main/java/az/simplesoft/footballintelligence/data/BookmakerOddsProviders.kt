@@ -82,6 +82,24 @@ data class FixtureIdentity(
     val kickoffMillis: Long,
 )
 
+/** Strictly links one visible bookmaker event to one local fixture using reviewed team aliases. */
+fun uniqueExactFixtureMatchId(
+    snapshot: BookmakerOddsSnapshot,
+    fixtures: List<FixtureIdentity>,
+    kickoffToleranceMillis: Long = 20 * 60 * 1000L,
+): Int? {
+    require(kickoffToleranceMillis >= 0)
+    val zone = runCatching { ZoneId.of(snapshot.timeZoneId) }.getOrNull() ?: return null
+    val eventDate = Instant.ofEpochMilli(snapshot.kickoffMillis).atZone(zone).toLocalDate()
+    val candidates = fixtures.filter { fixture ->
+        Instant.ofEpochMilli(fixture.kickoffMillis).atZone(zone).toLocalDate() == eventDate &&
+            TeamNameIdentity.canonical(fixture.homeTeam) == TeamNameIdentity.canonical(snapshot.homeTeam) &&
+            TeamNameIdentity.canonical(fixture.awayTeam) == TeamNameIdentity.canonical(snapshot.awayTeam) &&
+            kotlin.math.abs(fixture.kickoffMillis - snapshot.kickoffMillis) <= kickoffToleranceMillis
+    }
+    return candidates.singleOrNull()?.matchId
+}
+
 data class MisliVisiblePage(
     val url: String,
     val title: String,
@@ -171,7 +189,7 @@ class MisliOddsProvider : BookmakerOddsProvider {
                 rejected += duplicates.size
                 null
             }
-        }.map { snapshot -> snapshot.copy(matchId = matchIdFor(snapshot, fixtures)) }
+        }.map { snapshot -> snapshot.copy(matchId = uniqueExactFixtureMatchId(snapshot, fixtures)) }
             .sortedBy { it.kickoffMillis }
 
         lastCount = snapshots.size
@@ -256,18 +274,6 @@ class MisliOddsProvider : BookmakerOddsProvider {
         )
     }
 
-    private fun matchIdFor(snapshot: BookmakerOddsSnapshot, fixtures: List<FixtureIdentity>): Int? {
-        val exactDate = Instant.ofEpochMilli(snapshot.kickoffMillis).atZone(ZoneId.of(snapshot.timeZoneId)).toLocalDate()
-        val candidates = fixtures.filter { fixture ->
-            val fixtureDate = Instant.ofEpochMilli(fixture.kickoffMillis).atZone(ZoneId.of(snapshot.timeZoneId)).toLocalDate()
-            fixtureDate == exactDate &&
-                TeamNameIdentity.canonical(fixture.homeTeam) == TeamNameIdentity.canonical(snapshot.homeTeam) &&
-                TeamNameIdentity.canonical(fixture.awayTeam) == TeamNameIdentity.canonical(snapshot.awayTeam) &&
-                kotlin.math.abs(fixture.kickoffMillis - snapshot.kickoffMillis) <= 20 * 60 * 1000L
-        }
-        return candidates.singleOrNull()?.matchId
-    }
-
     private fun splitVisiblePair(value: String): Pair<String, String>? {
         val match = Regex("^(.+?)\\s+[–—-]\\s+(.+)$").matchEntire(value) ?: return null
         return match.groupValues[1].trim() to match.groupValues[2].trim()
@@ -306,66 +312,92 @@ object TeamNameIdentity {
         "bayern munich" to "bayern munich",
         "bayern munchen" to "bayern munich",
         "turkiye" to "turkey",
+        "turkei" to "turkey",
         "turkey" to "turkey",
         "belcika" to "belgium",
+        "belgien" to "belgium",
         "belgium" to "belgium",
         "italya" to "italy",
         "italiya" to "italy",
+        "italien" to "italy",
         "italy" to "italy",
         "fransa" to "france",
+        "frankreich" to "france",
         "france" to "france",
         "ingiltere" to "england",
         "england" to "england",
         "xorvatiya" to "croatia",
+        "kroatien" to "croatia",
         "croatia" to "croatia",
         "cexiya" to "czech republic",
         "czechia" to "czech republic",
+        "tschechien" to "czech republic",
         "czech republic" to "czech republic",
         "ispaniya" to "spain",
+        "spanien" to "spain",
         "spain" to "spain",
         "albaniya" to "albania",
+        "albanien" to "albania",
         "albania" to "albania",
         "finlandiya" to "finland",
+        "finnland" to "finland",
         "finland" to "finland",
         "cernoqoriya" to "montenegro",
         "montenegro" to "montenegro",
         "latviya" to "latvia",
+        "lettland" to "latvia",
         "latvia" to "latvia",
         "moldova respublikasi" to "moldova",
+        "moldawien" to "moldova",
         "moldova" to "moldova",
         "qazaxstan" to "kazakhstan",
+        "kasachstan" to "kazakhstan",
         "kazakhstan" to "kazakhstan",
         "niderland" to "netherlands",
+        "niederlande" to "netherlands",
         "netherlands" to "netherlands",
         "yunanistan" to "greece",
+        "griechenland" to "greece",
         "greece" to "greece",
         "serbiya" to "serbia",
+        "serbien" to "serbia",
         "serbia" to "serbia",
         "almaniya" to "germany",
+        "deutschland" to "germany",
         "germany" to "germany",
         "lixtensteyn" to "liechtenstein",
         "liechtenstein" to "liechtenstein",
         "azerbaycan" to "azerbaijan",
+        "aserbaidschan" to "azerbaijan",
         "azerbaijan" to "azerbaijan",
         "bolqaristan" to "bulgaria",
+        "bulgarien" to "bulgaria",
         "bulgaria" to "bulgaria",
         "islandiya" to "iceland",
+        "island" to "iceland",
         "iceland" to "iceland",
         "luksemburq" to "luxembourg",
         "luxembourg" to "luxembourg",
+        "luxemburg" to "luxembourg",
         "estoniya" to "estonia",
         "estonia" to "estonia",
+        "estland" to "estonia",
         "slovakiya" to "slovakia",
         "slovakia" to "slovakia",
+        "slowakei" to "slovakia",
         "farer adalari" to "faroe islands",
+        "faroer inseln" to "faroe islands",
         "faroe islands" to "faroe islands",
         "simali makedoniya" to "north macedonia",
+        "nordmazedonien" to "north macedonia",
         "north macedonia" to "north macedonia",
         "sloveniya" to "slovenia",
+        "slowenien" to "slovenia",
         "slovenia" to "slovenia",
         "isvecere" to "switzerland",
         "isvecre" to "switzerland",
         "switzerland" to "switzerland",
+        "schweiz" to "switzerland",
         "cebeli tariq" to "gibraltar",
         "gibraltar" to "gibraltar",
         "kosovo" to "kosovo",
@@ -377,28 +409,41 @@ object TeamNameIdentity {
         "wales" to "wales",
         "sotlandiya" to "scotland",
         "scotland" to "scotland",
+        "schottland" to "scotland",
         "gurcustan" to "georgia",
         "georgia" to "georgia",
+        "georgien" to "georgia",
         "macaristan" to "hungary",
         "hungary" to "hungary",
+        "ungarn" to "hungary",
         "portuqaliya" to "portugal",
         "portugal" to "portugal",
         "danimarka" to "denmark",
         "denmark" to "denmark",
+        "daenemark" to "denmark",
+        "danemark" to "denmark",
         "ruminiya" to "romania",
         "romania" to "romania",
+        "rumaenien" to "romania",
+        "rumanien" to "romania",
         "polsa" to "poland",
         "poland" to "poland",
+        "polen" to "poland",
         "isvec" to "sweden",
         "sweden" to "sweden",
+        "schweden" to "sweden",
         "bosniya ve herseqovina" to "bosnia and herzegovina",
         "bosnia and herzegovina" to "bosnia and herzegovina",
+        "bosnien und herzegowina" to "bosnia and herzegovina",
         "avstriya" to "austria",
         "austria" to "austria",
+        "osterreich" to "austria",
         "irlandiya" to "ireland",
         "ireland" to "ireland",
+        "irland" to "ireland",
         "simali irlandiya" to "northern ireland",
         "northern ireland" to "northern ireland",
+        "nordirland" to "northern ireland",
         "ukrayna" to "ukraine",
         "ukraine" to "ukraine",
         "roma" to "roma",
@@ -473,7 +518,7 @@ class TopazOddsProvider : BookmakerOddsProvider {
                 home=odds.first,draw=odds.second,away=odds.third,eventDate=eventDate,timeZoneId=zone.id,
                 eventYearInferred=true,
             )
-            parsed+=snapshot.copy(matchId=matchIdFor(snapshot,fixtures))
+            parsed+=snapshot.copy(matchId=uniqueExactFixtureMatchId(snapshot,fixtures))
         }
         val snapshots=parsed.groupBy { it.eventId }.values.mapNotNull { rows ->
             val prices=rows.distinctBy { Triple(it.home,it.draw,it.away) }
@@ -542,15 +587,4 @@ class TopazOddsProvider : BookmakerOddsProvider {
         )
     }
 
-    private fun matchIdFor(snapshot:BookmakerOddsSnapshot,fixtures:List<FixtureIdentity>):Int? {
-        val zone=ZoneId.of(snapshot.timeZoneId)
-        val date=Instant.ofEpochMilli(snapshot.kickoffMillis).atZone(zone).toLocalDate()
-        val candidates=fixtures.filter { fixture ->
-            Instant.ofEpochMilli(fixture.kickoffMillis).atZone(zone).toLocalDate()==date&&
-                TeamNameIdentity.canonical(fixture.homeTeam)==TeamNameIdentity.canonical(snapshot.homeTeam)&&
-                TeamNameIdentity.canonical(fixture.awayTeam)==TeamNameIdentity.canonical(snapshot.awayTeam)&&
-                kotlin.math.abs(fixture.kickoffMillis-snapshot.kickoffMillis)<=20*60*1000L
-        }
-        return candidates.singleOrNull()?.matchId
-    }
 }

@@ -206,3 +206,24 @@ The next items in this historical checkpoint were completed and recorded in the 
 - The official CI artifact for `5a64c43` passed, verified the same stable signature and successfully updated an installed app with preserved data.
 - API 34 first launch reached both source `OK` states and the expected broad multi-season database. Unit tests and APK build are green.
 - No physical handset or API 26 execution was performed. Dedicated SQLite migration and WorkManager integration tests remain future work. Current Misli/eTopaz terms do not affirm automatic odds reuse, and current public bookmaker events do not map to local model fixtures; the app correctly makes no model comparison for them.
+
+## 2026-11-09 — exact rematching of bookmaker snapshots to local fixtures (local tests/build passed; CI pending)
+
+### Implemented and inspected
+
+- Reviewed the saved TOPAZ rows against the local API 34 fixture database. Added explicit German national-team aliases and a shared strict matcher: canonical exact home/away order, same event date in the snapshot timezone, a unique local fixture, and kickoff within 20 minutes. No fuzzy matching was introduced.
+- Added relinking of recent unmatched future quote snapshots after football-provider sync and once after app open. Existing stored quotes can gain a local match ID when fixture history arrives later; this does not make a stale price fresh.
+- Verified the historical eTopaz row Türkiye—Belgium (3.30 / 3.64 / 1.88) maps to OpenLigaDB match ID 85220 (`Türkei`—`Belgien`, 12 Nov 2026 17:00 UTC). Seven quote snapshot rows now have a local fixture ID. The observed quote capture was about 57 minutes old at inspection, beyond the 30-minute freshness window; the current eTopaz page state remains `UNAVAILABLE`, so the stale price is neither shown as live nor used in the current coupon price map.
+- Corrected README, roadmap, limitations, source research, zero-touch status, changelog, and this log so historical linkage is not confused with a currently available bookmaker quote. `AGENTS.md` now records this exact continuation point and remaining accumulator/device tasks.
+
+### Verification
+
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed locally after the code change: 63 tests, 0 failures/errors/skips, debug APK built. The regression test covers the visible Azerbaijani names against the German OpenLigaDB fixture. `git diff --check` passed.
+- Installed the locally built APK signed with the same stable personal-test key over the existing API 34 app using `adb install -r`; update succeeded without uninstall. SQLite still contains 39,181 matches / 30,090 finished results, and exact rematching linked the stored TOPAZ event to match 85220. The link count is 7.
+- This milestone is not yet CI-verified. Commit and push, inspect Actions, download/verify the artifact signature, and update-install the CI artifact before treating it as delivered.
+
+### Next concrete work
+
+1. Finish and validate this matcher milestone in CI, including an API 34 update install and saved DB linkage.
+2. Implement explicit virtual accumulator sizes (2/3/5/8/10) with no invented combined probability or payoff where a required market price is absent; add historical outcome checking that does not imply profit without timestamped odds.
+3. Continue test/compatibility audit (SQLite migration, sync retry, API 26) and leave an accurate record of unsupported or unverified bookmaker access.

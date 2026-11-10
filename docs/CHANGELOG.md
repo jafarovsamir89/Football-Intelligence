@@ -14,6 +14,9 @@
 
 ## Unreleased — 2026-11-09
 
+- Re-linked seven stored Misli/TOPAZ quote snapshots to unique local fixtures using reviewed German and other explicit aliases, exact team orientation, local event date, and a 20-minute kickoff tolerance. TOPAZ Türkiye—Belgium now maps to OpenLigaDB match 85220. The captured price is stale and the latest public page check remains unavailable; no current line is claimed.
+- Added a best-effort rematching pass after fixture sync and on app open so quote snapshots captured before a fixture arrives can be linked later. Added a regression test for the exact Türkiye/Türkei—Belçika/Belgien mapping.
+
 - Final API 34 verification: GitHub Actions 42731992205 passed tests/build/stable signing; update install preserved SQLite and bounded retries completed both football providers.
 - Final sync stored 39,181 merged matches/30,090 scored results across 184 competitions; walk-forward returned 19,185 forecasts (Brier 0.6106, Log Loss 1.0235) from 30,090 targets.
 - Verified offline relaunch with Wi-Fi/mobile data disabled. Last WebView check showed 9 Misli rows and TOPAZ/eTopaz unavailable on its public home page; unmatched or unavailable prices are never presented as model-comparable.

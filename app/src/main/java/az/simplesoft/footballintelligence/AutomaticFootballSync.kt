@@ -119,7 +119,8 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             summaryText += "OpenLigaDB: ошибка каталога"
         }
 
-        setProgress(workDataOf("stage" to "complete", "summary" to summaryText.joinToString(" · ")))
+        val linkedOdds = runCatching { store.relinkUnmatchedBookmakerOdds() }.getOrDefault(0)
+        setProgress(workDataOf("stage" to "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds))
         when {
             retryNeeded -> Result.retry()
             anySuccess -> Result.success()

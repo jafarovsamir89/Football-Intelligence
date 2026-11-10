@@ -35,6 +35,8 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.analytics.EloEngine
@@ -68,6 +70,7 @@ import az.simplesoft.footballintelligence.data.visibleBookmakerStatus
 import az.simplesoft.footballintelligence.data.latestBookmakerSnapshotsPerEvent
 import az.simplesoft.footballintelligence.data.MisliVisiblePage
 import az.simplesoft.footballintelligence.data.FixtureIdentity
+import az.simplesoft.footballintelligence.data.uniqueExactFixtureMatchId
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 
@@ -526,6 +529,36 @@ class Store(context: Context) : SQLiteOpenHelper(context, "football_intelligence
         }
         return latestBookmakerSnapshotsPerEvent(result)
     }
+    /** Rechecks recent unmatched snapshots after local fixture data changes, using exact reviewed aliases. */
+    fun relinkUnmatchedBookmakerOdds(nowMillis:Long=System.currentTimeMillis()):Int {
+        val fixtures=matchIdentities()
+        if(fixtures.isEmpty()) return 0
+        data class UnmatchedSnapshot(val rowId:Long,val snapshot:BookmakerOddsSnapshot)
+        val unmatched=mutableListOf<UnmatchedSnapshot>()
+        readableDatabase.rawQuery(
+            "SELECT id,provider_id,event_id,source_url,captured_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,event_date,time_zone_id,event_year_inferred FROM bookmaker_odds_snapshots WHERE match_id IS NULL AND captured_at>=? AND kickoff>?",
+            arrayOf((nowMillis-30L*24*60*60*1000).toString(),nowMillis.toString()),
+        ).use { c ->
+            while(c.moveToNext()) unmatched+=UnmatchedSnapshot(
+                c.getLong(0),
+                BookmakerOddsSnapshot(
+                    c.getString(1),c.getString(2),c.getString(3),c.getLong(4),c.getLong(5),c.getString(6),c.getString(7),c.getString(8),
+                    c.getDouble(9),c.getDouble(10),c.getDouble(11),c.getString(12),c.getString(13),null,c.getInt(14)==1,
+                ),
+            )
+        }
+        val links=unmatched.mapNotNull { row -> uniqueExactFixtureMatchId(row.snapshot,fixtures)?.let { row.rowId to it } }
+        if(links.isEmpty()) return 0
+        val db=writableDatabase
+        db.beginTransaction()
+        try {
+            links.forEach { (rowId,matchId) ->
+                db.update("bookmaker_odds_snapshots",ContentValues().apply { put("match_id",matchId) },"id=? AND match_id IS NULL",arrayOf(rowId.toString()))
+            }
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+        return links.size
+    }
     fun loggedCouponPicks():List<LoggedCouponPick> {
         val result=mutableListOf<LoggedCouponPick>()
         readableDatabase.rawQuery("SELECT p.provider_id,p.match_id,m.home,m.away,m.kickoff,p.outcome,p.model_probability,p.captured_at,m.finished,m.home_score,m.away_score FROM model_coupon_picks p LEFT JOIN matches m ON m.id=p.match_id ORDER BY p.captured_at DESC",null).use { c ->
@@ -845,6 +878,10 @@ class MainActivity:ComponentActivity() {
         oneTimeSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
     ) { revision++ }
+    LaunchedEffect(store) {
+        val relinked=runCatching { withContext(Dispatchers.IO) { store.relinkUnmatchedBookmakerOdds() } }.getOrDefault(0)
+        if(relinked>0) revision++
+    }
     val matches=remember(revision) { store.matches() }
     val recentResults=remember(revision) { store.recentCompletedMatches() }
     val importedCompetitionCodes=remember(revision) { store.importedCompetitionCodes() }

@@ -46,6 +46,15 @@ class TopazOddsParserTest {
         assertNull(result.snapshots.single().matchId)
     }
 
+    @Test fun linksCapturedAzerbaijaniNamesToTheExactGermanOpenLigaDbFixture() {
+        val result=TopazOddsProvider().parseVisiblePage(page(),now,listOf(FixtureIdentity(85220,"Türkei","Belgien",kickoff)))
+        assertEquals(85220,result.snapshots.single().matchId)
+        assertEquals("turkey",TeamNameIdentity.canonical("Türkiyə"))
+        assertEquals("turkey",TeamNameIdentity.canonical("Türkei"))
+        assertEquals("belgium",TeamNameIdentity.canonical("Belçika"))
+        assertEquals("belgium",TeamNameIdentity.canonical("Belgien"))
+    }
+
     @Test fun rejectsPastSameDayLiveOrMissingPriceRows() {
         val past="""Futbol (3)
             |CD Junior - Cucuta Deportivo
