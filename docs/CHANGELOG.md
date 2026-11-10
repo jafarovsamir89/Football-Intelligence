@@ -1,12 +1,18 @@
 # Changelog
 
+## Unreleased — serialize foreground and Worker database writes (local tests passed; CI/API 26 pending)
+
+- Reproduced an API 26 v11 startup crash after a data-preserving update: `SQLiteDatabaseLockedException` when the foreground forecast ledger wrote while the WorkManager provider transaction was active. WAL opened correctly and saved match/result rows remained intact.
+- Serialize all `Store` mutations with a process-wide fair reentrant lock, and move forecast/coupon persistence off the main thread. Add an API 34 regression test that holds a background transaction and verifies the forecast write waits and commits.
+- Initial local full verification passed 88 JVM and 12 API 34 instrumentation tests and assembled the debug APK. After tightening the regression assertion, all 8 `StoreMigrationInstrumentedTest` tests passed again. Full latest-source CI and stable-signed API 26 update-install remain pending.
+
 ## Unreleased — prevent duplicate bookmaker captures and refresh at expiry (CI and API 34 runtime passed)
 
 - Coalesce repeated `onPageFinished` callbacks with a synchronized provider capture gate and one reload timer per WebView. If the app opens while odds are still fresh, schedule page loading when the 30-minute window expires, provided the app stays foregrounded.
 - Add a unit regression for in-progress duplicate suppression and the interval boundary. Local verification: 88 JVM + 11 API 34 instrumentation tests and APK assembly passed. Actions [42904789554](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42904789554) passed and uploaded stable-signed APK `13805066252`.
 - Update-install preserved the API 34 SQLite profile. The automatic refresh fired once per site at 21:34:53 / 21:35:11 UTC. Both public pages had no verified upcoming prematch 1X2 rows, so status became `UNAVAILABLE` and no odds were added. No repeat, crash or SQLite contention appeared.
 
-## Unreleased — protect foreground odds capture from SQLite contention (CI and API 34 runtime passed)
+## Unreleased — protect foreground odds capture from SQLite read contention (CI and API 34 runtime passed)
 
 - Reproduced a `SQLiteDatabaseLockedException` when first-open WorkManager sync and bookmaker WebView capture read/write the single-connection store at the same time.
 - Enable SQLite WAL and remove the duplicate foreground startup relink; the Worker still relinks unmatched snapshots after each provider sync segment.

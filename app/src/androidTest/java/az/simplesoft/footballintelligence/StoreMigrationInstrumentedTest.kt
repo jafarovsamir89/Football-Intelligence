@@ -18,12 +18,102 @@ import org.junit.runner.RunWith
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.concurrent.CountDownLatch
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class StoreMigrationInstrumentedTest {
+    @Test fun foregroundForecastWriteWaitsForBackgroundStoreTransaction() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-wal-writer-serialization-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val backgroundStore = Store(context, databaseName)
+        val foregroundStore = Store(context, databaseName)
+        val executor = Executors.newFixedThreadPool(2)
+        val transactionStarted = CountDownLatch(1)
+        val releaseTransaction = CountDownLatch(1)
+        val now = System.currentTimeMillis()
+        val kickoff = now + TimeUnit.HOURS.toMillis(3)
+        try {
+            backgroundStore.upsert(
+                listOf(
+                    Match(
+                        id = 910001,
+                        league = "writer-race",
+                        home = "Home FC",
+                        away = "Away FC",
+                        kickoff = Instant.ofEpochMilli(kickoff).toString(),
+                        finished = false,
+                        homeScore = null,
+                        awayScore = null,
+                    ),
+                ),
+            )
+
+            val backgroundTransaction = executor.submit {
+                StoreWriteCoordinator.withLock {
+                    val db = backgroundStore.writableDatabase
+                    db.beginTransaction()
+                    try {
+                        db.execSQL(
+                            "INSERT INTO provider_sync_state(provider_id,status,last_checked) VALUES(?,?,?)",
+                            arrayOf("held-writer", "RUNNING", now),
+                        )
+                        transactionStarted.countDown()
+                        check(releaseTransaction.await(5, TimeUnit.SECONDS)) {
+                            "Timed out waiting to release the background writer."
+                        }
+                        db.setTransactionSuccessful()
+                    } finally {
+                        db.endTransaction()
+                    }
+                }
+            }
+            assertTrue(transactionStarted.await(3, TimeUnit.SECONDS))
+
+            val forecast = ForecastedMatch(
+                matchId = 910001,
+                homeTeam = "Home FC",
+                awayTeam = "Away FC",
+                kickoffMillis = kickoff,
+                probabilities = OutcomeProbabilities(.6, .25, .15),
+                forecastedAtMillis = now,
+                historyMatchCount = 10,
+                competition = "writer-race",
+            )
+            val foregroundThread = AtomicReference<Thread?>()
+            val foregroundWrite = executor.submit<Int> {
+                foregroundThread.set(Thread.currentThread())
+                foregroundStore.recordProspectiveForecastSnapshots(listOf(forecast), now)
+            }
+            val queueDeadlineNanos = System.nanoTime() + TimeUnit.SECONDS.toNanos(3)
+            while (foregroundThread.get()?.let(StoreWriteCoordinator::isQueued) != true &&
+                System.nanoTime() < queueDeadlineNanos
+            ) {
+                Thread.sleep(10)
+            }
+            assertTrue(
+                "Foreground writer must queue on the in-process coordinator while the background transaction is active.",
+                foregroundThread.get()?.let(StoreWriteCoordinator::isQueued) == true,
+            )
+
+            releaseTransaction.countDown()
+            backgroundTransaction.get(5, TimeUnit.SECONDS)
+            assertEquals(1, foregroundWrite.get(5, TimeUnit.SECONDS))
+            assertEquals(1, foregroundStore.prospectiveForecastHistory(10).size)
+        } finally {
+            releaseTransaction.countDown()
+            executor.shutdownNow()
+            executor.awaitTermination(5, TimeUnit.SECONDS)
+            foregroundStore.close()
+            backgroundStore.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
     @Test fun writeAheadLoggingAllowsForegroundReadsDuringProviderWrite() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "fi-wal-concurrency-${UUID.randomUUID()}.db"

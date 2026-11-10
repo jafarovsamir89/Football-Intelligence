@@ -1,5 +1,18 @@
 # Development log
 
+## 2026-11-10 — serialize Store writers after API 26 startup crash (local suite passed; CI/runtime pending)
+
+### Finding
+
+- A stable-signed API 26 update-install migrated the data-bearing v10 database to v11, retained 38,609 matches / 29,588 completed results, and opened in WAL mode. On relaunch, Activity forecast-ledger writes raced with WorkManager's provider transaction and crashed the app on the main thread with `SQLiteDatabaseLockedException` from `Store.recordProspectiveForecastSnapshots`. Data remained readable and row counts were retained.
+- This was writer/writer contention, which WAL alone does not prevent. All production `Store` mutations now share a fair, process-wide reentrant coordinator, and forecast/coupon history writes run on `Dispatchers.IO` so waiting for a sync transaction cannot block the UI thread.
+
+### Local verification and next work
+
+- Added an API 34 regression test using two `Store` instances and a held background transaction. It confirms that the foreground forecast write waits, commits after release, and is readable from the other instance.
+- The initial local Gradle run passed all 88 JVM tests, assembled the debug APK, and passed all 12 API 34 instrumentation tests. The persistent API 34 emulator correctly rejected the local debug signing key because its installed app uses the stable CI certificate; no app/data was uninstalled. I then strengthened the new regression assertion to check the foreground thread is actually queued on the coordinator and reran all 8 tests in `StoreMigrationInstrumentedTest`; they passed on clean emulator 5558. The current locally packaged debug APK SHA-256 is `0a23d60ab18e01104a73c8b989598a44a19ecd7e0953f047936fffffaec89d5f`. Full latest-source CI run is pending.
+- Next: push this code milestone for one GitHub Actions run, update-install its stable-signed APK on API 26 without clearing the saved profile, and verify successful launch/sync plus preserved database rows. A physical device is unavailable.
+
 ## 2026-11-10 — coalesce repeated bookmaker page callbacks (CI and API 34 runtime passed)
 
 ### Finding and change

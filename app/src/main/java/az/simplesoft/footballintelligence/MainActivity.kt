@@ -144,12 +144,49 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
     return Triple(p.home, p.draw, p.away)
 }
 
+/** Serializes SQLite writers shared by the foreground screen and WorkManager in this process. */
+internal object StoreWriteCoordinator {
+    private val lock = java.util.concurrent.locks.ReentrantLock(true)
+
+    internal fun isQueued(thread: Thread): Boolean = lock.hasQueuedThread(thread)
+
+    fun <T> withLock(block: () -> T): T {
+        lock.lock()
+        try {
+            return block()
+        } finally {
+            lock.unlock()
+        }
+    }
+
+    fun beginTransaction(db: SQLiteDatabase) {
+        lock.lock()
+        try {
+            db.beginTransaction()
+        } catch (error: Throwable) {
+            lock.unlock()
+            throw error
+        }
+    }
+
+    fun endTransaction(db: SQLiteDatabase) {
+        try {
+            db.endTransaction()
+        } finally {
+            lock.unlock()
+        }
+    }
+}
+
 class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 11) {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
         setWriteAheadLoggingEnabled(true)
     }
+
+    private fun beginWriteTransaction(db: SQLiteDatabase) = StoreWriteCoordinator.beginTransaction(db)
+    private fun endWriteTransaction(db: SQLiteDatabase) = StoreWriteCoordinator.endTransaction(db)
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER, source_key TEXT UNIQUE, source_name TEXT NOT NULL DEFAULT 'OpenLigaDB', exact_kickoff INTEGER NOT NULL DEFAULT 1, available_at INTEGER, source_url TEXT, event_date TEXT, season TEXT, captured_at INTEGER)")
@@ -244,7 +281,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     fun upsert(matches: List<Match>) {
         val db = writableDatabase
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             for (m in matches) {
                 if(!TeamDataQuality.isValidFixture(m.home,m.away)) continue
@@ -329,7 +366,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 }
             }
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
     }
     fun upsertProviderMatches(providerMatches:List<ProviderMatch>):Int {
         val rows = providerMatches.filter { TeamDataQuality.isValidFixture(it.homeTeam,it.awayTeam) }.map { row ->
@@ -365,7 +402,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     fun tryAcquireProviderSyncLock(nowMillis:Long,leaseMillis:Long):Boolean {
         val db=writableDatabase
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             val expires=db.rawQuery("SELECT expires_at FROM provider_sync_lock WHERE id=1",null).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
             if(expires>nowMillis) return false
@@ -373,10 +410,13 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.insertWithOnConflict("provider_sync_lock",null,values,SQLiteDatabase.CONFLICT_REPLACE)
             db.setTransactionSuccessful()
             return true
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
     }
-    fun releaseProviderSyncLock() { writableDatabase.delete("provider_sync_lock","id=1",null) }
-    fun saveProviderSync(summary:ProviderSyncSummary) {
+    fun releaseProviderSyncLock() = StoreWriteCoordinator.withLock {
+        writableDatabase.delete("provider_sync_lock","id=1",null)
+        Unit
+    }
+    fun saveProviderSync(summary:ProviderSyncSummary) = StoreWriteCoordinator.withLock {
         val db=writableDatabase
         val oldState=db.rawQuery("SELECT last_success,records_stored FROM provider_sync_state WHERE provider_id=?",arrayOf(summary.providerId)).use { c ->
             if(c.moveToFirst()) (if(c.isNull(0)) null else c.getLong(0)) to c.getInt(1) else null
@@ -389,11 +429,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             if(summary.error==null) putNull("error") else put("error",summary.error)
         }
         db.insertWithOnConflict("provider_sync_state",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+        Unit
     }
     fun providerFileCache(cacheKey:String):ProviderFileCache? = readableDatabase.rawQuery("SELECT etag,last_modified,last_checked,record_count,cached_body FROM provider_file_cache WHERE cache_key=?",arrayOf(cacheKey)).use { c ->
         if(!c.moveToFirst()) null else ProviderFileCache(if(c.isNull(0)) null else c.getString(0),if(c.isNull(1)) null else c.getString(1),c.getLong(2),c.getInt(3),if(c.isNull(4)) null else c.getString(4))
     }
-    fun saveProviderFileCache(cacheKey:String,providerId:String,etag:String?,lastModified:String?,checkedAt:Long,recordCount:Int,cachedBody:String?=null) {
+    fun saveProviderFileCache(cacheKey:String,providerId:String,etag:String?,lastModified:String?,checkedAt:Long,recordCount:Int,cachedBody:String?=null) = StoreWriteCoordinator.withLock {
         val db=writableDatabase
         val old=providerFileCache(cacheKey)
         val values=ContentValues().apply {
@@ -404,11 +445,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             (cachedBody ?: old?.cachedBody)?.let { put("cached_body",it) } ?: putNull("cached_body")
         }
         db.insertWithOnConflict("provider_file_cache",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+        Unit
     }
     fun openLigaState(leagueKey:String):OpenLigaLeagueState? = readableDatabase.rawQuery("SELECT source_change,current_group_order,last_full_sync,checked_at,record_count FROM provider_league_state WHERE league_key=?",arrayOf(leagueKey)).use { c ->
         if(!c.moveToFirst()) null else OpenLigaLeagueState(if(c.isNull(0)) null else c.getString(0),if(c.isNull(1)) null else c.getInt(1),c.getLong(2),c.getLong(3),c.getInt(4))
     }
-    fun saveOpenLigaState(leagueKey:String,sourceChange:String?,currentGroupOrderId:Int?,fullSyncAt:Long,checkedAt:Long,recordCount:Int) {
+    fun saveOpenLigaState(leagueKey:String,sourceChange:String?,currentGroupOrderId:Int?,fullSyncAt:Long,checkedAt:Long,recordCount:Int) = StoreWriteCoordinator.withLock {
         val db=writableDatabase
         val old=db.rawQuery("SELECT source_change,current_group_order,last_full_sync FROM provider_league_state WHERE league_key=?",arrayOf(leagueKey)).use { c ->
             if(c.moveToFirst()) Triple(if(c.isNull(0)) null else c.getString(0),if(c.isNull(1)) null else c.getInt(1),c.getLong(2)) else null
@@ -421,6 +463,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             put("checked_at",checkedAt);put("record_count",recordCount)
         }
         db.insertWithOnConflict("provider_league_state",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+        Unit
     }
     fun matches(): List<Match> {
         val result=mutableListOf<Match>()
@@ -536,7 +579,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(forecasts.isEmpty()) return 0
         val db=writableDatabase
         var inserted=0
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             for(forecast in forecasts) {
                 if(!TeamDataQuality.isValidFixture(forecast.homeTeam,forecast.awayTeam)) continue
@@ -586,7 +629,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             }
             db.setTransactionSuccessful()
         } finally {
-            db.endTransaction()
+            endWriteTransaction(db)
         }
         return inserted
     }
@@ -655,7 +698,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(results.isEmpty()) return 0
         val db=writableDatabase
         var inserted=0
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             for(result in results) {
                 val unchanged=result.outcome==result.previousOutcome&&
@@ -685,7 +728,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             }
             db.setTransactionSuccessful()
         } finally {
-            db.endTransaction()
+            endWriteTransaction(db)
         }
         return inserted
     }
@@ -726,7 +769,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     fun recordCouponCandidates(candidates:List<VirtualCouponCandidate>, nowMillis:Long=System.currentTimeMillis()):Int {
         val db=writableDatabase
         var inserted=0
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             for(candidate in candidates) for(pick in candidate.picks) {
                 if(pick.kickoffMillis<=nowMillis) continue
@@ -737,13 +780,13 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 if(db.insertWithOnConflict("model_coupon_picks",null,values,SQLiteDatabase.CONFLICT_IGNORE)!=-1L) inserted++
             }
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
         return inserted
     }
     fun recordAccumulatorDrafts(candidates:List<VirtualCouponCandidate>, nowMillis:Long=System.currentTimeMillis()):Int {
         val db=writableDatabase
         var inserted=0
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             for(candidate in candidates) {
                 val size=candidate.requestedLegCount
@@ -773,7 +816,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 inserted++
             }
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
         return inserted
     }
     fun virtualAccumulatorHistory(limit:Int=100):List<VirtualAccumulatorHistoryEntry> {
@@ -843,7 +886,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         error:String?=null,
     ) {
         val db=writableDatabase
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             snapshots.forEach { quote ->
                 val values=ContentValues().apply {
@@ -870,7 +913,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.insertWithOnConflict("bookmaker_sync_state",null,values,SQLiteDatabase.CONFLICT_REPLACE)
             db.delete("bookmaker_odds_snapshots","captured_at<?",arrayOf((checkedAtMillis-30L*24*60*60*1000).toString()))
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
     }
     fun freshBookmakerOdds(providerId:String,nowMillis:Long=System.currentTimeMillis(),freshnessMillis:Long=30L*60*1000):List<BookmakerOddsSnapshot> {
         val result=mutableListOf<BookmakerOddsSnapshot>()
@@ -906,13 +949,13 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         val links=unmatched.mapNotNull { row -> uniqueExactFixtureMatchId(row.snapshot,fixtures)?.let { row.rowId to it } }
         if(links.isEmpty()) return 0
         val db=writableDatabase
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             links.forEach { (rowId,matchId) ->
                 db.update("bookmaker_odds_snapshots",ContentValues().apply { put("match_id",matchId) },"id=? AND match_id IS NULL",arrayOf(rowId.toString()))
             }
             db.setTransactionSuccessful()
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
         return links.size
     }
     fun loggedCouponPicks():List<LoggedCouponPick> {
@@ -932,7 +975,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         val db=writableDatabase
         val importedAt=System.currentTimeMillis()
         var inserted=0
-        db.beginTransaction()
+        beginWriteTransaction(db)
         try {
             val importValues=ContentValues().apply {
                 put("source","Football-Data-style CSV (user-selected; provider unverified)")
@@ -970,7 +1013,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.execSQL("UPDATE historical_imports SET inserted_rows=?,duplicate_rows=? WHERE id=?",arrayOf(inserted,duplicateRows,importId))
             db.setTransactionSuccessful()
             return StoredFootballCsvImport(inserted,duplicateRows)
-        } finally { db.endTransaction() }
+        } finally { endWriteTransaction(db) }
     }
     fun importedCompetitionCodes():List<String> {
         val result=mutableListOf<String>()
@@ -1024,12 +1067,15 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         return result
     }
-    fun saveQuote(matchId:Int, book:String, h:Double,d:Double,a:Double) =
+    fun saveQuote(matchId:Int, book:String, h:Double,d:Double,a:Double) = StoreWriteCoordinator.withLock {
         writableDatabase.execSQL("INSERT INTO quotes(match_id,bookmaker,h,d,a,captured_at) VALUES(?,?,?,?,?,?)",arrayOf(matchId,book,h,d,a,System.currentTimeMillis()))
-    fun savePick(matchId:Int, source:String,outcome:String) =
+    }
+    fun savePick(matchId:Int, source:String,outcome:String) = StoreWriteCoordinator.withLock {
         writableDatabase.execSQL("INSERT INTO picks(match_id,source,outcome,created_at) VALUES(?,?,?,?)",arrayOf(matchId,source,outcome,System.currentTimeMillis()))
-    fun saveTicket(matchId:Int,outcome:String,price:Double,stake:Double,book:String) =
+    }
+    fun saveTicket(matchId:Int,outcome:String,price:Double,stake:Double,book:String) = StoreWriteCoordinator.withLock {
         writableDatabase.execSQL("INSERT INTO tickets(match_id,outcome,price,stake,bookmaker,created_at) VALUES(?,?,?,?,?,?)",arrayOf(matchId,outcome,price,stake,book,System.currentTimeMillis()))
+    }
 }
 
 class MainActivity:ComponentActivity() {
@@ -1382,14 +1428,16 @@ class MainActivity:ComponentActivity() {
         VirtualCouponBuilder.buildAccumulators(forecastedMatches,oddsProviders.map { it.providerId to it.displayName },bookmakerCouponPrices)
     }
     LaunchedEffect(forecastedMatches) {
-        val forecastSnapshotsAdded=store.recordProspectiveForecastSnapshots(forecastedMatches)
-        val forecastResultsSettled=store.settleProspectiveForecastSnapshots()
-        if(forecastSnapshotsAdded+forecastResultsSettled>0) revision++
+        val recordsChanged=withContext(Dispatchers.IO) {
+            store.recordProspectiveForecastSnapshots(forecastedMatches)+store.settleProspectiveForecastSnapshots()
+        }
+        if(recordsChanged>0) revision++
     }
     LaunchedEffect(modelPickDrafts,accumulatorDrafts) {
-        val picksAdded=store.recordCouponCandidates(modelPickDrafts)
-        val couponsAdded=store.recordAccumulatorDrafts(accumulatorDrafts)
-        if(picksAdded+couponsAdded>0) revision++
+        val recordsAdded=withContext(Dispatchers.IO) {
+            store.recordCouponCandidates(modelPickDrafts)+store.recordAccumulatorDrafts(accumulatorDrafts)
+        }
+        if(recordsAdded>0) revision++
     }
     val checkedCouponHistory=remember(revision) { store.loggedCouponPicks() }
     val prospectiveForecastHistory=remember(revision) { store.prospectiveForecastHistory(100) }

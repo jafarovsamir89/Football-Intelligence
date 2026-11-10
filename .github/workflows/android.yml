@@ -2,7 +2,15 @@ name: Build Android Debug APK
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/**'
   pull_request:
+    paths-ignore:
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/**'
   workflow_dispatch:
 
 jobs:
