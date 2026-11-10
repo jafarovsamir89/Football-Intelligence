@@ -7,10 +7,10 @@
 - Add a randomized SQLite concurrency instrumentation test. Local verification and Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921) passed 88 JVM + 11 API 34 instrumentation tests, APK assembly, stable signing and artifact upload for `01706e9`.
 - Stable-signed APK update-installed with `adb install -r` on the data-bearing API 34 emulator. The first-install time and 39,181 matches / 30,114 completed results were preserved. New normal foreground capture succeeded: Misli 9 visible rows/0 exact local links and TOPAZ 25/7 at 20:33 UTC. Both statuses displayed `LIVE`; no SQLite lock error recurred. Prices expire in 30 minutes. A separate offline harness's `chromewebdata/` output is not evidence of bookmaker blocking.
 
-## Unreleased — remove timing race in offline WorkManager instrumentation (local API 34 passed; CI pending)
+## Unreleased — remove timing race in offline WorkManager instrumentation (CI and API 34 passed)
 
 - Actions [42897976801](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42897976801) found one flaky `.single()` read after a fixed two-second delay in the offline unique-work scheduling test. The app code was not implicated.
-- The test now polls persisted WorkManager state for up to 30 seconds and includes observed states on timeout. Local API 34 instrumentation passes 11/11; commit and CI rerun remain.
+- The test now polls persisted WorkManager state for up to 30 seconds and includes observed states on timeout. Local API 34 instrumentation passes 11/11; commit `b58e655` passed all 88 JVM + 11 instrumentation tests, APK build/sign/upload in Actions [42899536981](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42899536981).
 
 ## Unreleased — make Worker failure test network-proof (CI and API 34 update-install passed)
 

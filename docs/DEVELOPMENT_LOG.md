@@ -1,10 +1,10 @@
 # Development log
 
-## 2026-11-10 — stabilize WorkManager offline instrumentation (local API 34 passed; CI pending)
+## 2026-11-10 — stabilize WorkManager offline instrumentation (CI and API 34 passed)
 
 - The docs-only commit `61374ee` reran the full Actions pipeline. JVM tests passed, but API 34 instrumentation failed once in `immediateSyncRemainsQueuedWithoutNetworkAndDoesNotStartWorker` with `NoSuchElementException: List is empty` after a fixed two-second wait. No production source or database operation failed.
 - Replaced fixed-time assumptions around WorkManager enqueue with bounded polling for the unique active request (30-second timeout), and improved timeout diagnostics to include observed states. Applied the same wait to both unique request assertions in this test class.
-- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 11 API 34 tests locally with zero failures/skips. Next: commit/push the test hardening and require a green Actions rerun.
+- `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest` passed all 11 API 34 tests locally with zero failures/skips. Commit `b58e655` passed Actions [42899536981](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42899536981): 88 JVM + 11 Android tests, APK build, stable signing and artifact upload `13802417862`. The artifact's APK SHA-256 is `bf95c21aee2afb6224bf456f3aeae4b309c0595792c0edc07749f85e06210a08`; stable signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The app source itself is unchanged from `01706e9`, whose API 34 update-install/capture was already verified.
 
 ## 2026-11-10 — SQLite concurrency fix, CI and live capture verified
 

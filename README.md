@@ -29,7 +29,7 @@
 
 ## Android APK
 
-Последняя успешная CI-сборка: [GitHub Actions 42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921) для `01706e9`: 88 JVM-тестов, 11 API 34 instrumentation тестов, APK, стабильная подпись и artifact upload `13800473100`. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK update-installed на сохранённый API 34 профиль, после чего оба WebView провайдера сохранили свежие линии без SQLite contention. В базе 419 снимков и 90 виртуальных купонов/522 выбора. Это тестовая debug-сборка, не релиз Play Store.
+Последняя успешная CI-сборка: [GitHub Actions 42899536981](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42899536981) для `b58e655`: 88 JVM-тестов, 11 API 34 instrumentation тестов, APK, стабильная подпись и artifact upload `13802417862`. Сертификат SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK с исправлением WAL из предыдущего коммита `01706e9` был установлен поверх сохранённого API 34 профиля; оба WebView сохранили котировки без блокировки SQLite. В базе после захвата было 419 снимков и 90 виртуальных купонов/522 выбора. Это тестовая debug-сборка, не релиз Play Store.
 
 После update-install v11 на API 34 база сохранила 39 181 матч и 315 снимков коэффициентов; все прежние 59 virtual accumulators/328 legs остались на месте. При открытии приложение записало 62 неизменяемых предматчевых прогноза; 0 из них пока имеют завершённый результат. В интерфейсе показано, что анализ точности ждёт результаты.
 
