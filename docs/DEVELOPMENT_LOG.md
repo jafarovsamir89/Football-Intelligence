@@ -1,17 +1,19 @@
 # Development log
 
-## 2026-11-10 — avoid duplicate first-run WorkManager sync (local suite passed; CI pending)
+## 2026-11-10 — avoid duplicate first-run WorkManager sync (CI passed; clean-install scheduling confirmed)
 
 ### Finding and change
 
 - A clean API 34 install of the latest stable APK queued two `AutomaticFootballSyncWorker` requests: the 24-hour periodic request and the stale-data app-open request. WorkManager ran the periodic request on first enqueue; the immediate request then retried every backoff interval while the first worker held the provider sync lock. This created unnecessary attempts and a second full refresh after the initial import.
 - Android's current [WorkManager documentation](https://developer.android.com/develop/background-work/background-tasks/persistent/getting-started/define-work#delayed-work) states the first periodic execution may be immediate and that an initial delay applies only to the first run. Set the periodic request's initial delay to its 24-hour interval; stale first-open data still uses the immediate, connected one-time request. Added instrumentation coverage for the periodic initial delay.
 
-### Local verification and next step
+### Verification and clean-install status
 
 - `ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:testDebugUnitTest :app:connectedDebugAndroidTest :app:assembleDebug` passed: 88 JVM tests, all 12 API 34 instrumentation tests, and APK assembly.
-- A separate clean API 34 acceptance installation is still running the pre-fix first sync. At 2026-11-10 14:40 local it had 20,166 matches / 15,137 completed scores, with one periodic worker holding the sync lock and its one-time request backing off. Misli captured 7 visible prematch rows; eTopaz reported `UNAVAILABLE`. No SQLite/fatal error appeared.
-- Next: commit and push the scheduler fix, verify Actions, then install the new signed APK on a clean API 34 emulator and confirm one immediate Worker plus a periodic request delayed 24 hours. Continue the in-flight first-run import long enough to record final data counts.
+- Commit `108c000` passed Actions [42917262103](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42917262103): 88 JVM + 12 API 34 instrumentation tests, APK build, stable signing and upload `13809154100`. Artifact APK SHA-256 `5bd197486a89c8b262090db93d8b907d0482833a33f7ea32f45e6227b800655c`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- The stable-signed APK was installed on clean API 34 emulator `emulator-5558` and opened with Wi-Fi connected. `firstInstallTime` was `2026-11-10 14:49:57` on the device. WorkManager persisted the daily periodic request with `initial_delay=86400000` and `interval_duration=86400000`; the stale-data one-time request had zero delay. Logcat showed only that one immediate `AutomaticFootballSyncWorker` start during the initial scheduling check.
+- The first bounded worker segment returned `SUCCESS` at 14:58:56 device time and started its appended continuation at 14:58:57. At the next checkpoint, the continuation was still importing automatically: SQLite had 7,340 matches / 3,340 completed-score rows across 18 league labels, and OpenFootball's cache included catalog/file data in 2026-27 and 2025-26. OpenFootball status was `PARTIAL` with 7,062 source records and the continuation message. OpenLigaDB had zero stored rows yet and its intermediate status showed the same continuation message; the complete clean-install provider sync has not been observed to finish. This is an in-progress snapshot, not a final first-run total.
+- The app process remained alive with `MainActivity` resumed. The WorkManager database showed the 24-hour periodic request still `ENQUEUED`; there was no second periodic worker start. This confirms the scheduler fix and queued-worker continuation. Continue monitoring the same install to record completion of older-season OpenFootball and OpenLigaDB imports; do not rebuild for this documentation update.
 
 ## 2026-11-10 — serialize Store writers after API 26 startup crash (CI and API 26 update-install passed)
 

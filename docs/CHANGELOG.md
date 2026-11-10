@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — delay the first periodic sync (local tests passed; CI pending)
+## Unreleased — delay the first periodic sync (CI and clean-install scheduling check passed)
 
 - On a clean API 34 install, the new 24-hour periodic request started immediately alongside the stale-data app-open request. The one-time request then retried the provider lock while the first full import ran.
 - Delay only the first periodic execution by 24 hours; the app-open request still imports immediately when source freshness is missing/stale. Add scheduler instrumentation asserting both interval and initial delay.
-- Local verification passed 88 JVM + 12 API 34 tests and APK assembly. A clean-install runtime check and GitHub Actions run remain pending.
+- Local verification passed 88 JVM + 12 API 34 tests and APK assembly. Actions [42917262103](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42917262103) passed and uploaded stable-signed artifact `13809154100` (APK SHA-256 `5bd197486a89c8b262090db93d8b907d0482833a33f7ea32f45e6227b800655c`). On a clean API 34 install the periodic WorkSpec showed `initial_delay=86400000` and `interval_duration=86400000`; only the immediate worker started. Its first segment returned `SUCCESS` and automatically queued a continuation. At the latest check, first-run history import remained active with 7,340 matches / 3,340 completed scores; full provider totals are not yet known.
 
 ## Unreleased — serialize foreground and Worker database writes (CI and API 26 update-install passed)
 
