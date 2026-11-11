@@ -30,12 +30,22 @@ class AutomaticFootballSyncTest {
         assertEquals("Идёт автоматическая синхронизация источников…", automaticSyncStageMessage(null))
     }
 
-    @Test fun openLigaBudgetContinuationIsDeferredRatherThanAnError() {
-        assertEquals("DEFERRED", openLigaSyncStatus(successfulLeagues = 0, hasErrors = false, continuationNeeded = true))
-        assertEquals("ERROR", openLigaSyncStatus(successfulLeagues = 0, hasErrors = true, continuationNeeded = false))
-        assertEquals("ERROR", openLigaSyncStatus(successfulLeagues = 0, hasErrors = true, continuationNeeded = true))
-        assertEquals("PARTIAL", openLigaSyncStatus(successfulLeagues = 1, hasErrors = true, continuationNeeded = false))
-        assertEquals("OK", openLigaSyncStatus(successfulLeagues = 1, hasErrors = false, continuationNeeded = false))
+    @Test fun providerBudgetContinuationIsDeferredRatherThanAnError() {
+        assertEquals("DEFERRED", automaticProviderSyncStatus(completedUnits = 0, hasErrors = false, continuationNeeded = true))
+        assertEquals("ERROR", automaticProviderSyncStatus(completedUnits = 0, hasErrors = true, continuationNeeded = false))
+        assertEquals("ERROR", automaticProviderSyncStatus(completedUnits = 0, hasErrors = true, continuationNeeded = true))
+        assertEquals("PARTIAL", automaticProviderSyncStatus(completedUnits = 1, hasErrors = true, continuationNeeded = false))
+        assertEquals("PARTIAL", automaticProviderSyncStatus(completedUnits = 1, hasErrors = false, continuationNeeded = true))
+        assertEquals("OK", automaticProviderSyncStatus(completedUnits = 1, hasErrors = false, continuationNeeded = false))
+    }
+
+    @Test fun eachProviderGetsTimeWithinOneWorkerSegment() {
+        val startedAt = 1_000L
+        val deadlines = syncRunDeadlines(startedAt)
+
+        assertEquals(TimeUnit.MINUTES.toMillis(3), deadlines.openFootballDeadlineMillis - startedAt)
+        assertEquals(TimeUnit.MINUTES.toMillis(7), deadlines.workerDeadlineMillis - startedAt)
+        assertTrue(deadlines.openFootballDeadlineMillis < deadlines.workerDeadlineMillis)
     }
 
     @Test fun appOpenRefreshBecomesDueAtEightHoursAndMissingSuccessIsStale() {

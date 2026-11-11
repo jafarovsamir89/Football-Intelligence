@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-10 — give both football sources time in each Worker segment (local tests passed; CI pending)
+
+- The live clean-install run showed OpenFootball using the full shared eight-minute budget before OpenLigaDB reached its league loop. At the latest pre-change check, the database had 16,511 matches / 11,487 completed scores across 26 league labels, but OpenLigaDB still had zero rows after several queued continuations. It was a scheduler budget-allocation problem, not a provider/network error.
+- The Worker now allocates three minutes to OpenFootball first, then allows OpenLigaDB to use the remaining time up to a seven-minute total deadline. Both sources can therefore advance during one Worker request. The deadline leaves time for a bounded in-flight API request and lock release; catalog loops check the deadline before starting more requests. If a source has done no work before the segment expires, its status is `DEFERRED`; real failures keep `ERROR`/retry behavior.
+- The bundled `./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug` passed: 92 JVM tests, 0 failures/errors/skips, APK assembly succeeded. The current clean API 34 install remains on the prior stable APK while its WorkManager chain imports; it has not been updated or cleared. Latest old-APK observation: OpenFootball `OK`/25,904 across five season catalogs; OpenLigaDB `PARTIAL`/1,347 source records and continuation queued; SQLite held 26,648 matches / 20,761 completed results across 44 league labels and 70 prospective forecasts. Actions/API 34 instrumentation remain pending for the new budget-sharing code.
+
 ## 2026-11-10 — show provider progress during long first-run sync (CI and local suite passed)
 
 - The fresh-install run confirmed automatic eight-minute WorkManager continuations, but the main sync banner showed only a generic message for the whole segment. When OpenFootball exhausted the shared segment budget before OpenLigaDB imported any league, OpenLigaDB's interim summary was `ERROR` despite the continuation being queued normally.

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — share Worker time across both football providers (local suite passed; Actions pending)
+
+- Reserve the first three minutes for OpenFootball and use a seven-minute total segment deadline, leaving OpenLigaDB time in the same WorkManager request. This prevents a long OpenFootball import from starving OpenLigaDB across every continuation.
+- Stop starting extra catalog requests after the source deadline and preserve `DEFERRED` for sources that have only been queued for a later segment.
+- Add regression coverage for the source budget and status rules. The bundled local run passed 92 JVM tests with no failures and assembled the debug APK; Actions/API 34 instrumentation are pending.
+
 ## Unreleased — explain provider sync progress during first-run imports (CI and local suite passed)
 
 - Publish the active OpenFootball/OpenLigaDB stage to the main screen so long bounded WorkManager runs have a useful status message.

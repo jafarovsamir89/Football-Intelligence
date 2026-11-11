@@ -35,6 +35,9 @@ private const val PERIODIC_SYNC_NAME = "football-intelligence-daily-sync"
 private const val ONCE_SYNC_NAME = "football-intelligence-sync-now"
 private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, below the provider's 60/minute cap.
 private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
+private const val FIRST_PROVIDER_SYNC_BUDGET_MILLIS = 3L * 60 * 1000
+// Keep the shared worker deadline below the 9-minute SQLite lease and Android's 10-minute worker limit.
+private const val WORKER_SYNC_BUDGET_MILLIS = 7L * 60 * 1000
 internal const val PERIODIC_SYNC_INTERVAL_HOURS = 24L
 internal const val APP_OPEN_SYNC_STALE_AFTER_HOURS = 8L
 internal const val SYNC_RETRY_BACKOFF_SECONDS = 30L
@@ -65,15 +68,25 @@ internal fun automaticSyncStageMessage(stage: String?): String = when (stage) {
     else -> "Идёт автоматическая синхронизация источников…"
 }
 
-internal fun openLigaSyncStatus(successfulLeagues: Int, hasErrors: Boolean, continuationNeeded: Boolean): String {
-    require(successfulLeagues >= 0)
+internal fun automaticProviderSyncStatus(completedUnits: Int, hasErrors: Boolean, continuationNeeded: Boolean): String {
+    require(completedUnits >= 0)
     return when {
-        successfulLeagues == 0 && continuationNeeded && !hasErrors -> "DEFERRED"
-        successfulLeagues == 0 -> "ERROR"
-        hasErrors -> "PARTIAL"
+        completedUnits == 0 && continuationNeeded && !hasErrors -> "DEFERRED"
+        completedUnits == 0 -> "ERROR"
+        hasErrors || continuationNeeded -> "PARTIAL"
         else -> "OK"
     }
 }
+
+internal data class SyncRunDeadlines(
+    val openFootballDeadlineMillis: Long,
+    val workerDeadlineMillis: Long,
+)
+
+internal fun syncRunDeadlines(startedAtMillis: Long): SyncRunDeadlines = SyncRunDeadlines(
+    openFootballDeadlineMillis = startedAtMillis + FIRST_PROVIDER_SYNC_BUDGET_MILLIS,
+    workerDeadlineMillis = startedAtMillis + WORKER_SYNC_BUDGET_MILLIS,
+)
 
 object FootballSyncScheduler {
     fun scheduleOnAppOpen(context: Context) {
@@ -139,59 +152,72 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
             return@withContext Result.retry()
         }
         syncLockAcquired = true
-        setProgress(workDataOf("stage" to "OpenFootball"))
         val startedAt = System.currentTimeMillis()
+        val deadlines = syncRunDeadlines(startedAt)
         val today = LocalDate.now(ZoneOffset.UTC)
-        val seasonCount = 5
         var anySuccess = false
         var retryNeeded = false
         var continuationNeeded = false
         val summaryText = mutableListOf<String>()
+        var openFootballRecords = 0
 
-        val openFootball = runCatching { OpenFootballSync(store, providerHttpClient).sync(today, startedAt) }
-        openFootball.onSuccess { outcome ->
-            store.saveProviderSync(
-                ProviderSyncSummary(
-                    OpenFootballJsonParser.PROVIDER_ID,
-                    outcome.status,
-                    System.currentTimeMillis(),
-                    outcome.successAtMillis,
-                    outcome.records,
-                    outcome.errors.takeIf { it.isNotEmpty() }?.joinToString("; ")?.take(500),
-                ),
-            )
-            anySuccess = outcome.successAtMillis != null
-            retryNeeded = retryNeeded || outcome.retryNeeded
-            continuationNeeded = continuationNeeded || outcome.continuationNeeded
-            summaryText += "OpenFootball ${outcome.status}: ${outcome.records}"
-        }.onFailure { error ->
-            retryNeeded = true
-            store.saveProviderSync(ProviderSyncSummary(OpenFootballJsonParser.PROVIDER_ID, "ERROR", System.currentTimeMillis(), null, 0, safeError(error)))
-            summaryText += "OpenFootball: ошибка каталога"
+        suspend fun syncOpenFootball() {
+            setProgress(workDataOf("stage" to "OpenFootball", "openFootballRecords" to openFootballRecords))
+            val result = runCatching {
+                OpenFootballSync(store, providerHttpClient).sync(today, startedAt, deadlines.openFootballDeadlineMillis)
+            }
+            result.onSuccess { outcome ->
+                openFootballRecords = outcome.records
+                store.saveProviderSync(
+                    ProviderSyncSummary(
+                        OpenFootballJsonParser.PROVIDER_ID,
+                        outcome.status,
+                        System.currentTimeMillis(),
+                        outcome.successAtMillis,
+                        outcome.records,
+                        outcome.errors.takeIf { it.isNotEmpty() }?.joinToString("; ")?.take(500),
+                    ),
+                )
+                anySuccess = anySuccess || outcome.successAtMillis != null
+                retryNeeded = retryNeeded || outcome.retryNeeded
+                continuationNeeded = continuationNeeded || outcome.continuationNeeded
+                summaryText += "OpenFootball ${outcome.status}: ${outcome.records}"
+            }.onFailure { error ->
+                retryNeeded = true
+                store.saveProviderSync(ProviderSyncSummary(OpenFootballJsonParser.PROVIDER_ID, "ERROR", System.currentTimeMillis(), null, 0, safeError(error)))
+                summaryText += "OpenFootball: ошибка каталога"
+            }
         }
-        setProgress(workDataOf("stage" to "OpenLigaDB", "openFootballRecords" to (openFootball.getOrNull()?.records ?: 0)))
 
-        val openLiga = runCatching { OpenLigaDbSync(store, providerHttpClient).sync(today, startedAt) }
-        openLiga.onSuccess { outcome ->
-            store.saveProviderSync(
-                ProviderSyncSummary(
-                    OpenLigaDbParser.PROVIDER_ID,
-                    outcome.status,
-                    System.currentTimeMillis(),
-                    outcome.successAtMillis,
-                    outcome.records,
-                    outcome.errors.takeIf { it.isNotEmpty() }?.joinToString("; ")?.take(500),
-                ),
-            )
-            anySuccess = anySuccess || outcome.successAtMillis != null
-            retryNeeded = retryNeeded || outcome.retryNeeded
-            continuationNeeded = continuationNeeded || outcome.continuationNeeded
-            summaryText += "OpenLigaDB ${outcome.status}: ${outcome.records}"
-        }.onFailure { error ->
-            retryNeeded = true
-            store.saveProviderSync(ProviderSyncSummary(OpenLigaDbParser.PROVIDER_ID, "ERROR", System.currentTimeMillis(), null, 0, safeError(error)))
-            summaryText += "OpenLigaDB: ошибка каталога"
+        suspend fun syncOpenLiga() {
+            setProgress(workDataOf("stage" to "OpenLigaDB", "openFootballRecords" to openFootballRecords))
+            val result = runCatching {
+                OpenLigaDbSync(store, providerHttpClient).sync(today, startedAt, deadlines.workerDeadlineMillis)
+            }
+            result.onSuccess { outcome ->
+                store.saveProviderSync(
+                    ProviderSyncSummary(
+                        OpenLigaDbParser.PROVIDER_ID,
+                        outcome.status,
+                        System.currentTimeMillis(),
+                        outcome.successAtMillis,
+                        outcome.records,
+                        outcome.errors.takeIf { it.isNotEmpty() }?.joinToString("; ")?.take(500),
+                    ),
+                )
+                anySuccess = anySuccess || outcome.successAtMillis != null
+                retryNeeded = retryNeeded || outcome.retryNeeded
+                continuationNeeded = continuationNeeded || outcome.continuationNeeded
+                summaryText += "OpenLigaDB ${outcome.status}: ${outcome.records}"
+            }.onFailure { error ->
+                retryNeeded = true
+                store.saveProviderSync(ProviderSyncSummary(OpenLigaDbParser.PROVIDER_ID, "ERROR", System.currentTimeMillis(), null, 0, safeError(error)))
+                summaryText += "OpenLigaDB: ошибка каталога"
+            }
         }
+
+        syncOpenFootball()
+        syncOpenLiga()
 
         val linkedOdds = runCatching { store.relinkUnmatchedBookmakerOdds() }.getOrDefault(0)
         val nextStep = decideSyncNextStep(retryNeeded, continuationNeeded, anySuccess)
@@ -291,7 +317,7 @@ private class OpenFootballSync(private val store: Store, private val http: Provi
     private val currentCatalogTtl = TimeUnit.HOURS.toMillis(24)
     private val historicalCatalogTtl = TimeUnit.DAYS.toMillis(30)
 
-    fun sync(today: LocalDate, syncStartedAt: Long): SyncOutcome {
+    fun sync(today: LocalDate, syncStartedAt: Long, runtimeDeadlineMillis: Long): SyncOutcome {
         val errors = mutableListOf<String>()
         var recordCount = 0
         var completedFiles = 0
@@ -300,11 +326,16 @@ private class OpenFootballSync(private val store: Store, private val http: Provi
         var consecutiveErrors = 0
         val seasons = OpenFootballJsonParser.planSeasons(today, 5)
         for (season in seasons) {
+            if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
+                continuationNeeded = true
+                errors += SYNC_CONTINUATION_MESSAGE
+                break
+            }
             val currentSeason = season == seasons.first()
             val directory = getSeasonDirectory(season, currentSeason, syncStartedAt, errors)
             if (directory.isEmpty()) continue
             for (file in directory) {
-                if (System.currentTimeMillis() - syncStartedAt >= TimeUnit.MINUTES.toMillis(8)) {
+                if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
                     continuationNeeded = true
                     errors += SYNC_CONTINUATION_MESSAGE
                     break
@@ -347,14 +378,14 @@ private class OpenFootballSync(private val store: Store, private val http: Provi
                     if (consecutiveErrors >= 3) break
                 }
             }
-            if (consecutiveErrors >= 3 || System.currentTimeMillis() - syncStartedAt >= TimeUnit.MINUTES.toMillis(8)) break
+            if (consecutiveErrors >= 3) break
         }
         return SyncOutcome(
-            status = when {
-                completedFiles == 0 -> "ERROR"
-                errors.isNotEmpty() -> "PARTIAL"
-                else -> "OK"
-            },
+            status = automaticProviderSyncStatus(
+                completedFiles,
+                errors.any { it != SYNC_CONTINUATION_MESSAGE },
+                continuationNeeded,
+            ),
             records = recordCount,
             successAtMillis = System.currentTimeMillis().takeIf { completedFiles > 0 },
             retryNeeded = needsRetry || errors.any { it != SYNC_CONTINUATION_MESSAGE },
@@ -400,23 +431,24 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
     private var lastRequestAtMillis = 0L
     private val weeklyFullSyncTtl = TimeUnit.DAYS.toMillis(7)
     private val checkTtl = TimeUnit.HOURS.toMillis(12)
-    private val maxRuntimeMillis = TimeUnit.MINUTES.toMillis(8)
-
-    fun sync(today: LocalDate, syncStartedAt: Long): SyncOutcome {
+    fun sync(today: LocalDate, syncStartedAt: Long, runtimeDeadlineMillis: Long): SyncOutcome {
         val errors = mutableListOf<String>()
         var recordCount = 0
         var successfulLeagues = 0
         var catalogsFound = 0
         var retryNeeded = false
         var continuationNeeded = false
-        val started = syncStartedAt
-
         seasonLoop@ for (seasonYear in today.year downTo today.year - 4) {
+            if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
+                continuationNeeded = true
+                errors += SYNC_CONTINUATION_MESSAGE
+                break@seasonLoop
+            }
             val catalog = getCatalog(seasonYear, syncStartedAt)
             if (catalog.isEmpty()) continue
             catalogsFound++
             for (league in catalog) {
-                if (System.currentTimeMillis() - started >= maxRuntimeMillis) {
+                if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
                     continuationNeeded = true
                     errors += SYNC_CONTINUATION_MESSAGE
                     break@seasonLoop
@@ -486,11 +518,11 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
                 }
             }
         }
-        if (catalogsFound == 0) {
+        if (catalogsFound == 0 && !continuationNeeded) {
             return SyncOutcome("ERROR", 0, null, true, false, listOf("OpenLigaDB football catalogs were unavailable."))
         }
         return SyncOutcome(
-            status = openLigaSyncStatus(
+            status = automaticProviderSyncStatus(
                 successfulLeagues,
                 errors.any { it != SYNC_CONTINUATION_MESSAGE },
                 continuationNeeded,
