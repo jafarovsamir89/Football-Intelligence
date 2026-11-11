@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — share Worker time across both football providers (local suite passed; Actions pending)
+## Unreleased — share Worker time across both football providers (CI verified)
 
 - Reserve the first three minutes for OpenFootball and use a seven-minute total segment deadline, leaving OpenLigaDB time in the same WorkManager request. This prevents a long OpenFootball import from starving OpenLigaDB across every continuation.
 - Stop starting extra catalog requests after the source deadline and preserve `DEFERRED` for sources that have only been queued for a later segment.
-- Add regression coverage for the source budget and status rules. The bundled local run passed 92 JVM tests with no failures and assembled the debug APK; Actions/API 34 instrumentation are pending.
+- Add regression coverage for the source budget and status rules. The bundled local run passed 92 JVM tests with no failures and assembled the debug APK. Actions [42979682129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42979682129) passed all 12 API 34 instrumentation tests, APK build, stable signing and artifact upload `13837271507`.
 
 ## Unreleased — explain provider sync progress during first-run imports (CI and local suite passed)
 
