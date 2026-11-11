@@ -5,6 +5,7 @@
 ## Forecasting and scoring
 
 - **Market baseline:** convert the three decimal 1X2 prices to implied probabilities, then remove overround. The app now exposes basic proportional normalization, Power, and Shin calculations. A margin-free estimate is still a market estimate; the user-entered price may not be available and the book's margin model is not known.
+- **International reference:** TipsAudit offers a free, no-key upcoming 1X2 API with visible attribution. It publishes a single derived fair estimate (sharp-market price after power devig where available, its model in some uncovered leagues), not independently enumerable raw Pinnacle/Betfair/bet365 lines. The Android adapter stores it outside bookmaker odds, accepts only fresh `fair_source=live` reads captured before kickoff, links exact fixtures, and uses it for descriptive probability differences only. It ignores the soft-book price/value signal, does not compute our EV, does not feed coupons, and does not create an independent market consensus. First direct capture returned 98 rows but the example Türkiye—Belgium read was ~47 minutes old, so no current reference was eligible at that check.
 - **Poisson baseline:** independent home/away goal counts parameterized by expected goals generate a score matrix and internally consistent 1X2 probabilities. Expected goals are not fitted from team histories yet, so the app does not present this as a fixture forecast.
 - **Dixon–Coles correction:** an optional rho changes the 0–0, 0–1, 1–0, and 1–1 cells to represent low-score dependence. The current implementation is a deterministic math primitive; rho is not estimated from data.
 - **Evaluation:** Brier score and log loss are implemented for an observed one-hot 1X2 result. They are only meaningful after chronological, out-of-sample predictions are stored. Neither score is currently calculated from application history.
@@ -32,5 +33,7 @@ Before any strategy is promoted:
 3. Compare against market-implied probability and simple Poisson/Elo baselines.
 4. Report calibration, Brier, log loss, ROI, CLV, drawdown, sample count, uncertainty intervals, and stake assumptions.
 5. Keep tuning out of the final test window; publish failures and versions in the experiment log.
+
+The live reference ledger is not a historical odds archive: each saved fair-market snapshot expires from comparisons after 30 minutes, and the current API POC found no fresh row. A future market baseline evaluation needs timestamped coverage and a separate held-out interval; today's single-feed comparisons are descriptive only.
 
 The app now has a date-bucketed Elo walk-forward evaluator for user-imported score CSVs, but no real historical file has been run through it in this workspace. It emits Brier and Log Loss only and has no market baseline. The project still has no full-coverage timestamped odds or licensed tipster dataset.

@@ -163,13 +163,15 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val db = store.writableDatabase
-                assertEquals(11, db.version)
+                assertEquals(12, db.version)
                 assertTrue(tableExists(db, "historical_results"))
                 assertTrue(tableExists(db, "provider_sync_state"))
                 assertTrue(tableExists(db, "bookmaker_odds_snapshots"))
                 assertTrue(tableExists(db, "virtual_accumulators"))
                 assertTrue(tableExists(db, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(db, "prospective_forecast_settlements"))
+                assertTrue(tableExists(db, "market_reference_snapshots"))
+                assertTrue(tableExists(db, "market_reference_sync_state"))
                 assertTrue(columnExists(db, "matches", "source_key"))
                 assertTrue(columnExists(db, "matches", "captured_at"))
 
@@ -235,7 +237,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(11, upgraded.version)
+                assertEquals(12, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulators", "selection_basis"))
                 upgraded.rawQuery(
                     "SELECT provider_id,leg_count,snapshot_key,selection_basis FROM virtual_accumulators",
@@ -278,7 +280,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(11, upgraded.version)
+                assertEquals(12, upgraded.version)
                 assertTrue(tableExists(upgraded, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(upgraded, "prospective_forecast_settlements"))
                 upgraded.rawQuery(
@@ -292,6 +294,33 @@ class StoreMigrationInstrumentedTest {
                     assertEquals("MODEL_RANKED", cursor.getString(3))
                     assertFalse(cursor.moveToNext())
                 }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun versionElevenUpgradeAddsMarketReferenceTablesWithoutChangingSavedMatches() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-v11-market-migration-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        try {
+            val db=context.openOrCreateDatabase(databaseName,Context.MODE_PRIVATE,null)
+            db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER, source_key TEXT UNIQUE, source_name TEXT NOT NULL DEFAULT 'OpenLigaDB', exact_kickoff INTEGER NOT NULL DEFAULT 1, available_at INTEGER, source_url TEXT, event_date TEXT, season TEXT, captured_at INTEGER)")
+            db.execSQL("INSERT INTO matches(id,league,home,away,kickoff,finished,source_key) VALUES(41,'nla','Türkiye','Belgium','2026-11-12T17:00:00Z',0,'openligadb:41')")
+            db.version=11
+            db.close()
+
+            Store(context,databaseName).use { store ->
+                val upgraded=store.writableDatabase
+                assertEquals(12,upgraded.version)
+                assertTrue(tableExists(upgraded,"market_reference_snapshots"))
+                assertTrue(tableExists(upgraded,"market_reference_sync_state"))
+                val match=store.matches().single()
+                assertEquals(41,match.id)
+                assertEquals("Türkiye",match.home)
+                assertEquals("Belgium",match.away)
+                assertTrue(store.freshMarketReferences().isEmpty())
             }
         } finally {
             context.deleteDatabase(databaseName)

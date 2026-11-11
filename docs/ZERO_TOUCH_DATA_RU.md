@@ -68,6 +68,12 @@ C. Дополнительно изучить независимые официа
 - WebView получает данные при открытой активности; WorkManager обновляет OpenFootball/OpenLigaDB с продолжением и retry на ограничениях Android.
 - GitHub Actions run [42738579732](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42738579732) прошёл 63 unit tests, APK build, стабильную подпись и artifact upload; artifact update-installed на API 34 и сохранил SQLite: 39 181 матч, 30 090 результатов, 7 связанных снимков.
 
+### Международный market-reference слой (2026-11-11)
+
+- TipsAudit добавлен как отдельный бесплатный JSON-источник с обязательной видимой ссылкой. Это производная fair 1X2 оценка; она не выдается за прямой коэффициент Pinnacle/Betfair/bet365/Misli/TOPAZ, bookmaker payout, crowd consensus или прогноз прибыльности.
+- Он обновляется независимым network-constrained Worker: проверка при открытии после 15 минут устаревания и периодически раз в 30 минут по best effort Android. Пустой/устаревший ответ хранит статус и причину; локальная футбольная база не зависит от него.
+- API POC 2026-11-11 вернул 98 событий. Пример Türkiye—Belgium сопоставился с локальным fixture по точным alias/order/kickoff, но timestamp fair price был примерно на 47 минут старше capture, поэтому его следует отбрасывать. Следующая проверка — GitHub Actions instrumentation, stable-signed update-install v11→v12 и проверка фактически свежего ответа, если источник его выдаст.
+
 ### Продолжение проверки (2026-11-09 Pacific)
 
 - Более ранний API 34 capture после CI APK `3cdcd96` автоматически получил 9 видимых будущих линий Misli и 25 TOPAZ (2026-11-10 03:07 UTC); 0/9 и 7/25 связались точно. Portugal—Denmark / OpenLigaDB 85257 тогда имел TOPAZ 1.45 / 4.31 / 5.29. Это историческое наблюдение: линия старше 30 минут не считается актуальной котировкой.

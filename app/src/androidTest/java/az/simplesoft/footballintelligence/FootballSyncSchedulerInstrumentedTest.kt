@@ -134,6 +134,32 @@ class FootballSyncSchedulerInstrumentedTest {
         }
     }
 
+    @Test fun marketReferenceUsesIndependentThirtyMinuteConnectedRefresh() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val manager=WorkManager.getInstance(context)
+        cancelTestWork(manager)
+        try {
+            val now=System.currentTimeMillis()
+            val safeDelay=TimeUnit.HOURS.toMillis(1)
+            TipsAuditMarketReferenceScheduler.enqueueForFreshness(context,null,now,safeDelay)
+            val periodic=awaitSingleActiveWork(manager,TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME)
+            val once=awaitSingleActiveWork(manager,TipsAuditMarketReferenceScheduler.UNIQUE_ONCE_NAME)
+            assertEquals(NetworkType.CONNECTED,periodic.constraints.requiredNetworkType)
+            assertEquals(NetworkType.CONNECTED,once.constraints.requiredNetworkType)
+            assertEquals(TimeUnit.MINUTES.toMillis(30),periodic.periodicityInfo?.repeatIntervalMillis)
+            assertEquals(TimeUnit.MINUTES.toMillis(30),periodic.initialDelayMillis)
+            assertEquals(safeDelay,once.initialDelayMillis)
+
+            cancelTestWork(manager)
+            val freshNow=System.currentTimeMillis()
+            TipsAuditMarketReferenceScheduler.enqueueForFreshness(context,freshNow-TimeUnit.MINUTES.toMillis(1),freshNow,safeDelay)
+            assertEquals(1,activeWork(manager,TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME).size)
+            assertTrue(activeWork(manager,TipsAuditMarketReferenceScheduler.UNIQUE_ONCE_NAME).isEmpty())
+        } finally {
+            cancelTestWork(manager)
+        }
+    }
+
     private fun activeWork(manager: WorkManager, uniqueName: String): List<WorkInfo> =
         manager.getWorkInfosForUniqueWork(uniqueName).get(10, TimeUnit.SECONDS)
             .filter { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
@@ -159,6 +185,10 @@ class FootballSyncSchedulerInstrumentedTest {
         manager.cancelUniqueWork(FootballSyncScheduler.UNIQUE_ONCE_NAME)
             .result.get(10, TimeUnit.SECONDS)
         manager.cancelUniqueWork(FootballSyncScheduler.UNIQUE_PERIODIC_NAME)
+            .result.get(10, TimeUnit.SECONDS)
+        manager.cancelUniqueWork(TipsAuditMarketReferenceScheduler.UNIQUE_ONCE_NAME)
+            .result.get(10, TimeUnit.SECONDS)
+        manager.cancelUniqueWork(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME)
             .result.get(10, TimeUnit.SECONDS)
     }
 

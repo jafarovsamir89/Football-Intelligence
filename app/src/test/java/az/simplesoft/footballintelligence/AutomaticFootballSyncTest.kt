@@ -5,6 +5,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_APP_OPEN_STALE_MINUTES
 
 class AutomaticFootballSyncTest {
     @Test fun runtimeBudgetQueuesContinuationInsteadOfBackoff() {
@@ -55,5 +56,14 @@ class AutomaticFootballSyncTest {
         assertTrue(isAppOpenSyncStale(now - eightHours, now))
         assertTrue(isAppOpenSyncStale(null, now))
         assertTrue(isAppOpenSyncStale(0L, now))
+    }
+
+    @Test fun marketReferenceRefreshUsesFifteenMinuteFreshnessWindow() {
+        val now=10*TimeUnit.DAYS.toMillis(1)
+        val fifteenMinutes=TimeUnit.MINUTES.toMillis(MARKET_REFERENCE_APP_OPEN_STALE_MINUTES)
+        assertFalse(isTipsAuditReferenceSyncStale(now-fifteenMinutes+1L,now))
+        assertTrue(isTipsAuditReferenceSyncStale(now-fifteenMinutes,now))
+        assertTrue(isTipsAuditReferenceSyncStale(null,now))
+        assertTrue(isTipsAuditReferenceSyncStale(0L,now))
     }
 }

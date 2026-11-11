@@ -20,6 +20,11 @@ import az.simplesoft.footballintelligence.data.OpenLigaLeague
 import az.simplesoft.footballintelligence.data.ProviderFileCache
 import az.simplesoft.footballintelligence.data.ProviderMatch
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
+import az.simplesoft.footballintelligence.data.TipsAuditFairOddsProvider
+import az.simplesoft.footballintelligence.data.TIPSAUDIT_API_URL
+import az.simplesoft.footballintelligence.data.MarketReferenceStatus
+import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_APP_OPEN_STALE_MINUTES
+import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_REFRESH_INTERVAL_MINUTES
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -33,6 +38,8 @@ import kotlinx.coroutines.withContext
 
 private const val PERIODIC_SYNC_NAME = "football-intelligence-daily-sync"
 private const val ONCE_SYNC_NAME = "football-intelligence-sync-now"
+private const val TIPSAUDIT_PERIODIC_SYNC_NAME = "football-intelligence-tipsaudit-market-reference"
+private const val TIPSAUDIT_ONCE_SYNC_NAME = "football-intelligence-tipsaudit-market-reference-now"
 private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, below the provider's 60/minute cap.
 private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
 private const val FIRST_PROVIDER_SYNC_BUDGET_MILLIS = 3L * 60 * 1000
@@ -98,6 +105,7 @@ object FootballSyncScheduler {
         }.getOrDefault(emptyList())
         val mostRecentSuccess = summaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull() ?: 0L
         enqueueForFreshness(appContext, mostRecentSuccess, System.currentTimeMillis())
+        TipsAuditMarketReferenceScheduler.scheduleOnAppOpen(appContext)
     }
 
     /**
@@ -138,6 +146,77 @@ object FootballSyncScheduler {
 
     const val UNIQUE_ONCE_NAME = ONCE_SYNC_NAME
     const val UNIQUE_PERIODIC_NAME = PERIODIC_SYNC_NAME
+}
+
+internal fun isTipsAuditReferenceSyncStale(lastCheckedAtMillis:Long?,nowMillis:Long):Boolean =
+    lastCheckedAtMillis==null || lastCheckedAtMillis<=0L ||
+        nowMillis-lastCheckedAtMillis>=TimeUnit.MINUTES.toMillis(MARKET_REFERENCE_APP_OPEN_STALE_MINUTES)
+
+/** Market reference refresh is isolated from the slower historical football-data sync. */
+object TipsAuditMarketReferenceScheduler {
+    fun scheduleOnAppOpen(context:Context) {
+        val appContext=context.applicationContext
+        val lastChecked=runCatching {
+            Store(appContext).let { store -> try { store.marketReferenceSyncState()?.lastCheckedAtMillis } finally { store.close() } }
+        }.getOrNull()
+        enqueueForFreshness(appContext,lastChecked,System.currentTimeMillis())
+    }
+
+    internal fun enqueueForFreshness(
+        context:Context,
+        lastCheckedAtMillis:Long?,
+        nowMillis:Long,
+        immediateInitialDelayMillis:Long=0L,
+    ) {
+        require(immediateInitialDelayMillis>=0L)
+        val manager=WorkManager.getInstance(context.applicationContext)
+        val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val periodic=withAutomaticSyncRetryBackoff(
+            PeriodicWorkRequestBuilder<TipsAuditMarketReferenceWorker>(MARKET_REFERENCE_REFRESH_INTERVAL_MINUTES,TimeUnit.MINUTES)
+                .setInitialDelay(MARKET_REFERENCE_REFRESH_INTERVAL_MINUTES,TimeUnit.MINUTES)
+                .setConstraints(constraints),
+        ).build()
+        manager.enqueueUniquePeriodicWork(TIPSAUDIT_PERIODIC_SYNC_NAME,ExistingPeriodicWorkPolicy.KEEP,periodic)
+        if(isTipsAuditReferenceSyncStale(lastCheckedAtMillis,nowMillis)) {
+            val onceBuilder=withAutomaticSyncRetryBackoff(
+                OneTimeWorkRequestBuilder<TipsAuditMarketReferenceWorker>().setConstraints(constraints),
+            )
+            if(immediateInitialDelayMillis>0L) onceBuilder.setInitialDelay(immediateInitialDelayMillis,TimeUnit.MILLISECONDS)
+            val once=onceBuilder.build()
+            manager.enqueueUniqueWork(TIPSAUDIT_ONCE_SYNC_NAME,ExistingWorkPolicy.KEEP,once)
+        }
+    }
+
+    const val UNIQUE_ONCE_NAME=TIPSAUDIT_ONCE_SYNC_NAME
+    const val UNIQUE_PERIODIC_NAME=TIPSAUDIT_PERIODIC_SYNC_NAME
+}
+
+class TipsAuditMarketReferenceWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params) {
+    internal var providerHttpClient:ProviderHttpClient=PublicJsonClient()
+
+    override suspend fun doWork():Result=withContext(Dispatchers.IO) {
+        val store=Store(applicationContext)
+        val checkedAt=System.currentTimeMillis()
+        try {
+            val response=providerHttpClient.get(TIPSAUDIT_API_URL)
+            if(response.statusCode !in 200..299) throw IOException("Unexpected HTTP ${response.statusCode} for TipsAudit.")
+            val parsed=TipsAuditFairOddsProvider().parse(response.body,checkedAt,store.matchIdentities())
+            store.saveMarketReferenceCapture(
+                checkedAt,
+                if(parsed.snapshots.isEmpty()) MarketReferenceStatus.UNAVAILABLE else MarketReferenceStatus.OK,
+                parsed.snapshots,
+                parsed.methodologyVersion,
+                parsed.detail,
+            )
+            store.relinkUnmatchedMarketReferences(checkedAt)
+            Result.success()
+        } catch(error:Exception) {
+            store.saveMarketReferenceCapture(checkedAt,MarketReferenceStatus.ERROR,emptyList(),null,safeError(error))
+            Result.retry()
+        } finally {
+            store.close()
+        }
+    }
 }
 
 class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -220,8 +299,9 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         syncOpenLiga()
 
         val linkedOdds = runCatching { store.relinkUnmatchedBookmakerOdds() }.getOrDefault(0)
+        val linkedMarketReferences = runCatching { store.relinkUnmatchedMarketReferences() }.getOrDefault(0)
         val nextStep = decideSyncNextStep(retryNeeded, continuationNeeded, anySuccess)
-        setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds))
+        setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds, "marketFixturesLinked" to linkedMarketReferences))
         when (nextStep) {
             SyncNextStep.RETRY -> Result.retry()
             SyncNextStep.SUCCESS -> Result.success()

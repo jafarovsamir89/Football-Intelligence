@@ -4,12 +4,13 @@
 
 ```text
 MainActivity / Compose
-  ├── WorkManager scheduler (first-open stale check + daily periodic)
+  ├── WorkManager schedulers (football first-open/24h + market-reference first-open/30m, network constrained)
   │     └── AutomaticFootballSyncWorker (network constraint, unique lock, retry/backoff)
   │            ├── OpenFootballSync → GitHub directory discovery + public raw CC0 JSON
   │            └── OpenLigaDbSync → official API catalog, matches, group/change polling
+  │     └── TipsAuditMarketReferenceWorker → public fair-odds JSON, strict freshness parser
   ├── Misli and TOPAZ public-page WebViews (foreground, visible DOM only, gated capture/reload at 30-minute freshness)
-  ├── Store / SQLite v11 with WAL (matches, source cache, bookmaker snapshots, single and accumulator forecasts/history)
+  ├── Store / SQLite v12 with WAL (matches, separate bookmaker and derived-market ledgers, forecasts/history)
   ├── EloEngine → exact-kickoff forecasts with safe-availability cutoff
   └── VirtualCouponBuilder → separate model-ranked and same-bookmaker fresh-price accumulator drafts
 ```
@@ -28,6 +29,7 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 - `TeamDataQuality` rejects known placeholder identities and same-team fixtures. Legacy rows remain in SQLite for ID/migration safety, but reads, fixture matching, models, and evaluations exclude them; parser and write paths prevent new placeholder rows.
 - `MisliOddsProvider` parses only complete 1/X/2 rows from the visible `document.body.innerText` of the public `/idman-novleri/futbol` route. It requires a future event, visible date/time, device timezone, valid prices, and exact reviewed team aliases. It links an event to local history only for one exact date/home/away/kickoff match. Each quote snapshot retains its raw names, source URL, time, market and capture timestamp; UI freshness expires after 30 minutes. The WebView is loaded on app open and while foreground; WorkManager does not run this browser collector.
 - `TopazOddsProvider` reads visible text from eTopaz's normal public sports tab, requires complete future 1X2 rows, and marks its inferred year. Neither provider has bypass or login logic; live observations are rejected.
+- `TipsAuditFairOddsProvider` reads a separate public, no-key JSON endpoint that requires visible attribution. It accepts only `fair_source=live`, source-read time before capture and kickoff, <=30-minute freshness, coherent 1X2 fair probabilities/reciprocal prices and an HTTPS TipsAudit event URL. A strict unique exact team/order/UTC-date/kickoff match may attach a local fixture ID. SQLite stores provenance and methodology in `market_reference_snapshots`, never in `bookmaker_odds_snapshots`; an independent Worker checks when app-open data is older than 15 minutes and runs a 30-minute best-effort periodic request. Its prices are not local bookmaker quotes, coupon prices or EV inputs.
 - `ForegroundBookmakerCaptureGate` coalesces repeated `onPageFinished` notifications and permits one capture per 30-minute interval. If a fresh quote state is present on app open, a delayed foreground WebView load starts at the freshness boundary; one delayed reload follows each completed attempt. This does not run in WorkManager or when the app is not open.
 - After commit `01706e9` passed Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921), its stable-signed APK update-installed over the data-bearing API 34 app and captured 9 Misli visible lines/0 exact local links and 25 TOPAZ/7 exact links at 20:33 UTC without another SQLite lock. Portugal—Denmark / local match 85257 had TOPAZ H/D/A 1.47/4.24/5.14. Those prices expire after 30 minutes. Misli robots and reviewed eTopaz terms do not establish explicit odds-reuse permission. The app stores snapshots locally; `LIVE` means technical capture, not legal authorization, continued availability or profitability.
 - The local Elo walk-forward is computed per competition using strict saved availability cutoffs. It runs in a background thread from the Backtest tab. Date-only OpenFootball targets use a date boundary, scored results are considered available two days later, and later-captured OpenLigaDB results cannot enter earlier training. Source files are current snapshots rather than archived historical vintages, so its metrics are retrospective research, not proof of reliable future probabilities.
@@ -39,11 +41,11 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 
 `EloWalkForwardEngine.kt` and the automatic-source evaluator apply conservative `available_at` bounds. Legacy placeholder fixtures are excluded. Current source files are not archived vintages, so retrospective scores cannot establish historical real-time knowledge.
 
-`ProbabilityEngine.kt` also contains tested 1X2 de-vigging and Poisson/Dixon–Coles mathematics. No live expected-goals feature model or market baseline is connected. These primitives do not validate betting advantage.
+`ProbabilityEngine.kt` also contains tested 1X2 de-vigging and Poisson/Dixon–Coles mathematics. TipsAudit can now provide a timestamp-filtered descriptive fair-market reference, but no matched fresh row has been verified by the live POC and there is no chronological evaluation against that benchmark. No expected-goals feature model exists. These components do not validate betting advantage.
 
 ## Next architecture work
 
-1. SQLite instrumentation covers upgrades through v11 and cross-provider score/provenance retention on API 34. Run update-preservation checks on API 26 and a physical Android device when available.
+1. Verify the new v11→v12 market-reference migration and Worker in GitHub Actions, then update-install the stable artifact over a data-bearing API 34 database without wiping rows. Run a physical-device check when available.
 2. Collect future results for the immutable prospective ledger; currently captured predictions are all pending, so prospective accuracy is not available yet.
 3. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests are in place.
 4. WorkManager instrumentation verifies app-open enqueue constraints, uniqueness, freshness, zero-delay queueing while offline and delayed exponential retry. The network-proof Worker failure test and WAL/read-concurrency regression passed Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921): 88 JVM + 11 API 34 instrumentation tests. Rate-limit pacing coverage remains open, and the API 26 runtime continuation check remains complementary evidence.

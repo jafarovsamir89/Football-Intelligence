@@ -92,6 +92,12 @@ import az.simplesoft.footballintelligence.data.FixtureIdentity
 import az.simplesoft.footballintelligence.data.uniqueExactFixtureMatchId
 import az.simplesoft.footballintelligence.data.BOOKMAKER_CAPTURE_INTERVAL_MILLIS
 import az.simplesoft.footballintelligence.data.ForegroundBookmakerCaptureGate
+import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
+import az.simplesoft.footballintelligence.data.MarketReferenceStatus
+import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
+import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_FRESHNESS_MILLIS
+import az.simplesoft.footballintelligence.data.TIPSAUDIT_PROVIDER_ID
+import az.simplesoft.footballintelligence.data.uniqueExactMarketFixtureMatchId
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
 
@@ -143,6 +149,7 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
     val p = ProbabilityEngine.removeMargin(q.h, q.d, q.a, method)
     return Triple(p.home, p.draw, p.away)
 }
+private fun percentagePoints(value:Double):String = "%.1f".format(value*100.0)
 
 /** Serializes SQLite writers shared by the foreground screen and WorkManager in this process. */
 internal object StoreWriteCoordinator {
@@ -178,7 +185,7 @@ internal object StoreWriteCoordinator {
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 11) {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 12) {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -200,6 +207,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         createBookmakerTables(db)
         createAccumulatorTables(db)
         createProspectiveForecastTables(db)
+        createMarketReferenceTables(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if(oldVersion<2) createHistoricalImportTables(db)
@@ -234,6 +242,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<9) createAccumulatorTables(db)
         else if(oldVersion<10) db.execSQL("ALTER TABLE virtual_accumulators ADD COLUMN selection_basis TEXT NOT NULL DEFAULT 'MODEL_RANKED'")
         if(oldVersion<11) createProspectiveForecastTables(db)
+        if(oldVersion<12) createMarketReferenceTables(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -278,6 +287,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 "actual_outcome TEXT NOT NULL, home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL, " +
                 "result_source_name TEXT NOT NULL, result_source_url TEXT)",
         )
+    }
+    private fun createMarketReferenceTables(db:SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS market_reference_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, methodology_version TEXT, detail TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS market_reference_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, external_event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, captured_at INTEGER NOT NULL, fair_read_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_key TEXT NOT NULL, away_key TEXT NOT NULL, home_fair_odds REAL NOT NULL, draw_fair_odds REAL NOT NULL, away_fair_odds REAL NOT NULL, home_probability REAL NOT NULL, draw_probability REAL NOT NULL, away_probability REAL NOT NULL, fair_source TEXT NOT NULL, methodology_version TEXT NOT NULL, UNIQUE(provider_id,external_event_id,captured_at))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS market_reference_match_idx ON market_reference_snapshots(match_id,provider_id,fair_read_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS market_reference_fresh_idx ON market_reference_snapshots(provider_id,fair_read_at,kickoff)")
     }
     fun upsert(matches: List<Match>) {
         val db = writableDatabase
@@ -915,6 +930,100 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.setTransactionSuccessful()
         } finally { endWriteTransaction(db) }
     }
+    fun saveMarketReferenceCapture(
+        checkedAtMillis:Long,
+        status:MarketReferenceStatus,
+        snapshots:List<MarketReferenceSnapshot>,
+        methodologyVersion:String?,
+        detail:String?,
+    ) = StoreWriteCoordinator.withLock {
+        val db=writableDatabase
+        db.beginTransaction()
+        try {
+            snapshots.forEach { snapshot ->
+                val values=ContentValues().apply {
+                    put("provider_id",snapshot.providerId);put("external_event_id",snapshot.externalEventId)
+                    if(snapshot.matchId==null) putNull("match_id") else put("match_id",snapshot.matchId)
+                    put("source_url",snapshot.sourceUrl);put("captured_at",snapshot.capturedAtMillis)
+                    put("fair_read_at",snapshot.fairReadAtMillis);put("kickoff",snapshot.kickoffMillis)
+                    put("market",snapshot.market);put("home_team",snapshot.homeTeam);put("away_team",snapshot.awayTeam)
+                    put("home_key",az.simplesoft.footballintelligence.data.TeamNameIdentity.canonical(snapshot.homeTeam))
+                    put("away_key",az.simplesoft.footballintelligence.data.TeamNameIdentity.canonical(snapshot.awayTeam))
+                    put("home_fair_odds",snapshot.homeFairOdds);put("draw_fair_odds",snapshot.drawFairOdds);put("away_fair_odds",snapshot.awayFairOdds)
+                    put("home_probability",snapshot.homeProbability);put("draw_probability",snapshot.drawProbability);put("away_probability",snapshot.awayProbability)
+                    put("fair_source",snapshot.fairSource);put("methodology_version",snapshot.methodologyVersion)
+                }
+                db.insertWithOnConflict("market_reference_snapshots",null,values,SQLiteDatabase.CONFLICT_IGNORE)
+            }
+            val old=marketReferenceSyncState()
+            val values=ContentValues().apply {
+                put("provider_id",TIPSAUDIT_PROVIDER_ID);put("status",status.name);put("last_checked",checkedAtMillis)
+                val successfulCheck=if(status!=MarketReferenceStatus.ERROR) checkedAtMillis else old?.lastSuccessAtMillis
+                if(successfulCheck==null) putNull("last_success") else put("last_success",successfulCheck)
+                put("fresh_records_stored",snapshots.size)
+                if(methodologyVersion==null) putNull("methodology_version") else put("methodology_version",methodologyVersion)
+                if(detail==null) putNull("detail") else put("detail",detail.take(500))
+            }
+            db.insertWithOnConflict("market_reference_sync_state",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+            db.delete("market_reference_snapshots","captured_at<?",arrayOf((checkedAtMillis-30L*24*60*60*1000).toString()))
+            db.setTransactionSuccessful()
+        } finally { db.endTransaction() }
+    }
+    fun marketReferenceSyncState():MarketReferenceSyncState? = readableDatabase.rawQuery(
+        "SELECT status,last_checked,last_success,fresh_records_stored,methodology_version,detail FROM market_reference_sync_state WHERE provider_id=?",
+        arrayOf(TIPSAUDIT_PROVIDER_ID),
+    ).use { c ->
+        if(!c.moveToFirst()) null else MarketReferenceSyncState(
+            TIPSAUDIT_PROVIDER_ID,
+            runCatching { MarketReferenceStatus.valueOf(c.getString(0)) }.getOrDefault(MarketReferenceStatus.ERROR),
+            c.getLong(1),if(c.isNull(2)) null else c.getLong(2),c.getInt(3),
+            if(c.isNull(4)) null else c.getString(4),if(c.isNull(5)) null else c.getString(5),
+        )
+    }
+    fun freshMarketReferences(nowMillis:Long=System.currentTimeMillis()):List<MarketReferenceSnapshot> {
+        val result=mutableListOf<MarketReferenceSnapshot>()
+        readableDatabase.rawQuery(
+            "SELECT external_event_id,match_id,source_url,captured_at,fair_read_at,kickoff,market,home_team,away_team,home_fair_odds,draw_fair_odds,away_fair_odds,home_probability,draw_probability,away_probability,fair_source,methodology_version FROM market_reference_snapshots WHERE provider_id=? AND captured_at>=? AND captured_at<=? AND fair_read_at>=? AND fair_read_at<=? AND kickoff>? AND fair_source='live' ORDER BY kickoff",
+            arrayOf(TIPSAUDIT_PROVIDER_ID,(nowMillis-MARKET_REFERENCE_FRESHNESS_MILLIS).toString(),nowMillis.toString(),(nowMillis-MARKET_REFERENCE_FRESHNESS_MILLIS).toString(),nowMillis.toString(),nowMillis.toString()),
+        ).use { c ->
+            while(c.moveToNext()) result+=MarketReferenceSnapshot(
+                TIPSAUDIT_PROVIDER_ID,c.getString(0),if(c.isNull(1)) null else c.getInt(1),c.getString(2),c.getLong(3),c.getLong(4),c.getLong(5),c.getString(6),c.getString(7),c.getString(8),
+                c.getDouble(9),c.getDouble(10),c.getDouble(11),c.getDouble(12),c.getDouble(13),c.getDouble(14),c.getString(15),c.getString(16),
+            )
+        }
+        return result.groupBy { it.externalEventId }.values.mapNotNull { rows -> rows.maxByOrNull { it.fairReadAtMillis } }.sortedBy { it.kickoffMillis }
+    }
+    /** Links current market references only to one exact, same-orientation local fixture. */
+    fun relinkUnmatchedMarketReferences(nowMillis:Long=System.currentTimeMillis()):Int {
+        val fixtures=matchIdentities()
+        if(fixtures.isEmpty()) return 0
+        data class Candidate(val rowId:Long,val snapshot:MarketReferenceSnapshot)
+        val candidates=mutableListOf<Candidate>()
+        readableDatabase.rawQuery(
+            "SELECT id,external_event_id,source_url,captured_at,fair_read_at,kickoff,market,home_team,away_team,home_fair_odds,draw_fair_odds,away_fair_odds,home_probability,draw_probability,away_probability,fair_source,methodology_version FROM market_reference_snapshots WHERE provider_id=? AND match_id IS NULL AND captured_at>=? AND fair_read_at>=? AND kickoff>?",
+            arrayOf(TIPSAUDIT_PROVIDER_ID,(nowMillis-MARKET_REFERENCE_FRESHNESS_MILLIS).toString(),(nowMillis-MARKET_REFERENCE_FRESHNESS_MILLIS).toString(),nowMillis.toString()),
+        ).use { c ->
+            while(c.moveToNext()) {
+                val rowId=c.getLong(0)
+                val snapshot=MarketReferenceSnapshot(
+                    TIPSAUDIT_PROVIDER_ID,c.getString(1),null,c.getString(2),c.getLong(3),c.getLong(4),c.getLong(5),c.getString(6),c.getString(7),c.getString(8),
+                    c.getDouble(9),c.getDouble(10),c.getDouble(11),c.getDouble(12),c.getDouble(13),c.getDouble(14),c.getString(15),c.getString(16),
+                )
+                candidates+=Candidate(rowId,snapshot)
+            }
+        }
+        val links=candidates.mapNotNull { candidate ->
+            uniqueExactMarketFixtureMatchId(candidate.snapshot.homeTeam,candidate.snapshot.awayTeam,candidate.snapshot.kickoffMillis,fixtures)?.let { candidate.rowId to it }
+        }
+        if(links.isEmpty()) return 0
+        val db=writableDatabase
+        beginWriteTransaction(db)
+        try {
+            links.forEach { (rowId,matchId) -> db.update("market_reference_snapshots",ContentValues().apply { put("match_id",matchId) },"id=? AND match_id IS NULL",arrayOf(rowId.toString())) }
+            db.setTransactionSuccessful()
+        } finally { endWriteTransaction(db) }
+        return links.size
+    }
     fun freshBookmakerOdds(providerId:String,nowMillis:Long=System.currentTimeMillis(),freshnessMillis:Long=30L*60*1000):List<BookmakerOddsSnapshot> {
         val result=mutableListOf<BookmakerOddsSnapshot>()
         readableDatabase.rawQuery(
@@ -1318,6 +1427,8 @@ class MainActivity:ComponentActivity() {
     val workManager=remember(activity) { WorkManager.getInstance(activity) }
     val oneTimeSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballSyncScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val periodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballSyncScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
+    val marketReferenceOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
+    val marketReferencePeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val syncSummaries=remember(revision) { store.providerSyncSummaries() }
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
@@ -1334,6 +1445,7 @@ class MainActivity:ComponentActivity() {
         oneTimeSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
     ) { revision++ }
+    LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
     var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     var recentResults by remember { mutableStateOf<List<Match>>(emptyList()) }
     var importedCompetitionCodes by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1371,6 +1483,9 @@ class MainActivity:ComponentActivity() {
     val misliOdds=remember(revision) { store.freshBookmakerOdds("misli") }
     val topazSyncState=remember(revision) { store.bookmakerSyncState("topaz") }
     val topazOdds=remember(revision) { store.freshBookmakerOdds("topaz") }
+    val marketReferenceSyncState=remember(revision) { store.marketReferenceSyncState() }
+    val marketReferences=remember(revision) { store.freshMarketReferences() }
+    val activeMarketReference=remember(active?.id,marketReferences) { marketReferences.firstOrNull { it.matchId==active?.id } }
     val historyRefreshKey=syncSummaries.map { it.providerId to it.lastSuccessAtMillis }
     var historicalByLeague by remember { mutableStateOf<Map<String,List<HistoricalMatch>>>(emptyMap()) }
     var historyVersion by remember { mutableIntStateOf(0) }
@@ -1593,6 +1708,17 @@ class MainActivity:ComponentActivity() {
                     Text("Misli.az: ${visibleBookmakerStatus(misliSyncState?.status,misliSyncState?.lastCheckedAtMillis,misliOdds.size)} · снимок $misliChecked · актуальных будущих линий: ${misliOdds.size}${misliSyncState?.error?.let { " · $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
                     val topazChecked=topazSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "проверяется при открытии"
                     Text("TOPAZ/eTopaz: ${visibleBookmakerStatus(topazSyncState?.status,topazSyncState?.lastCheckedAtMillis,topazOdds.size)} · снимок $topazChecked · актуальных будущих линий: ${topazOdds.size}${topazSyncState?.error?.let { " · $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
+                    Text("Pinnacle: UNAVAILABLE · официальный API требует запроса доступа и имеет переменную стоимость.",style=MaterialTheme.typography.bodySmall)
+                    Text("Betfair Exchange: UNAVAILABLE · API требует аккаунт, App Key и сессию; live-доступ требует платной активации.",style=MaterialTheme.typography.bodySmall)
+                    Text("bet365: BLOCKED · официальные условия ограничивают автоматическое извлечение данных.",style=MaterialTheme.typography.bodySmall)
+                    val referenceChecked=marketReferenceSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                    val referenceStatus=when {
+                        marketReferenceSyncState==null -> "ОЖИДАЕТ ПРОВЕРКИ"
+                        marketReferenceSyncState.status==MarketReferenceStatus.ERROR -> "ОШИБКА"
+                        marketReferences.isNotEmpty() -> "СВЕЖИЙ РЫНОЧНЫЙ ОРИЕНТИР"
+                        else -> "СЕЙЧАС НЕДОСТУПЕН"
+                    }
+                    Text("TipsAudit · производная оценка рынка, не цена конкретной БК: $referenceStatus · проверено $referenceChecked · свежих 1X2: ${marketReferences.size}${marketReferenceSyncState?.detail?.let { " · $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
                     syncSummaries.forEach { summary ->
                         val checked=DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(summary.lastCheckedAtMillis))
                         val successful=summary.lastSuccessAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не было"
@@ -1643,6 +1769,27 @@ class MainActivity:ComponentActivity() {
                       }
                       Text("Источник: сохранённые результаты OpenLigaDB этой лиги до времени начала матча. Elo с фиксированными параметрами, без калибровки и walk-forward проверки; экспериментальная оценка, не рекомендация и не показатель уверенности.",style=MaterialTheme.typography.bodySmall)
                   }
+                  HorizontalDivider()
+                  Text("Рыночный ориентир 1X2",fontWeight=FontWeight.Bold)
+                  if(activeMarketReference==null) {
+                      Text("Нет свежей, однозначно сопоставленной оценки TipsAudit для этого матча. Устаревшие значения не используются. Последняя проверка: ${marketReferenceSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "не выполнялась"}.",style=MaterialTheme.typography.bodySmall)
+                  } else {
+                      val reference=activeMarketReference
+                      val marketProb=Triple(reference.homeProbability,reference.drawProbability,reference.awayProbability)
+                      val fairRead=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(reference.fairReadAtMillis))
+                      Text("TipsAudit fair reference: ${"%.1f".format(marketProb.first*100)}% / ${"%.1f".format(marketProb.second*100)}% / ${"%.1f".format(marketProb.third*100)}% · ориентирные цены ${reference.homeFairOdds} / ${reference.drawFairOdds} / ${reference.awayFairOdds} · источник считал в $fairRead · метод ${reference.methodologyVersion}.",style=MaterialTheme.typography.bodySmall)
+                      eloForecast?.probabilities?.let { model ->
+                          Text("Расхождение Elo с рыночным ориентиром: ${percentagePoints(model.home-marketProb.first)} / ${percentagePoints(model.draw-marketProb.second)} / ${percentagePoints(model.away-marketProb.third)} п.п. Это сравнение, не сигнал доходности.",style=MaterialTheme.typography.bodySmall)
+                      }
+                      (misliOdds+topazOdds).filter { it.matchId==active.id }.forEach { quote ->
+                          val bookmakerProb=fairProbabilities(Quote(0,active.id,quote.providerId,quote.home,quote.draw,quote.away,quote.capturedAtMillis))
+                          Text("${if(quote.providerId=="misli") "Misli" else "TOPAZ"} без маржи против ориентира: ${percentagePoints(bookmakerProb.first-marketProb.first)} / ${percentagePoints(bookmakerProb.second-marketProb.second)} / ${percentagePoints(bookmakerProb.third-marketProb.third)} п.п. Линия той же БК, 1X2; рассчитано пропорциональным снятием маржи.",style=MaterialTheme.typography.bodySmall)
+                      }
+                      Text("Один внешний производный ориентир; это не независимый консенсус и не сырые цены Pinnacle, Betfair или bet365. Значения не используются как цены купона или для расчёта EV.",style=MaterialTheme.typography.bodySmall)
+                  }
+                  TextButton(onClick={
+                      runCatching { activity.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,android.net.Uri.parse("https://tipsaudit.com/data"))) }
+                  }) { Text("Источник и методика: TipsAudit · бесплатное использование с атрибуцией") }
 
                 }
               }

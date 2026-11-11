@@ -1,5 +1,22 @@
 # Development log
 
+## 2026-11-11 — add a separate international fair-market reference (local code/build passed; CI pending)
+
+### Research and implementation
+
+- Rechecked the international source gates before coding. Pinnacle's official API page describes inquiry-based access with variable cost; Betfair's official setup needs an account, App Key and session token, and its live key requires a £499 one-off fee; bet365's current terms restrict automated extraction. None satisfies this app's free/no-account/allowed raw-feed requirement. No adapters or invented data were added for those three operators.
+- The first-party TipsAudit API documentation offers free no-key access with a visible attribution link and 60 requests/minute. It returns a single derived fair 1X2 view, not raw named-book prices. The methodology says it removes sharp-market margin via power devig where covered and uses its own calibrated model for leagues without sharp prices.
+- Direct POC `GET /api/v1/predictions` at `2026-11-11T23:22:04Z` returned 98 upcoming rows. Türkiye—Belgium (`id=16388`, 12 Nov 17:00 UTC) matched local fixture 85220 under exact reviewed aliases, but its `fair_read_at` was `22:34:39Z` (about 47 minutes old), exceeding the app's 30-minute limit. No fresh usable reference was verified at that capture. The app ignores all `best_soft_odds` and value-signal fields.
+- Added `TipsAuditFairOddsProvider`, strict timestamp/probability/reciprocal-price/URL checks and same-orientation exact fixture matching. Added a separate SQLite v12 ledger so derived estimates cannot be mistaken for Misli/TOPAZ bookmaker quotes or flow into coupon/EV calculations. Added an independent network-constrained Worker, app-open stale check after 15 minutes, 30-minute periodic best-effort schedule, and fixture relinking after football sync.
+- Analysis now displays a linked TipsAudit attribution with a fresh external fair reference and compares it descriptively with Elo/local fresh Misli/TOPAZ probabilities only when the exact event is linked. The main screen displays truthful status/reason for all five named books/markets: Misli and TOPAZ from their foreground collectors; Pinnacle/Betfair unavailable under access/cost requirements; bet365 blocked by terms. TipsAudit is explicitly a separate reference, not one of the five bookmakers.
+- Updated source, method, limitations, zero-touch, architecture, Azerbaijan bookmaker, roadmap, README and changelog documentation.
+
+### Verification and continuation
+
+- `./gradlew --no-daemon :app:testDebugUnitTest` passed 98 JUnit tests, and Android-test Kotlin compilation passed. The debug APK was assembled locally (21,061,736 bytes; SHA-256 `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`). `git diff --check` passed.
+- Local API 34 instrumentation did not start: the persistent test emulator already has the stable-CI-signed app, so Android refused to install the locally debug-signed target (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, zero tests executed). No uninstall, data clear or emulator wipe was performed. CI's clean emulator is the next verification path for the new Worker, schema and scheduler.
+- Next: push this milestone, verify GitHub Actions (expected 98 JVM + 16 API 34 instrumentation, APK/stable signing/artifact upload), then update-install the CI artifact onto the data-bearing API 34 emulator without uninstall. Confirm schema v12 and preserve the existing match/result/coupon/forecast rows. Do not disturb the user10 import/backoff profile on emulator 5558.
+
 ## 2026-11-11 — complete clean API 34 import and update-install the shared-budget APK
 
 - The clean API 34 installation on emulator 5558 finished its WorkManager continuation chain without user action. The installed import version was `108c000`; OpenFootball ended `OK` with 25,904 records and cached five seasons (2022-23 through 2026-27). OpenLigaDB ended `OK` with 17,202 records across five yearly catalogs and 214 league-season states. Final local DB: 38,609 matches, 29,612 completed results, 183 competition labels, 120 prospective forecast snapshots and 41 bookmaker quote snapshots. A few transient OpenLigaDB HTTP 429 responses retried; final provider state is `OK`.

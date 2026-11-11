@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — add an attributed international fair-market reference
+
+- Researched official access conditions for Pinnacle, Betfair Exchange and bet365; none currently provides a verified free, no-account, permitted raw-odds path under the user's zero-touch constraints.
+- Added a separate TipsAudit market-reference provider, SQLite v12 ledger, independent network-constrained WorkManager refresh (app-open after 15 minutes; 30-minute best-effort periodic), exact fixture matcher and visible source attribution.
+- Accept only timestamped `fair_source=live` 1X2 observations no older than 30 minutes and before kickoff; reject stale/future timestamps, inconsistent fair odds/probabilities, duplicate or invalid rows and non-source URLs. Ignore best-soft prices and value flags.
+- Show descriptive probability differences against fresh local Misli/TOPAZ lines and Elo when one exact fixture is available. Never use this derived reference for local-bookmaker coupons, payout odds, EV, or a multi-source consensus.
+- The 2026-11-11 direct API POC returned 98 events, but Türkiye—Belgium's fair source read was ~47 minutes old; no current reference was eligible in that capture. The UI therefore needs to show unavailable until a genuinely fresh read is observed.
+- Verification is being completed for parser rejection rules, v11→v12 data-preserving migration, Worker scheduling/network constraints, and APK/Actions.
+
 ## Unreleased — finish clean-install data and odds runtime verification
 
 - The clean API 34 first-run Worker chain completed automatically across five OpenFootball seasons and five OpenLigaDB calendar-year catalogs: OpenFootball 25,904 records, OpenLigaDB 17,202 records / 214 league-season states, and SQLite 38,609 matches / 29,612 completed results / 183 competition labels / 120 prospective forecasts.
