@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — finish clean-install data and odds runtime verification
+
+- The clean API 34 first-run Worker chain completed automatically across five OpenFootball seasons and five OpenLigaDB calendar-year catalogs: OpenFootball 25,904 records, OpenLigaDB 17,202 records / 214 league-season states, and SQLite 38,609 matches / 29,612 completed results / 183 competition labels / 120 prospective forecasts.
+- The `9399fa4` stable-signed APK update-installed on the same clean-install emulator without clearing data or changing `firstInstallTime`. MainActivity resumed and retained all provider, fixture, result and forecast records.
+- At 2026-11-11 07:37–07:38 UTC, the visible public WebViews captured 25 TOPAZ and 16 Misli prematch lines. Exact local links were 7 and 4; the Coupons tab displayed 6 provider-specific TOPAZ candidates and 2 Misli candidates with capture times. A second API 34 instance had no current public lines, so the app correctly displayed `UNAVAILABLE` there. Explicit operator permission for automated quote reuse remains unconfirmed.
+
 ## Unreleased — share Worker time across both football providers (CI verified)
 
 - Reserve the first three minutes for OpenFootball and use a seven-minute total segment deadline, leaving OpenLigaDB time in the same WorkManager request. This prevents a long OpenFootball import from starving OpenLigaDB across every continuation.
