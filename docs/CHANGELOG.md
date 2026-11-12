@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — prefer freshest duplicate Odds API lines and validate catalog-cache clock
+## Prefer freshest duplicate Odds API lines and validate catalog-cache clock (CI verified)
 
 - For duplicate reports of the same bookmaker/event, retain the latest provider market timestamp (capture time breaks a tie) while counting one accepted line. Reject missing, expired or future-dated catalog-cache timestamps.
-- Add parser and cache-window regressions. The grouped local run passed 158 JVM tests, Android-test Kotlin compilation and debug/personal APK assembly; GitHub Actions verification is pending.
+- Add parser and cache-window regressions. The grouped local run passed 158 JVM tests, Android-test Kotlin compilation and debug/personal APK assembly. Actions [43219694343](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43219694343) passed 44 API 34 tests and API 26 with 44/44 complete, one existing radio-dependent skip and zero failures. Keyless variants built; only debug artifact `13945757789` was uploaded. Downloaded APK SHA-256 `d5aebaff03d8e7e3f84c554b7c19d7761f3e0343415f8750cdff1cf33bb38b07`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; credential absent. No install was done.
 
 ## Unreleased — clarify paired market delta direction in the Android UI
 

@@ -1,12 +1,13 @@
 # Development log
 
-## 2026-11-12 — retain freshest duplicate Odds API lines and reject future catalog-cache times (local passed; Actions pending)
+## 2026-11-12 — retain freshest duplicate Odds API lines and reject future catalog-cache times (CI/API 26/API 34 passed)
 
 - When one underlying bookmaker/event appeared more than once in a response, the parser previously kept whichever line arrived first. It now retains the quote with the newest provider market timestamp, then uses capture time as a tie-breaker, while still counting and storing only one event/book row.
 - The seven-day active-soccer catalog cache now requires a positive timestamp no later than device time. A clock correction into the past can no longer make a future-dated cache look fresh indefinitely.
 - Added regression tests for both duplicate response orders, newest-line selection, and absent/expired/future/fresh catalog timestamps.
 - The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 158 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `1dd62d0f45a3b65cbdcc3d111b41397461d23c65984851734871eed96b6e23c8`; private personal APK SHA-256 `ad217cbb251a928b81bf2023b3a5986ce423206a962c6f79dae20bd9fba849ba`. APK signatures verified locally. An uncompressed DEX audit confirmed the personal API credential is absent from debug and present only in personal; keep that APK private.
-- No live API call/credit was used, and no APK was installed. API 26/API 34 instrumentation, CI signing and artifact inspection are pending.
+- Commit `757c947` passed Actions [43219694343](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43219694343): the unit task and all 44 API 34 instrumentation tests passed. API 26 reported 44/44 complete with one existing radio-dependent skip and zero failures; its runner printed “Finished 45 tests” after the 44/44 counter, while Gradle succeeded. CI built both variants without the local credential, stable-signed and uploaded only debug artifact `13945757789` (archive SHA-256 `f1bb01eafb9a65a015e264b75cbe08c60729c8858c5878b368037f116a783708`). Downloaded APK SHA-256 `d5aebaff03d8e7e3f84c554b7c19d7761f3e0343415f8750cdff1cf33bb38b07`, 17,468,014 bytes; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Its DEX was checked and contains no personal credential.
+- No live API call/credit was used, and no APK was installed or existing emulator database modified. The locally built personal APK includes the credential and remains private. Next: verify the key-enabled Worker and football-source reachability on the owner's physical phone when connected; keep collecting timestamped prospective matched outcomes.
 
 ## 2026-11-12 — explain market-delta direction and test interval display (CI/API 26/API 34 passed)
 

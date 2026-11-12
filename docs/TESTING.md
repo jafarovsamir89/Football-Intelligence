@@ -1,10 +1,10 @@
 # Testing
 
-## The Odds API duplicate and catalog-cache freshness (local passed; Actions pending)
+## The Odds API duplicate and catalog-cache freshness (CI/API 26/API 34 passed)
 
 - The parser test provides two aliases for the same underlying bookmaker/fixture with different `last_update` values, then reverses response order; both parses must retain the newer line and report a single accepted row plus one duplicate.
 - Pure cache-window coverage rejects missing, expired and future-dated times, and accepts a timestamp within the seven-day TTL.
-- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 158 JVM tests, Android-test Kotlin compilation and both APK assemblies. The private credential is present only in the local personal APK. API 26/34 instrumentation and CI artifact checks are pending.
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 158 JVM tests, Android-test Kotlin compilation and both APK assemblies. Actions [43219694343](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43219694343) passed all 44 API 34 tests and API 26 with 44/44 complete, one radio-dependent skip and zero failures. The API 26 runner's “Finished 45 tests” line conflicts with its 44/44 counter; Gradle succeeded. CI uploaded only keyless debug artifact `13945757789`; APK SHA-256 `d5aebaff03d8e7e3f84c554b7c19d7761f3e0343415f8750cdff1cf33bb38b07`, stable signer `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`, credential absent. No APK was installed.
 
 ## Paired prospective international-market baseline and compact-screen scrolling (CI verified)
 
