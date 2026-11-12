@@ -7,11 +7,11 @@
 - Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684) passed all 32 API 34 tests, API 26 with one radio-off test skipped and no failures, APK build, stable signing and artifact upload `13918259270` (16,885,059 bytes). Downloaded APK SHA-256 `2af956f21c46bddbda5913492e4bb31b532971bb0bc539b1834cebdfc446f860`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 - The API 26 emulator-runner log reports 32 declared tests and 32/32 complete with one skip, then emits `33/32`/“Finished 33 tests” while Gradle succeeds with zero failures. Record this as a progress-counter inconsistency; the declared instrumentation method inventory is 32. API 26 radio-off behavior remains unverified. No local APK install or persistent-emulator change was made.
 
-## Screen repository and lifecycle-bound bookmaker capture (Actions pending)
+## Screen repository and lifecycle-bound bookmaker capture (Actions passed)
 
 - Route Compose-screen reads and writes through `FootballScreenRepository`; its SQLite adapter dispatches database operations to IO while background Workers keep using `Store`.
 - Replace TOPAZ's raw thread/UI-thread callback with the same cancellable Compose coroutine flow as Misli. Parse visible page text on `Dispatchers.Default`, obtain fixture identities and persist snapshots through the repository, and record parse/read failures without fabricating odds.
-- Extend the isolated-database instrumentation test to read the dashboard and fixture identities through the repository. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`). Actions is pending; the persistent emulator was not used.
+- Extend the isolated-database instrumentation test to read the dashboard and fixture identities through the repository. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`). Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268) passed all 32 API 34 tests and the API 26 suite (one offline-radio skip), then built, stable-signed and uploaded artifact `13919403768`. The API 26 emulator printed 33 finished after 32 declared tests had completed; Gradle succeeded. Downloaded APK SHA-256 `349987dcfbdf5cb02ad459a25d327e51a83440160ac4a0b235bb2c1334fb6358`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The persistent emulator was not used.
 
 ## Structured CSV/backtest background execution (CI passed)
 

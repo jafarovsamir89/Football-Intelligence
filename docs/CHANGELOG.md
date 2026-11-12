@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — add the screen persistence boundary (Actions pending)
+## Add the screen persistence boundary (CI verified)
 
 - Route screen reads and writes through `FootballScreenRepository`; its SQLite adapter confines operations to `Dispatchers.IO`. Keep background Worker and schema-migration access on the existing `Store`.
 - Run both public bookmaker-page collectors in lifecycle-bound Compose coroutines, with visible-text parsing on `Dispatchers.Default`, cancellation handling and repository persistence for success and failure states.
-- Extend isolated SQLite instrumentation coverage through the repository. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; APK SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`. Actions/API matrix is pending.
+- Extend isolated SQLite instrumentation coverage through the repository. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; APK SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`. Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268) passed all 32 API 34 tests and API 26 instrumentation (one emulator-radio test skipped), then built, stable-signed and uploaded artifact `13919403768`. API 26 printed 33 finished after 32 declared tests; Gradle succeeded. Downloaded APK SHA-256 `349987dcfbdf5cb02ad459a25d327e51a83440160ac4a0b235bb2c1334fb6358`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Load the Compose screen read model asynchronously (CI verified)
 
