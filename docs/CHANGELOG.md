@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — verify conditional football-source cache reuse
+
+- Add a loopback HTTP regression test for ETag/Last-Modified request headers and real 304 response metadata, plus isolated SQLite coverage proving cached five-season OpenFootball rows, validators and catalog bodies survive revalidation.
+- The combined local cycle passed 120 JVM tests, Android-test Kotlin compilation and APK assembly. GitHub Actions has not run for this batch yet.
+
 ## Unreleased — add a gated international 1X2 market feed (CI passed)
 
 - Researched the requested public pages. Oddsbunch, BetExplorer, Oddspedia and OddsPortal terms do not permit automated reuse without consent; Oddschecker has regional limits and can block robotic access. No scraper, WebView collector or undocumented route was added for them.
@@ -14,7 +19,7 @@
 - Estimate home/away goal rates from preceding same-competition scores using league-average smoothing and explicit league/team sample floors.
 - Update goal features in strict effective-availability batches; reject result rows whose provider availability timestamp predates kickoff instead of guessing when they became usable.
 - Compare Poisson with the validation-selected Elo on identical final-holdout fixtures where both have forecasts; show model coverage separately. Do not fit Dixon–Coles rho or change live probabilities.
-- Synthetic-data regression tests pass in the combined local cycle: 107 JVM tests, Android-test Kotlin compilation and APK assembly. Actions is pending for this grouped model stage.
+- Synthetic-data regression tests passed in the combined local cycle: 107 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43126942380](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43126942380) passed unit tests, 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13902324452`.
 
 ## Unreleased — batch Elo research and correct accumulator history
 

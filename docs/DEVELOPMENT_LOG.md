@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-12 — cover conditional HTTP cache revalidation (local verification passed; CI pending)
+
+- The football sync already sends cached ETag/Last-Modified validators and handles HTTP 304, but the path lacked deterministic regression coverage. Exposed the existing HTTP client and OpenFootball sync seam at module visibility for tests; runtime behavior is unchanged.
+- Added a loopback HTTP test that inspects `If-None-Match` and `If-Modified-Since`, returns a real 304 response with updated validators, and checks the client returns an empty body plus response metadata.
+- Added an isolated SQLite instrumentation case that seeds five season catalogs, file counters and saved match rows, then returns 304 for every request. It verifies all validators are sent to the injected client, records and cached catalog bodies survive, match source keys/names are unchanged, and check timestamps advance.
+- Updated the README, roadmap, architecture, test guide and zero-touch requirements to reflect the already-passed Poisson/international-feed CI and v13 migrations. The combined local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 120 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `b835f39b4595eacd5ae6be2ec13497a8db5f6a9fd694ac53f6a852b890d9b768`; `git diff --check` passed.
+- No device install was performed. ADB shows API 34 emulator `5558` with no Football Intelligence package installed, and the Xiaomi is disconnected. Next: commit/push the grouped test/docs update and verify it in one Actions cycle; keep both emulator profiles untouched.
+
 ## 2026-11-12 — integrate a permitted international bookmaker feed (CI passed; Azerbaijan device check pending)
 
 - Researched public Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker pages and reviewed their current terms. Their terms/age/region rules do not support automated extraction or republication in this app; no WebView data collector, page scraper or undocumented route was added. Static-vs-JavaScript page internals were not reverse-engineered because those sources fail the permission gate.

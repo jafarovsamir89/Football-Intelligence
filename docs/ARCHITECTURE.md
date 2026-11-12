@@ -50,8 +50,8 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 
 ## Next architecture work
 
-1. Verify the v12→v13 international-odds migration and Worker in Actions. Defer local update-install until a grouped runtime milestone needs it; never wipe the data-bearing API 34 databases.
-2. Collect future results for the immutable prospective ledger; currently captured predictions are all pending, so prospective accuracy is not available yet.
-3. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests are in place.
-4. WorkManager instrumentation verifies app-open enqueue constraints, uniqueness, freshness, zero-delay queueing while offline and delayed exponential retry. The network-proof Worker failure test and WAL/read-concurrency regression passed Actions [42895248921](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42895248921): 88 JVM + 11 API 34 instrumentation tests. Rate-limit pacing coverage remains open, and the API 26 runtime continuation check remains complementary evidence.
-5. Verify both collectors across timezones and more events; clarify their odds-reuse terms. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.
+1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
+2. Verify the international market and local bookmaker collectors on a physical Android phone in Azerbaijan. The latest CI APK has not been installed there; app access, source availability and fresh current prices remain unverified. Preserve local data and require the user's explicit 18+ confirmation before MoviOdds access.
+3. Add focused tests for source request pacing and HTTP `429`/`Retry-After`. Conditional ETag/Last-Modified and `304` behavior now has deterministic local HTTP and isolated SQLite regression tests; CI is pending for that test batch.
+4. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests justify the added migration surface.
+5. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.

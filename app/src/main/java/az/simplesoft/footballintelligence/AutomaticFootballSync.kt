@@ -442,7 +442,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
     }.isSuccess
 }
 
-private data class SyncOutcome(
+internal data class SyncOutcome(
     val status: String,
     val records: Int,
     val successAtMillis: Long?,
@@ -466,7 +466,7 @@ internal interface ProviderHttpClient {
     fun get(url: String, cache: ProviderFileCache? = null): ProviderHttpResult
 }
 
-private class PublicJsonClient : ProviderHttpClient {
+internal class PublicJsonClient : ProviderHttpClient {
     override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
@@ -511,7 +511,7 @@ private class PublicJsonClient : ProviderHttpClient {
     }
 }
 
-private class OpenFootballSync(private val store: Store, private val http: ProviderHttpClient) {
+internal class OpenFootballSync(private val store: Store, private val http: ProviderHttpClient) {
     private val recentFileTtl = TimeUnit.HOURS.toMillis(24)
     private val historicalFileTtl = TimeUnit.DAYS.toMillis(30)
     private val currentCatalogTtl = TimeUnit.HOURS.toMillis(24)

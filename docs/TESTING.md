@@ -1,10 +1,10 @@
 # Testing
 
-## Latest completed milestone (2026-11-11; GitHub Actions passed)
+## Latest completed milestone (2026-11-12; international feed CI passed)
 
-- Added parser tests for timestamp age/future-time rejection, logged/model fallback rejection, fair probability/price consistency, duplicate IDs, HTTPS source host and exact local fixture matching. Added market-reference WorkManager cadence/network-constraint coverage, a socket-free Worker instrumentation test, and a v11→v12 migration-preservation test.
-- Commit `4badae9` passed Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746): unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901058686` (16,768,389 bytes). The local API 34 instrumentation command could not install the workstation-signed target over the persistent stable-CI-signed app (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), so it executed zero tests; no app uninstall or data clear was done. Following the user's batching request, the stable APK was not installed on either data-bearing emulator.
-- APK SHA-256: `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`. This is the local debug-key build; use the CI stable-signed artifact for data-preserving update installation.
+- Added independent MoviOdds market storage, age and Worker gates, exact event linking, quote freshness/history, single-book no-vig display and migration coverage. The provider is labelled “bet365 via MoviOdds”; international prices remain excluded from Misli/TOPAZ coupons.
+- The follow-up for commit `828f469` passed Actions [43135555477](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43135555477): unit tests, all 22 API 34 instrumentation tests, APK build, stable signing and artifact upload `13907840944` (16,855,155 bytes). The run includes schema v13 migration coverage and the Worker/scheduler/error cases.
+- Downloaded CI APK SHA-256: `d80cd80c7caa9b4145526012f53bc0d0ad52c280c1959286dec9a32048cab9a1`; signer certificate SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The API 34 emulator currently visible to ADB has no app package installed; the physical Xiaomi is disconnected, so this artifact was not update-installed.
 
 ## Completed P2/P4 grouped milestone (2026-11-11; local and CI verification passed)
 
@@ -12,13 +12,19 @@
 - One combined local cycle passed 102 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin`, and `:app:assembleDebug`. APK SHA-256: `421046664c314aa6aa001819cdb6543eb79987572778c7ecbdcbc6b33ed8b0da`.
 - Actions [43124533252](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43124533252) passed unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901853811`. No APK update-install was done on the persistent local emulators.
 
-## Current grouped goal-model milestone (2026-11-12; local verification passed, Actions pending)
+## Completed goals-model milestone (2026-11-12; local and Actions verification passed)
 
 - Added a smoothed goals-based Poisson model, strict pre-kickoff effective availability, chronological comparison with selected Elo on paired holdout fixtures, and regression tests for cutoff isolation, sample gates and paired evaluation.
-- One combined local cycle passed 107 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin` and `:app:assembleDebug`. APK SHA-256: `d17edfe037ab7046be93ebbe4e353ae110b7ccc88d1af42e91d2bc87f0f6699e`. `git diff --check` passed; the Actions run is pending.
-- No APK was installed for this model stage. A separate user-requested install of the preceding stable CI APK on the connected phone is recorded in `docs/DEVELOPMENT_LOG.md`. Do not install on the persistent data-bearing emulators.
+- One combined local cycle passed 107 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin` and `:app:assembleDebug`. Actions [43126942380](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43126942380) passed the unit job, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13902324452`.
+- No APK was installed for this model stage. The Poisson analysis is a retrospective paired holdout comparison only; it does not alter saved or live Elo forecasts.
 
-## Latest verification status (2026-11-10)
+## Current conditional-cache regression batch (2026-11-12; local verification passed, CI pending)
+
+- Added a real loopback HTTP 304 test for cached ETag/Last-Modified request headers and response metadata.
+- Added isolated SQLite coverage for five OpenFootball season catalogs and files: a `304 Not Modified` response keeps match rows, catalog body, cached record counts and validators while refreshing check times.
+- One combined local cycle passed 120 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and `assembleDebug`. CI has not run for this batch yet.
+
+## Historical runtime verification (through 2026-11-10)
 
 - Commit `108c000` passed 88 JVM tests, 12 API 34 instrumentation tests, APK assembly and GitHub Actions [42917262103](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42917262103). A stable-signed clean install confirmed the periodic WorkSpec's 24-hour initial delay and interval, one immediate first-run Worker, and successful continuation scheduling. Its full automatic import later completed: OpenFootball `OK`/25,904 across five seasons; OpenLigaDB `OK`/17,202 across five catalogs and 214 league-season states; SQLite 38,609 matches / 29,612 completed results / 183 competition labels / 120 prospective forecasts.
 - Commit `c436c07` passed 91 local JVM tests (0 failures/errors/skips) and `assembleDebug`. Actions [42921473653](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42921473653) passed the API 34 instrumentation suite (12/12), APK build, stable signing and artifact upload `13812041365`. The downloaded APK SHA-256 is `8bf19b2cda7958aaeaca4fcd2b96b01caaede1b1df38e7bdb1d5868d0ae80cbf`; stable signer matches the existing CI key. Its progress UI was later exercised in the full first-run import documented below.
@@ -102,8 +108,8 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 ## Remaining verification gaps
 
-- SQLite v1/v9/v10→v12 and v11→v12 migration preservation, cross-provider score retention during incomplete/conflicting refresh, and WAL foreground-reader access during a provider write have isolated instrumentation coverage. The tests use separate random database names.
-- WorkManager offline queue gating, delayed exponential retry/backoff, network-proof Worker failure routing, and SQLite WAL/read-concurrency pass locally and in CI [42912446156](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42912446156). API 34 update-install preserved local data and a new foreground capture succeeded. API 26 stable update-install plus an app-open Worker refresh completed successfully without SQLite lock or data loss. ETag/304, provider pacing, lock expiry and a physical handset still lack dedicated validation.
+- SQLite v1, v9, v10, v11 and v12→v13 migration preservation, cross-provider score retention during incomplete/conflicting refresh, and WAL foreground-reader access during a provider write have isolated instrumentation coverage on CI [43135555477](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43135555477). The tests use separate random database names.
+- WorkManager offline queue gating, delayed exponential retry/backoff, network-proof Worker failure routing, and SQLite WAL/read-concurrency pass locally and in CI. Conditional ETag/304 tests pass locally in the current batch; source pacing/429 recovery, lock expiry and a physical handset still need dedicated validation.
 
 Commit `92836d8` passed Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971): **84 JUnit tests**, **3 API 34 instrumentation tests**, APK build, stable signing and artifact upload. The instrumentation job confirmed the SQLite migration tests and WorkManager scheduler test on its API 34 emulator.
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.
