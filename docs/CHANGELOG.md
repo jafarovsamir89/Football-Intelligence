@@ -1,11 +1,11 @@
 # Changelog
 
-## Correct prospective evaluation sampling (local checks passed; CI pending)
+## Correct prospective evaluation sampling (CI verified)
 
 - Score the full saved forecast ledger instead of only the latest 100 visible rows. Keep the recent screen list bounded at 100.
 - Deduplicate daily forecasts to the latest valid pre-kickoff snapshot per fixture/model version; show settled and pending unique fixture counts and Brier/Log Loss/top-outcome metrics by version.
 - Reject settlement records without a named result source, matching score/outcome, post-kickoff/post-forecast availability, and settlement at/after availability. No database migration is needed.
-- Local grouped cycle passed 149 JVM tests, Android-test Kotlin compilation, and debug/personal APK builds. Actions run is pending; see `docs/DEVELOPMENT_LOG.md` for hashes and the API 26/API 34 test case covering 101 stored snapshots.
+- Local grouped cycle passed 149 JVM tests, Android-test Kotlin compilation, and debug/personal APK builds. Actions [43195049041](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43195049041) passed the unit-test task and 41 API 34 tests; API 26 passed 40 with one radio-dependent skip and zero failures. The uploaded keyless artifact is `13933137162`; APK and signer hashes are in `docs/DEVELOPMENT_LOG.md`. The instrumentation case covers 101 stored snapshots. No app install was performed.
 
 ## Add The Odds API V4 personal provider (CI verified)
 

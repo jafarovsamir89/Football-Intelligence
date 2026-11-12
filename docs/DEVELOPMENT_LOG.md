@@ -1,17 +1,18 @@
 # Development log
 
-## 2026-11-12 — evaluate the complete prospective forecast ledger once per fixture (local checks passed; CI pending)
+## 2026-11-12 — evaluate the complete prospective forecast ledger once per fixture (CI/API 26/API 34 passed)
 
 - Fixed an evaluation-sample bug: the coupon screen showed only the newest 100 forecast rows and also scored every daily snapshot, so older settled matches could disappear and repeated forecasts of the same match could inflate sample size.
 - The screen now reads the complete prospective ledger on `Dispatchers.IO`, still shows only the latest 100 history rows, and scores the latest valid pre-kickoff snapshot once per fixture and model version. Per-version reports show unique fixture count, settled/pending count, Brier, Log Loss and top-outcome rate.
 - A saved result contributes only when the prediction was captured before kickoff, history meets the Elo minimum, fixture names are valid, result availability is timestamped at/after kickoff and after the forecast, local settlement is no earlier than availability, the source name exists, and H/D/A agrees with the saved score. No schema change or migration was needed.
 - Added JVM regressions for latest-snapshot selection, model-version separation, post-kickoff exclusion, result-score/time consistency, plus an API 26/API 34 isolated-SQLite instrumentation case with 101 daily snapshots proving the evaluator receives the whole ledger while the visible list remains bounded at 100.
 - The final grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 149 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug APK SHA-256 `07b5f7f9300357338ea68fbd57237ae01adc0804b6fe19058ec37771e752ad36`; private personal APK SHA-256 `6ab0ae7c9fabc8772e60f0ffcafbc8ff45b3ee8884f5c60e78a1ea232edc8cb7`. An uncompressed APK-payload audit confirmed the key is absent from tracked source and debug APK and present only in the owner-only personal APK. `git diff --check` passed. No APK was installed and no persistent database changed.
+- Commit `a7b9764` passed [Actions run 43195049041](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43195049041): unit tests, 41/41 API 34 instrumentation tests, and API 26 with 40 passed + one network/radio-dependent `immediateSyncRemainsQueuedWithoutNetworkAndDoesNotStartWorker` skip; zero failures. Both variants assembled keyless in CI, the debug APK was stable-signed, and artifact `13933137162` was uploaded. The downloaded APK SHA-256 is `aa2296f0a1e8c60108b6c1224b724937c94906d5087ef9a899bd906679c633a8`; signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; artifact digest `33aa4d57a1633677e709a2254ac83ca379fc6b1ec55b706f0a607c2f1cc2cca6`. No install or persistent database change was done.
 
 ### Next
 
-1. Commit/push this grouped evaluator and instrumentation milestone; inspect a single Actions run for 149 JVM tests, API 34/API 26 instrumentation, both variant assemblies, and the signed keyless artifact.
-2. Do not update-install or clear data-bearing emulators. Physical-device prospective performance and regional API access remain unverified.
+1. Keep collecting future results in the user's installed database; real prospective scores remain unavailable until timestamped match results settle.
+2. Verify The Odds API matching/refresh and football-provider access on the owner's physical phone in Azerbaijan when available. No APK install or data-bearing emulator change occurred in this stage.
 
 ## 2026-11-12 — integrate The Odds API V4 personal feed (CI/API 26/API 34 passed)
 
