@@ -1472,10 +1472,9 @@ class MainActivity:ComponentActivity() {
  * Reads only the visible rendered content of Misli's public football page. The WebView uses the
  * ordinary Android user agent and never visits account, ticket, API, or live-detail paths.
  */
-@Composable private fun MisliPublicPageCollector(store:Store,onCaptured:()->Unit) {
+@Composable private fun MisliPublicPageCollector(store:Store,previousCheck:Long?,onCaptured:()->Unit) {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
-    val previousCheck=remember(store) { store.bookmakerSyncState("misli")?.lastCheckedAtMillis }
     val now=System.currentTimeMillis()
     val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { MisliOddsProvider() }
@@ -1573,10 +1572,9 @@ class MainActivity:ComponentActivity() {
 }
 
 /** Uses only the public eTopaz page and selects its ordinary visible "İdman" tab. */
-@Composable private fun TopazPublicPageCollector(store:Store,onCaptured:()->Unit) {
+@Composable private fun TopazPublicPageCollector(store:Store,previousCheck:Long?,onCaptured:()->Unit) {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
-    val previousCheck=remember(store) { store.bookmakerSyncState("topaz")?.lastCheckedAtMillis }
     val now=System.currentTimeMillis()
     val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { TopazOddsProvider() }
@@ -1675,6 +1673,7 @@ class MainActivity:ComponentActivity() {
 @Composable fun FootballScreen(store:Store) {
     val activity = LocalContext.current as ComponentActivity
     val coroutineScope = rememberCoroutineScope()
+    var storeLoadState by remember(store) { mutableStateOf(FootballScreenStoreLoadState()) }
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -1703,13 +1702,30 @@ class MainActivity:ComponentActivity() {
     val marketReferencePeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val internationalOddsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val internationalOddsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
-    val syncSummaries=remember(revision) { store.providerSyncSummaries() }
+    LaunchedEffect(store,revision,selected) {
+        try {
+            val snapshot=store.readFootballScreenSnapshot(selected.takeIf { it>=0 })
+            storeLoadState=FootballScreenStoreLoadState(
+                snapshot=snapshot,
+                loaded=true,
+                version=storeLoadState.version+1,
+            )
+        } catch(error:CancellationException) {
+            throw error
+        } catch(error:Exception) {
+            storeLoadState=storeLoadState.copy(error=error.localizedMessage ?: "Не удалось прочитать локальную базу.")
+        }
+    }
+    val storeSnapshot=storeLoadState.snapshot
+    val syncSummaries=storeSnapshot.providerSyncSummaries
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
     val activeSyncStage=(oneTimeSync+periodicSync).firstOrNull { it.state==WorkInfo.State.RUNNING }
         ?.progress?.getString("stage")
     val lastSuccessfulSync=syncSummaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull()
     val syncStatusText=when {
+        storeLoadState.error!=null -> "Ошибка чтения локальной базы: ${storeLoadState.error}"
+        !storeLoadState.loaded -> "Читаю сохранённую локальную базу…"
         syncBusy -> automaticSyncStageMessage(activeSyncStage)
         syncQueued -> "Автоматическая синхронизация стоит в очереди WorkManager; возможна системная задержка или ожидание сети. Локальная база доступна."
         lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
@@ -1721,18 +1737,9 @@ class MainActivity:ComponentActivity() {
     ) { revision++ }
     LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
     LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state }) { revision++ }
-    var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
-    var recentResults by remember { mutableStateOf<List<Match>>(emptyList()) }
-    var importedCompetitionCodes by remember { mutableStateOf<List<String>>(emptyList()) }
-    val matchRefreshKey=syncSummaries.map { it.providerId to it.lastCheckedAtMillis }
-    LaunchedEffect(matchRefreshKey) {
-        val loaded=withContext(Dispatchers.IO) {
-            Triple(store.matches(),store.recentCompletedMatches(),store.importedCompetitionCodes())
-        }
-        matches=loaded.first
-        recentResults=loaded.second
-        importedCompetitionCodes=loaded.third
-    }
+    val matches=storeSnapshot.matches
+    val recentResults=storeSnapshot.recentResults
+    val importedCompetitionCodes=storeSnapshot.importedCompetitionCodes
     val activeBacktestCode=selectedBacktestCode.takeIf { it in importedCompetitionCodes }
         ?: importedCompetitionCodes.firstOrNull().orEmpty()
     val active=matches.firstOrNull { it.id==selected }
@@ -1749,30 +1756,23 @@ class MainActivity:ComponentActivity() {
             }
         }
     }
-    val quoteList=remember(selected,revision) { if(selected>=0) store.quotes(selected) else emptyList() }
-    val pickList=remember(selected,revision) { if(selected>=0) store.picks(selected) else emptyList() }
-    val tickets=remember(revision) { store.tickets() }
-    val ticketMatches=remember(revision) { store.ticketMatches() }
+    val quoteList=storeSnapshot.selectedQuotes
+    val pickList=storeSnapshot.selectedPicks
+    val tickets=storeSnapshot.tickets
+    val ticketMatches=storeSnapshot.ticketMatches
     val oddsProviders=remember { listOf(MisliOddsProvider(),TopazOddsProvider()) }
-    val misliSyncState=remember(revision) { store.bookmakerSyncState("misli") }
-    val misliOdds=remember(revision) { store.freshBookmakerOdds("misli") }
-    val topazSyncState=remember(revision) { store.bookmakerSyncState("topaz") }
-    val topazOdds=remember(revision) { store.freshBookmakerOdds("topaz") }
-    val internationalOddsSyncState=remember(revision) { store.internationalOddsSyncState() }
-    val internationalOddsSyncHistory=remember(revision) { store.internationalOddsSyncHistory(50) }
-    val internationalOdds=remember(revision) { store.freshInternationalOdds() }
-    val internationalOddsHistory=remember(revision) { store.internationalOddsHistory(700) }
-    val marketReferenceSyncState=remember(revision) { store.marketReferenceSyncState() }
-    val marketReferences=remember(revision) { store.freshMarketReferences() }
+    val misliSyncState=storeSnapshot.misliSyncState
+    val misliOdds=storeSnapshot.misliOdds
+    val topazSyncState=storeSnapshot.topazSyncState
+    val topazOdds=storeSnapshot.topazOdds
+    val internationalOddsSyncState=storeSnapshot.internationalOddsSyncState
+    val internationalOddsSyncHistory=storeSnapshot.internationalOddsSyncHistory
+    val internationalOdds=storeSnapshot.internationalOdds
+    val internationalOddsHistory=storeSnapshot.internationalOddsHistory
+    val marketReferenceSyncState=storeSnapshot.marketReferenceSyncState
+    val marketReferences=storeSnapshot.marketReferences
     val activeMarketReference=remember(active?.id,marketReferences) { marketReferences.firstOrNull { it.matchId==active?.id } }
-    val historyRefreshKey=syncSummaries.map { it.providerId to it.lastSuccessAtMillis }
-    var historicalByLeague by remember { mutableStateOf<Map<String,List<HistoricalMatch>>>(emptyMap()) }
-    var historyVersion by remember { mutableIntStateOf(0) }
-    LaunchedEffect(historyRefreshKey) {
-        val loaded=withContext(Dispatchers.IO) { store.historicalResultsByLeague() }
-        historicalByLeague=loaded
-        historyVersion++
-    }
+    val historicalByLeague=storeSnapshot.historicalByLeague
     val matchForecastKey=remember(matches) {
         matches.map { listOf(it.id,it.league,it.home,it.away,it.kickoff,it.finished,it.homeScore,it.awayScore,it.exactKickoff,it.availableAtMillis) }.hashCode()
     }
@@ -1781,7 +1781,7 @@ class MainActivity:ComponentActivity() {
     }
     var forecastedMatches by remember { mutableStateOf<List<ForecastedMatch>>(emptyList()) }
     val internationalConsensus=remember(internationalOdds) { InternationalMarketEngine.consensus(internationalOdds) }
-    LaunchedEffect(matchForecastKey,oddsForecastKey,historyVersion) {
+    LaunchedEffect(matchForecastKey,oddsForecastKey,storeLoadState.version) {
         val matchSnapshot=matches
         val oddsSnapshot=misliOdds+topazOdds
         val historySnapshot=historicalByLeague
@@ -1836,12 +1836,12 @@ class MainActivity:ComponentActivity() {
         }
         if(recordsAdded>0) revision++
     }
-    val checkedCouponHistory=remember(revision) { store.loggedCouponPicks() }
-    val prospectiveForecastHistory=remember(revision) { store.prospectiveForecastHistory(100) }
+    val checkedCouponHistory=storeSnapshot.checkedCouponHistory
+    val prospectiveForecastHistory=storeSnapshot.prospectiveForecastHistory
     val prospectiveForecastReport=remember(prospectiveForecastHistory) {
         ProspectiveForecastEvaluator.evaluate(prospectiveForecastHistory)
     }
-    val accumulatorHistory=remember(revision) { store.virtualAccumulatorHistory() }
+    val accumulatorHistory=storeSnapshot.accumulatorHistory
     val mapped=matches.associateBy { it.id }
     val settled=tickets.mapNotNull { t -> ticketMatches[t.matchId]?.let { m -> scoreResult(m)?.let { it to t } } }
     val exposure=settled.sumOf { it.second.stake }
@@ -1969,8 +1969,10 @@ class MainActivity:ComponentActivity() {
     }
 
     MaterialTheme {
-      MisliPublicPageCollector(store) { revision++ }
-      TopazPublicPageCollector(store) { revision++ }
+      if(storeLoadState.loaded) {
+          MisliPublicPageCollector(store,misliSyncState?.lastCheckedAtMillis) { revision++ }
+          TopazPublicPageCollector(store,topazSyncState?.lastCheckedAtMillis) { revision++ }
+      }
       Scaffold(topBar={ Surface(color=MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Text("FOOTBALL INTELLIGENCE",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
@@ -2013,7 +2015,14 @@ class MainActivity:ComponentActivity() {
                 }
                 LazyColumn(contentPadding=PaddingValues(12.dp),verticalArrangement=Arrangement.spacedBy(8.dp)){
                     if(matches.isEmpty()) {
-                        item { Text("База пока пуста. Первый импорт начнётся автоматически при доступной сети; после загрузки данные останутся на устройстве.",Modifier.padding(12.dp),style=MaterialTheme.typography.bodyMedium) }
+                        item {
+                            val message=when {
+                                !storeLoadState.loaded -> "Читаю сохранённую локальную базу…"
+                                storeLoadState.error!=null -> "Не удалось прочитать локальную базу: ${storeLoadState.error}"
+                                else -> "База пока пуста. Первый импорт начнётся автоматически при доступной сети; после загрузки данные останутся на устройстве."
+                            }
+                            Text(message,Modifier.padding(12.dp),style=MaterialTheme.typography.bodyMedium)
+                        }
                     } else {
                         items(matches,key={it.id}) { m ->
                             ElevatedCard(onClick={selected=m.id;tab=1},modifier=Modifier.fillMaxWidth()) {

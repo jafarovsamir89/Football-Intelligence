@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — load the Compose screen read model asynchronously
+
+- Group the screen's match, provider, odds, coupon and forecast-history queries in an immutable read model fetched on `Dispatchers.IO`. Compose keeps the last successful snapshot when a later read fails and shows the database error; bookmaker WebViews wait for the first stored freshness state so launch does not bypass the 30-minute capture gate.
+- Add an isolated SQLite instrumentation test for loading a fixture and its selected quotes/picks. Local verification passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; the API 34/API 26 instrumentation matrix is pending.
+
 ## Keep CSV import and backtests within the screen coroutine scope (CI verified)
 
 - Replace the CSV import, imported walk-forward, and automatic walk-forward raw threads with Compose-scoped coroutines. CSV file I/O and database operations run on `Dispatchers.IO`; parsing and imported walk-forward calculation run on `Dispatchers.Default`. UI state updates stay on the main coroutine, and cancellation is rethrown instead of being shown as an import/backtest error.

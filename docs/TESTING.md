@@ -1,5 +1,11 @@
 # Testing
 
+## Asynchronous Compose screen read model (CI pending)
+
+- Replace SQLite reads executed in Compose `remember` blocks with one immutable screen read model loaded on `Dispatchers.IO`; retain the previous successful data and expose read errors. Delay bookmaker WebView startup until the stored last-check timestamps have loaded so the 30-minute capture gate remains effective.
+- Add an isolated-database instrumentation regression for fixture/quote/pick reads. Local grouped verification passed 131 JVM tests, Android-test Kotlin compilation (including the new test), APK assembly, and `git diff --check`. Local APK SHA-256: `7c437adbaf6c2f2db77ba1d8657d7ca94bc4efed76952eef63ebf7ff8dedbe04`.
+- Run the complete API 34/API 26 CI matrix and inspect the stable-signed artifact before calling this milestone verified. Do not install on the persistent emulator.
+
 ## Structured CSV/backtest background execution (CI passed)
 
 - The CSV picker, imported walk-forward, and automatic walk-forward now run in the screen's Compose coroutine scope; blocking file/SQLite work and CPU-heavy parsing or model evaluation are kept off the main thread. Cancellation is not reported as a processing failure.

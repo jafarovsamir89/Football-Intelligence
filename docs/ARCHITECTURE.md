@@ -18,6 +18,10 @@ MainActivity / Compose
 
 No server, account, secret, paid API, or bookmaker action exists. WorkManager runs best-effort; Android controls exact scheduling. Public source rows and HTTP metadata are persisted for offline use. CSV remains an optional Settings feature.
 
+### Compose and SQLite reads
+
+`FootballScreenStoreSnapshot.kt` groups the Compose screen's SQLite reads into an immutable read model fetched on `Dispatchers.IO`. The screen retains its last successful data if a later read fails and surfaces that failure in the source-status area. The first bookmaker WebView capture waits for the stored last-check time so asynchronous screen loading preserves the existing freshness gate. Database writes and domain calculations remain in their current Store/analytics boundaries; the read model does not change SQLite schema or migration behavior.
+
 ## Provider and persistence rules
 
 - `ProviderMatch` keeps stable provider ID, competition/season, event date, exact-vs-date-only kickoff, source URL, capture time, and safe result-availability time.

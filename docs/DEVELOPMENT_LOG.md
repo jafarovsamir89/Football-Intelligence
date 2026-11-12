@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — move Compose screen reads off the main thread (local checks passed; CI pending)
+
+- Added `FootballScreenStoreSnapshot`, an immutable read model that gathers the screen's SQLite match, result, provider, odds, quote/pick, ticket, coupon and forecast-ledger data on `Dispatchers.IO`. The Compose screen now updates only after the read finishes, retains the last successful snapshot on subsequent read failure, and displays a database read error instead of treating an empty result as an empty database.
+- Misli and TOPAZ foreground WebViews now wait for the initial saved provider-check times before deciding whether their 30-minute capture interval has expired. This prevents the asynchronous UI load from accidentally making both sources look never checked and reloading immediately.
+- Added an API 26/API 34 instrumentation regression using an isolated SQLite database and selected fixture quotes/picks. The grouped local cycle `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `7c437adbaf6c2f2db77ba1d8657d7ca94bc4efed76952eef63ebf7ff8dedbe04`; `git diff --check` passed.
+- First local compilation caught a missing `HistoricalMatch` import in the new read model; after adding it, the full grouped command passed. Next: push the code, run both instrumentation API levels, inspect the signed APK, and update `AGENTS.md` with the verified result. No persistent emulator was used.
+
 ## 2026-11-12 — use structured background work for CSV and backtests (local and CI checks passed)
 
 - Replaced the raw `Thread` + `runOnUiThread` pairs used by the advanced CSV import, imported-league walk-forward, and automatic-history backtest with the lifecycle-bound Compose coroutine scope. The CSV content resolver read and database import run on `Dispatchers.IO`; decoding/parsing and imported walk-forward evaluation use `Dispatchers.Default`; automatic report generation stays on `Dispatchers.IO` so its SQLite reads never run on the UI thread.
