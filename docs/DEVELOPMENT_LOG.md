@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — add competition/season Elo walk-forward diagnostics (local checks passed; Actions pending)
+
+- The 3.0 backlog requires model quality by league and season. SQLite already stores source season labels, but the automatic walk-forward previously dropped them. `WalkForwardTarget` now carries the exact stored label; missing labels remain null and are grouped separately. No season is inferred from kickoff dates, and no holdout or model-selection rules changed.
+- The backtest tab can expand Elo Brier/Log Loss and prediction coverage by competition/season from the existing strict as-of walk-forward predictions. It marks n<30 as a small sample and explains that OpenFootball multi-year season labels and OpenLigaDB calendar-year labels are not normalized. Added unit coverage for exact grouping and unknown labels, plus a Compose regression for the expanded result.
+- Grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 179 JVM tests (0 failures/errors/skips), compiled Android-test Kotlin and assembled debug/personal APKs. Debug SHA-256 `77e2adb027ab62c273620b495a2e2d54a1d23cd0b37344298f2a6c2eee59d664`; personal APK SHA-256 `48a54e97885b2f1421e6a5b5fd667ae08a26ba3badb6f1412443f580ca55ac38`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the key is absent from debug and present only in the owner-only personal APK. `git diff --check` passed. No APK was installed and no API quota was used.
+- Next: commit/push this grouped milestone and verify the full GitHub Actions API 26/API 34 matrix. The Odds API live Worker still needs a physical phone or safe isolated AVD; preserve emulator `5558`.
+
 ## 2026-11-12 — expose method-sensitive international market comparison (CI/API 26/API 34 passed)
 
 - The 3.0 audit found that Basic, Power and Shin calculators existed, but international market summaries averaged only Basic and did not expose method sensitivity. Consensus now calculates equal-weight Basic and Power averages across the same deduplicated bookmaker IDs; Shin is available only if every included 1X2 line has an overround, so it never uses a hidden smaller sample.

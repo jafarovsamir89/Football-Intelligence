@@ -45,6 +45,7 @@ data class AutomaticBacktestReports(
     val eloWalkForward: EloWalkForwardReport,
     val eloParameterExperiment: EloChronologicalExperimentReport,
     val goalModelComparison: GoalModelComparisonReport,
+    val eloByCompetitionSeason: List<CompetitionSeasonWalkForwardMetrics> = emptyList(),
 )
 
 /** Compares goal-based baselines to Elo on identical forecastable chronological holdout rows. */

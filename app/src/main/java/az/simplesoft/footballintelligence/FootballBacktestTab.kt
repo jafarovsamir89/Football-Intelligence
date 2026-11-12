@@ -4,6 +4,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -18,6 +20,7 @@ internal fun FootballBacktestTabContent(
     automaticBacktestRunning: Boolean,
     automaticBacktestMessage: String,
     automaticBacktestReport: EloWalkForwardReport?,
+    automaticEloByCompetitionSeason: List<CompetitionSeasonWalkForwardMetrics> = emptyList(),
     automaticEloExperiment: EloChronologicalExperimentReport?,
     automaticGoalComparison: GoalModelComparisonReport?,
     importedCompetitionCodes: List<String>,
@@ -41,6 +44,38 @@ internal fun FootballBacktestTabContent(
                     else Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
                     WalkForwardCalibrationSummary(report)
                     Text("Срез рассчитан отдельно в границах соревнований. Результат не является обещанием прибыли.",style=MaterialTheme.typography.bodySmall)
+                    if(automaticEloByCompetitionSeason.isNotEmpty()) {
+                        var seasonDetailsExpanded by remember(automaticEloByCompetitionSeason) { mutableStateOf(false) }
+                        val rowsWithForecasts=automaticEloByCompetitionSeason.count { it.forecastCount > 0 }
+                        val noForecastRows=automaticEloByCompetitionSeason.size-rowsWithForecasts
+                        Text("Качество Elo по сохранённым меткам лиги и сезона",fontWeight=FontWeight.SemiBold)
+                        Text(
+                            "Сезон не выводится из даты: используются метки источников. Групп ${automaticEloByCompetitionSeason.size}, с прогнозами $rowsWithForecasts, без прогноза $noForecastRows.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        TextButton(onClick={seasonDetailsExpanded=!seasonDetailsExpanded},contentPadding=PaddingValues(0.dp)) {
+                            Text(if(seasonDetailsExpanded) "Скрыть сезонные результаты" else "Показать сезонные результаты")
+                        }
+                        if(seasonDetailsExpanded) {
+                            LazyColumn(Modifier.fillMaxWidth().height(360.dp)) {
+                                items(
+                                    items=automaticEloByCompetitionSeason,
+                                    key={ "${it.competition}|${it.season ?: "<unknown>"}" },
+                                ) { seasonal ->
+                                    val seasonLabel=seasonal.season ?: "метка сезона не сохранена"
+                                    Text(
+                                        "${seasonal.competition} · $seasonLabel: прогнозов ${seasonal.forecastCount}/${seasonal.targetCount} · " +
+                                            "Brier ${seasonal.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} · " +
+                                            "Log Loss ${seasonal.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}" +
+                                            if(seasonal.forecastCount in 1..29) " · малая выборка" else "",
+                                        style=MaterialTheme.typography.bodySmall,
+                                        modifier=Modifier.padding(vertical=3.dp),
+                                    )
+                                }
+                            }
+                            Text("Эти строки — объединённые as-of walk-forward прогнозы по исходным меткам сезона. Значения с n<30 описательны и слишком малы для вывода о качестве.",style=MaterialTheme.typography.labelSmall)
+                        }
+                    }
                 }
                 automaticEloExperiment?.let { experiment ->
                     HorizontalDivider()

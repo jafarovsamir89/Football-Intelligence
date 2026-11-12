@@ -29,6 +29,7 @@ import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
+import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
 import az.simplesoft.footballintelligence.analytics.EloChronologicalExperimentReport
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
@@ -66,6 +67,7 @@ import androidx.work.WorkManager
     var automaticBacktestRunning by remember { mutableStateOf(false) }
     var automaticBacktestMessage by remember { mutableStateOf("") }
     var automaticBacktestReport by remember { mutableStateOf<EloWalkForwardReport?>(null) }
+    var automaticEloByCompetitionSeason by remember { mutableStateOf<List<CompetitionSeasonWalkForwardMetrics>>(emptyList()) }
     var automaticEloExperiment by remember { mutableStateOf<EloChronologicalExperimentReport?>(null) }
     var automaticGoalComparison by remember { mutableStateOf<GoalModelComparisonReport?>(null) }
     var automaticBacktestRevision by remember { mutableIntStateOf(-1) }
@@ -341,6 +343,7 @@ import androidx.work.WorkManager
             try {
                 val reports=repository.automaticBacktestReports()
                 automaticBacktestReport=reports.eloWalkForward
+                automaticEloByCompetitionSeason=reports.eloByCompetitionSeason
                 automaticEloExperiment=reports.eloParameterExperiment
                 automaticGoalComparison=reports.goalModelComparison
                 automaticBacktestRevision=revision
@@ -429,6 +432,7 @@ import androidx.work.WorkManager
                 automaticBacktestRunning=automaticBacktestRunning,
                 automaticBacktestMessage=automaticBacktestMessage,
                 automaticBacktestReport=automaticBacktestReport,
+                automaticEloByCompetitionSeason=automaticEloByCompetitionSeason,
                 automaticEloExperiment=automaticEloExperiment,
                 automaticGoalComparison=automaticGoalComparison,
                 importedCompetitionCodes=importedCompetitionCodes,

@@ -23,6 +23,8 @@ import az.simplesoft.footballintelligence.analytics.EloConfig
 import az.simplesoft.footballintelligence.analytics.EloExperimentMetrics
 import az.simplesoft.footballintelligence.analytics.GoalExpectationConfig
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
+import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
+import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
 import az.simplesoft.footballintelligence.analytics.HomeAwayPerformanceConfig
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
@@ -175,7 +177,10 @@ class FootballTabUiInstrumentedTest {
                 FootballBacktestTabContent(
                     automaticBacktestRunning = false,
                     automaticBacktestMessage = "",
-                    automaticBacktestReport = null,
+                    automaticBacktestReport = EloWalkForwardReport(1,1,0,0.5,1.0,emptyList()),
+                    automaticEloByCompetitionSeason = listOf(
+                        CompetitionSeasonWalkForwardMetrics("League A","2024-25",20,18,2,0.51,1.04),
+                    ),
                     automaticEloExperiment = null,
                     automaticGoalComparison = null,
                     importedCompetitionCodes = listOf("TEST"),
@@ -192,6 +197,8 @@ class FootballTabUiInstrumentedTest {
 
         composeRule.onNodeWithText("TEST").performClick()
         composeRule.onNodeWithText("Рассчитать walk-forward").performScrollTo().performClick()
+        composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
+        composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertIsDisplayed()
 
         assertEquals("TEST", selectedCompetition)
         assertEquals("TEST", requestedBacktest)

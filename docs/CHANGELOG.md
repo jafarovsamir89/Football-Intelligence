@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — разбить Elo walk-forward по лигам и сезонам
+
+- Сохранять исходную метку сезона в walk-forward target и группировать уже рассчитанные строгие as-of Elo оценки по соревнованию и сезону. Пропущенные метки остаются неизвестными; даты не используются для их угадывания. Экран показывает Brier/Log Loss, coverage и предупреждение для n<30. Добавлены unit и Compose regression tests.
+
 ## Unreleased — добавить парные интервалы сравнения моделей (CI/API 26/API 34 passed)
 
 - Add deterministic 2,000-resample paired percentile-bootstrap 95% intervals for Elo-minus-Poisson and Elo-minus-Home/Away Brier/Log Loss differences on shared chronological holdout fixtures. Require at least 30 paired fixtures, label negative loss differences as favoring Elo, and document the independence limitation from recurring teams/rounds. Intervals are descriptive and never tune the holdout or live model. Local grouped verification passed 175 JVM tests, Android-test Kotlin compilation and both APK builds. Actions [43274830661](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43274830661) passed the unit task, 56 API 34 tests, API 26 with one offline-only skip, keyless builds, signing and upload `13969583772`.

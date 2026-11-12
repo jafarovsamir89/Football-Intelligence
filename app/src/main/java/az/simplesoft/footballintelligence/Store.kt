@@ -17,6 +17,7 @@ import az.simplesoft.footballintelligence.analytics.EloExperimentDataset
 import az.simplesoft.footballintelligence.analytics.EloParameterExperimentEngine
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonEngine
 import az.simplesoft.footballintelligence.analytics.AutomaticBacktestReports
+import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetricsBuilder
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastObservation
 import az.simplesoft.footballintelligence.analytics.isProspectiveForecastEligible
@@ -778,7 +779,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 val safeAvailability=if(c.isNull(7)) Long.MAX_VALUE else c.getLong(7)
                 val row=Row(
                     HistoricalMatch(kickoff,home,away,homeGoals,awayGoals,safeAvailability),
-                    WalkForwardTarget(c.getInt(0).toString(),cutoff,home,away,homeGoals,awayGoals),
+                    WalkForwardTarget(c.getInt(0).toString(),cutoff,home,away,homeGoals,awayGoals,season),
                 )
                 byLeague.getOrPut(c.getString(1)) { mutableListOf() }.add(row)
             }
@@ -789,6 +790,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         val reports=datasets.map { dataset ->
             EloWalkForwardEngine.evaluate(dataset.history,dataset.targets)
         }
+        val eloByCompetitionSeason=CompetitionSeasonWalkForwardMetricsBuilder.build(datasets,reports)
         val predictions=reports.flatMap { it.predictions }
         val walkForward=EloWalkForwardReport(
             targetCount=reports.sumOf { it.targetCount },
@@ -800,7 +802,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         )
         val parameterExperiment=EloParameterExperimentEngine.evaluate(datasets)
         val goalModelComparison=GoalModelComparisonEngine.evaluate(datasets,parameterExperiment)
-        return AutomaticBacktestReports(walkForward,parameterExperiment,goalModelComparison)
+        return AutomaticBacktestReports(walkForward,parameterExperiment,goalModelComparison,eloByCompetitionSeason)
     }
     fun recordProspectiveForecastSnapshots(
         forecasts:List<ForecastedMatch>,

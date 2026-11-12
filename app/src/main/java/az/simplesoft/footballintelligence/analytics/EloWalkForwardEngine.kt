@@ -9,6 +9,8 @@ data class WalkForwardTarget(
     val awayTeam: String,
     val homeGoals: Int,
     val awayGoals: Int,
+    /** Exact source season label, when supplied. Never infer it from the event date. */
+    val season: String? = null,
 )
 
 data class WalkForwardPrediction(
