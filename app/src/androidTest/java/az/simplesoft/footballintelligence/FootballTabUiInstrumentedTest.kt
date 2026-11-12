@@ -195,7 +195,7 @@ class FootballTabUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("TEST").performClick()
+        composeRule.onNodeWithText("TEST").performScrollTo().performClick()
         composeRule.onNodeWithText("Рассчитать walk-forward").performScrollTo().performClick()
         composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
         composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertIsDisplayed()
