@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — add the screen persistence boundary (Actions pending)
+
+- Route screen reads and writes through `FootballScreenRepository`; its SQLite adapter confines operations to `Dispatchers.IO`. Keep background Worker and schema-migration access on the existing `Store`.
+- Run both public bookmaker-page collectors in lifecycle-bound Compose coroutines, with visible-text parsing on `Dispatchers.Default`, cancellation handling and repository persistence for success and failure states.
+- Extend isolated SQLite instrumentation coverage through the repository. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; APK SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`. Actions/API matrix is pending.
+
 ## Load the Compose screen read model asynchronously (CI verified)
 
 - Group the screen's match, provider, odds, coupon and forecast-history queries in an immutable read model fetched on `Dispatchers.IO`. Compose keeps the last successful snapshot when a later read fails and shows the database error; bookmaker WebViews wait for the first stored freshness state so launch does not bypass the 30-minute capture gate.

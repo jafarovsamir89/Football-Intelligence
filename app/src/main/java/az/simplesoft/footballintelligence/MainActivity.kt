@@ -13,6 +13,7 @@ import android.database.Cursor
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import android.content.ContentValues
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -43,6 +44,7 @@ import java.util.Locale
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.MarginMethod
@@ -83,6 +85,8 @@ import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.analytics.TeamDataQuality
 import az.simplesoft.footballintelligence.analytics.isFreshQuote
 import az.simplesoft.footballintelligence.data.FootballDataCsvImporter
+import az.simplesoft.footballintelligence.data.FootballScreenRepository
+import az.simplesoft.footballintelligence.data.StoreFootballScreenRepository
 import az.simplesoft.footballintelligence.data.FootballCsvImportReport
 import az.simplesoft.footballintelligence.data.StoredFootballCsvImport
 import az.simplesoft.footballintelligence.data.ImportedHistoryRow
@@ -1455,16 +1459,16 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
 }
 
 class MainActivity:ComponentActivity() {
-    private lateinit var store:Store
+    private lateinit var screenRepository:FootballScreenRepository
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
-        store=Store(this)
+        screenRepository=StoreFootballScreenRepository(Store(this))
         FootballSyncScheduler.scheduleOnAppOpen(this)
-        setContent { FootballScreen(store) }
+        setContent { FootballScreen(screenRepository) }
     }
     override fun onDestroy() {
-        store.close()
         super.onDestroy()
+        screenRepository.close()
     }
 }
 
@@ -1472,9 +1476,25 @@ class MainActivity:ComponentActivity() {
  * Reads only the visible rendered content of Misli's public football page. The WebView uses the
  * ordinary Android user agent and never visits account, ticket, API, or live-detail paths.
  */
-@Composable private fun MisliPublicPageCollector(store:Store,previousCheck:Long?,onCaptured:()->Unit) {
+private suspend fun persistBookmakerCaptureFailure(
+    repository: FootballScreenRepository,
+    providerId: String,
+    checkedAtMillis: Long,
+    detail: String,
+) {
+    try {
+        repository.saveBookmakerCapture(providerId, checkedAtMillis, OddsProviderStatus.ERROR, emptyList(), detail)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        Log.e("BookmakerCapture", "Could not persist $providerId page-capture failure.", error)
+    }
+}
+
+@Composable private fun MisliPublicPageCollector(repository:FootballScreenRepository,previousCheck:Long?,onCaptured:()->Unit) {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
+    val captureScope=rememberCoroutineScope()
     val now=System.currentTimeMillis()
     val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { MisliOddsProvider() }
@@ -1519,32 +1539,33 @@ class MainActivity:ComponentActivity() {
                             "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
                         ) { encoded ->
                             val checkedAt=System.currentTimeMillis()
-                            try {
-                                val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
-                                val json=when(decoded) {
-                                    is org.json.JSONObject -> decoded
-                                    is String -> org.json.JSONObject(decoded)
-                                    else -> error("Страница не вернула видимые данные.")
+                            captureScope.launch {
+                                try {
+                                    val page=withContext(Dispatchers.Default) {
+                                        val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
+                                        val json=when(decoded) {
+                                            is org.json.JSONObject -> decoded
+                                            is String -> org.json.JSONObject(decoded)
+                                            else -> error("Страница не вернула видимые данные.")
+                                        }
+                                        MisliVisiblePage(
+                                            url=json.optString("url"),title=json.optString("title"),
+                                            visibleText=json.optString("text"),timeZoneId=json.optString("timeZoneId","UTC")
+                                        )
+                                    }
+                                    val fixtures=repository.fixtureIdentities()
+                                    val result=withContext(Dispatchers.Default) { parser.parseVisiblePage(page,checkedAt,fixtures) }
+                                    val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
+                                    repository.saveBookmakerCapture("misli",checkedAt,status,result.snapshots,result.detail)
+                                } catch(error:CancellationException) {
+                                    throw error
+                                } catch(error:Exception) {
+                                    persistBookmakerCaptureFailure(
+                                        repository,"misli",checkedAt,error.message ?: "Не удалось прочитать видимые данные публичной страницы."
+                                    )
+                                } finally {
+                                    if(captureScope.isActive&&!activity.isFinishing) finishCapture(view,checkedAt)
                                 }
-                                val page=MisliVisiblePage(
-                                    url=json.optString("url"),title=json.optString("title"),
-                                    visibleText=json.optString("text"),timeZoneId=json.optString("timeZoneId","UTC")
-                                )
-                                Thread {
-                                    try {
-                                        val result=parser.parseVisiblePage(page,checkedAt,store.matchIdentities())
-                                        val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
-                                        store.saveBookmakerCapture("misli",checkedAt,status,result.snapshots,result.detail)
-                                    } catch(error:Exception) {
-                                        runCatching { store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.") }
-                                    }
-                                    activity.runOnUiThread {
-                                        finishCapture(view,checkedAt)
-                                    }
-                                }.start()
-                            } catch(error:Exception) {
-                                runCatching { store.saveBookmakerCapture("misli",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.") }
-                                finishCapture(view,checkedAt)
                             }
                         }
                     },4_000)
@@ -1572,9 +1593,10 @@ class MainActivity:ComponentActivity() {
 }
 
 /** Uses only the public eTopaz page and selects its ordinary visible "İdman" tab. */
-@Composable private fun TopazPublicPageCollector(store:Store,previousCheck:Long?,onCaptured:()->Unit) {
+@Composable private fun TopazPublicPageCollector(repository:FootballScreenRepository,previousCheck:Long?,onCaptured:()->Unit) {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
+    val captureScope=rememberCoroutineScope()
     val now=System.currentTimeMillis()
     val initialLoadDelay=previousCheck?.let { (BOOKMAKER_CAPTURE_INTERVAL_MILLIS-(now-it)).coerceAtLeast(0L) } ?: 0L
     val parser=remember { TopazOddsProvider() }
@@ -1623,29 +1645,33 @@ class MainActivity:ComponentActivity() {
                                     "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
                                 ) { encoded ->
                                     val checkedAt=System.currentTimeMillis()
-                                    try {
-                                        val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
-                                        val json=when(decoded) {
-                                            is org.json.JSONObject -> decoded
-                                            is String -> org.json.JSONObject(decoded)
-                                            else -> error("Страница eTopaz не вернула видимые данные.")
+                                    captureScope.launch {
+                                        try {
+                                            val page=withContext(Dispatchers.Default) {
+                                                val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
+                                                val json=when(decoded) {
+                                                    is org.json.JSONObject -> decoded
+                                                    is String -> org.json.JSONObject(decoded)
+                                                    else -> error("Страница eTopaz не вернула видимые данные.")
+                                                }
+                                                MisliVisiblePage(
+                                                    url=json.optString("url"),title=json.optString("title"),
+                                                    visibleText=json.optString("text"),timeZoneId=json.optString("timeZoneId","UTC")
+                                                )
+                                            }
+                                            val fixtures=repository.fixtureIdentities()
+                                            val result=withContext(Dispatchers.Default) { parser.parseVisiblePage(page,checkedAt,fixtures) }
+                                            val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
+                                            repository.saveBookmakerCapture("topaz",checkedAt,status,result.snapshots,result.detail)
+                                        } catch(error:CancellationException) {
+                                            throw error
+                                        } catch(error:Exception) {
+                                            persistBookmakerCaptureFailure(
+                                                repository,"topaz",checkedAt,error.message ?: "Не удалось прочитать видимые данные публичной страницы."
+                                            )
+                                        } finally {
+                                            if(captureScope.isActive&&!activity.isFinishing) finishCapture(view,checkedAt)
                                         }
-                                        val page=MisliVisiblePage(json.optString("url"),json.optString("title"),json.optString("text"),json.optString("timeZoneId","UTC"))
-                                        Thread {
-                                            try {
-                                                val result=parser.parseVisiblePage(page,checkedAt,store.matchIdentities())
-                                                val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
-                                                store.saveBookmakerCapture("topaz",checkedAt,status,result.snapshots,result.detail)
-                                            } catch(error:Exception) {
-                                                runCatching { store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Ошибка разбора публичной страницы.") }
-                                            }
-                                            activity.runOnUiThread {
-                                                finishCapture(view,checkedAt)
-                                            }
-                                        }.start()
-                                    } catch(error:Exception) {
-                                        runCatching { store.saveBookmakerCapture("topaz",checkedAt,OddsProviderStatus.ERROR,emptyList(),error.message ?: "Не удалось прочитать видимый текст.") }
-                                        finishCapture(view,checkedAt)
                                     }
                                 }
                             },3_000)
@@ -1670,10 +1696,10 @@ class MainActivity:ComponentActivity() {
     AndroidView(factory={webView},modifier=Modifier.size(1.dp).alpha(0.01f))
 }
 
-@Composable fun FootballScreen(store:Store) {
+@Composable fun FootballScreen(repository:FootballScreenRepository) {
     val activity = LocalContext.current as ComponentActivity
     val coroutineScope = rememberCoroutineScope()
-    var storeLoadState by remember(store) { mutableStateOf(FootballScreenStoreLoadState()) }
+    var storeLoadState by remember(repository) { mutableStateOf(FootballScreenStoreLoadState()) }
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -1702,9 +1728,9 @@ class MainActivity:ComponentActivity() {
     val marketReferencePeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val internationalOddsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val internationalOddsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
-    LaunchedEffect(store,revision,selected) {
+    LaunchedEffect(repository,revision,selected) {
         try {
-            val snapshot=store.readFootballScreenSnapshot(selected.takeIf { it>=0 })
+            val snapshot=repository.readScreenSnapshot(selected.takeIf { it>=0 })
             storeLoadState=FootballScreenStoreLoadState(
                 snapshot=snapshot,
                 loaded=true,
@@ -1750,7 +1776,7 @@ class MainActivity:ComponentActivity() {
         if(match==null||match.finished||kickoff==null||!match.exactKickoff) {
             eloForecast=null
         } else {
-            val history=withContext(Dispatchers.IO) { store.historicalResultsBefore(match.league,kickoff) }
+            val history=repository.historicalResultsBefore(match.league,kickoff)
             eloForecast=withContext(Dispatchers.Default) {
                 EloEngine.forecast(history,kickoff,match.home,match.away)
             }
@@ -1825,15 +1851,11 @@ class MainActivity:ComponentActivity() {
         VirtualCouponBuilder.buildAccumulators(forecastedMatches,oddsProviders.map { it.providerId to it.displayName },bookmakerCouponPrices)
     }
     LaunchedEffect(forecastedMatches) {
-        val recordsChanged=withContext(Dispatchers.IO) {
-            store.recordProspectiveForecastSnapshots(forecastedMatches)+store.settleProspectiveForecastSnapshots()
-        }
+        val recordsChanged=repository.recordProspectiveForecastsAndSettle(forecastedMatches)
         if(recordsChanged>0) revision++
     }
     LaunchedEffect(modelPickDrafts,accumulatorDrafts) {
-        val recordsAdded=withContext(Dispatchers.IO) {
-            store.recordCouponCandidates(modelPickDrafts)+store.recordAccumulatorDrafts(accumulatorDrafts)
-        }
+        val recordsAdded=repository.recordCouponDrafts(modelPickDrafts,accumulatorDrafts)
         if(recordsAdded>0) revision++
     }
     val checkedCouponHistory=storeSnapshot.checkedCouponHistory
@@ -1883,7 +1905,7 @@ class MainActivity:ComponentActivity() {
                         FootballDataCsvImporter.parse(FootballDataCsvImporter.decode(bytes),fallback)
                     }
                     require(report.results.isNotEmpty()) { "Не найдено корректных завершённых матчей. Проверь Date, HomeTeam, AwayTeam, FTHG/HG и FTAG/AG." }
-                    val stored=withContext(Dispatchers.IO) { store.importHistoricalResults(fileName,report) }
+                    val stored=repository.importHistoricalResults(fileName,report)
                     revision++
                     importingCsv=false
                     backtestReport=null
@@ -1908,8 +1930,8 @@ class MainActivity:ComponentActivity() {
         backtestReportCode=""
         coroutineScope.launch {
             try {
-                val (history,targets)=withContext(Dispatchers.IO) {
-                    val rows=store.importedHistory(competitionCode)
+                val rows=repository.importedHistory(competitionCode)
+                val (history,targets)=withContext(Dispatchers.Default) {
                     val historicalMatches=rows.map { row ->
                         HistoricalMatch(
                             kickoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
@@ -1952,7 +1974,7 @@ class MainActivity:ComponentActivity() {
         automaticBacktestMessage="Расчёт по локальной автоматической истории…"
         coroutineScope.launch {
             try {
-                val reports=withContext(Dispatchers.IO) { store.automaticBacktestReports() }
+                val reports=repository.automaticBacktestReports()
                 automaticBacktestReport=reports.eloWalkForward
                 automaticEloExperiment=reports.eloParameterExperiment
                 automaticGoalComparison=reports.goalModelComparison
@@ -1970,8 +1992,8 @@ class MainActivity:ComponentActivity() {
 
     MaterialTheme {
       if(storeLoadState.loaded) {
-          MisliPublicPageCollector(store,misliSyncState?.lastCheckedAtMillis) { revision++ }
-          TopazPublicPageCollector(store,topazSyncState?.lastCheckedAtMillis) { revision++ }
+          MisliPublicPageCollector(repository,misliSyncState?.lastCheckedAtMillis) { revision++ }
+          TopazPublicPageCollector(repository,topazSyncState?.lastCheckedAtMillis) { revision++ }
       }
       Scaffold(topBar={ Surface(color=MaterialTheme.colorScheme.primaryContainer) {
         Column(Modifier.fillMaxWidth().padding(16.dp)) {

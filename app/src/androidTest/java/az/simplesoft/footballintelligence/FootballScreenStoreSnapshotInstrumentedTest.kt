@@ -2,6 +2,7 @@ package az.simplesoft.footballintelligence
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import az.simplesoft.footballintelligence.data.StoreFootballScreenRepository
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -39,7 +40,9 @@ class FootballScreenStoreSnapshotInstrumentedTest {
                 store.saveQuote(matchId, "Example Book", 2.0, 3.2, 4.1)
                 store.savePick(matchId, "snapshot-test", "H")
 
-                val snapshot = store.readFootballScreenSnapshot(matchId)
+                val repository = StoreFootballScreenRepository(store)
+                val snapshot = repository.readScreenSnapshot(matchId)
+                val identities = repository.fixtureIdentities()
 
                 assertEquals(matchId, snapshot.matches.single().id)
                 assertEquals("Snapshot League", snapshot.matches.single().league)
@@ -47,6 +50,7 @@ class FootballScreenStoreSnapshotInstrumentedTest {
                 assertEquals("H", snapshot.selectedPicks.single().outcome)
                 assertTrue(snapshot.ticketMatches.isEmpty())
                 assertTrue(snapshot.historicalByLeague.isEmpty())
+                assertEquals(matchId, identities.single().matchId)
             }
         } finally {
             context.deleteDatabase(databaseName)

@@ -20,9 +20,9 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 
 ### Compose and SQLite reads
 
-`FootballScreenStoreSnapshot.kt` groups the Compose screen's SQLite reads into an immutable read model fetched on `Dispatchers.IO`. The screen retains its last successful data if a later read fails and surfaces that failure in the source-status area. The first bookmaker WebView capture waits for the stored last-check time so asynchronous screen loading preserves the existing freshness gate. Database writes and domain calculations remain in their current Store/analytics boundaries; the read model does not change SQLite schema or migration behavior.
+`FootballScreenStoreSnapshot.kt` groups the Compose screen's SQLite reads into an immutable read model fetched on `Dispatchers.IO`. `FootballScreenRepository` is the screen-facing persistence boundary for that read model, fixture history, bookmaker captures, forecast/coupon writes, CSV import, and backtest data. Its SQLite adapter confines operations to `Dispatchers.IO`; WorkManager and migration tests may still use `Store` directly. Both public bookmaker WebViews parse and persist within the Compose lifecycle coroutine scope, so destroying the screen cancels pending work. Parsing remains on `Dispatchers.Default`. The screen retains its last successful data if a later read fails and surfaces that failure in the source-status area. The first bookmaker WebView capture waits for the stored last-check time so asynchronous screen loading preserves the existing freshness gate. This boundary does not change SQLite schema or migration behavior.
 
-The v16 screen-read model and selected-fixture path are covered by an isolated SQLite instrumentation test. Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684) passed all 32 tests on API 34 and the API 26 suite with its radio-state test skipped; the debug APK was built and stable-signed. Next, extract a repository boundary around screen reads before deciding whether a Room migration is warranted.
+The v16 screen-read model and repository adapter are covered by an isolated SQLite instrumentation test. The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly; Actions verification is pending. No schema change or emulator install was made. Room remains a separate decision: preserve the existing SQLite v16 database until a measured need and non-destructive migration plan justify replacing the helper.
 
 ## Provider and persistence rules
 
@@ -59,6 +59,6 @@ The v16 screen-read model and selected-fixture path are covered by an isolated S
 
 1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
 2. Verify the international market and local bookmaker collectors on a physical Android phone in Azerbaijan. The latest CI APK has not been installed there; app access, source availability and fresh current prices remain unverified. Preserve local data and require the user's explicit 18+ confirmation before MoviOdds access.
-3. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests justify the added migration surface.
+3. Continue extracting provider and domain boundaries from `MainActivity.kt`; assess Room + Flow only when migration and backup tests justify the added migration surface.
 4. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.
 5. Continue collecting prospective forecast outcomes; do not report forward accuracy until saved snapshots have settled.

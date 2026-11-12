@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-12 — extract the screen repository and scope bookmaker capture work (local checks passed; Actions pending)
+
+- Added `FootballScreenRepository` and a SQLite adapter for Compose screen reads, fixture history, prospective forecast settlement, coupon drafts, CSV history/import, backtest reports, and bookmaker capture persistence. All adapter database methods run on `Dispatchers.IO`; WorkManager retains its direct `Store` use. No SQLite schema or migration changed.
+- Routed Compose through the repository and converted TOPAZ's remaining raw thread/UI-thread callback to the same lifecycle-bound coroutine pattern as Misli. Visible-page decoding and parser work run on `Dispatchers.Default`; cancellation propagates, and capture errors are saved as `ERROR` without synthesizing odds. A static scan found no direct `store` access or raw `Thread` in `MainActivity`.
+- Extended `FootballScreenStoreSnapshotInstrumentedTest` to load the selected screen data and fixture identity through the repository against a uniquely named disposable database.
+- The one grouped local run, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly. APK SHA-256: `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`; `git diff --check` passed. The Android instrumentation test is compiled locally but awaits GitHub's API 26/API 34 run.
+- No emulator/phone install or persistent database change was performed. Next: commit and push this grouped stage, inspect Actions and signed APK, then continue the provider/domain boundary review. Keep SQLite v16 until a separately justified, data-preserving Room migration plan exists.
+
 ## 2026-11-12 — move Compose screen reads off the main thread (local and CI checks passed)
 
 - Added `FootballScreenStoreSnapshot`, an immutable read model that gathers the screen's SQLite match, result, provider, odds, quote/pick, ticket, coupon and forecast-ledger data on `Dispatchers.IO`. The Compose screen now updates only after the read finishes, retains the last successful snapshot on subsequent read failure, and displays a database read error instead of treating an empty result as an empty database.
