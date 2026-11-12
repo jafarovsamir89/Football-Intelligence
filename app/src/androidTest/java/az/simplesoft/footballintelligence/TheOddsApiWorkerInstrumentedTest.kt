@@ -208,11 +208,19 @@ class TheOddsApiWorkerInstrumentedTest {
             manager.enqueueUniquePeriodicWork(
                 TheOddsApiScheduler.UNIQUE_PERIODIC_NAME,
                 ExistingPeriodicWorkPolicy.KEEP,
-                PeriodicWorkRequestBuilder<TheOddsApiOddsWorker>(24, TimeUnit.HOURS).build(),
+                PeriodicWorkRequestBuilder<TheOddsApiOddsWorker>(24, TimeUnit.HOURS)
+                    .setInitialDelay(24, TimeUnit.HOURS)
+                    .build(),
             ).result.get(10, TimeUnit.SECONDS)
             assertEquals(TimeUnit.HOURS.toMillis(24), awaitOne(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME).periodicityInfo?.repeatIntervalMillis)
 
-            TheOddsApiScheduler.enqueueForFreshness(context, null, System.currentTimeMillis(), apiKeyAvailable = true)
+            TheOddsApiScheduler.enqueueForFreshness(
+                context,
+                null,
+                System.currentTimeMillis(),
+                immediateInitialDelayMillis = TimeUnit.MINUTES.toMillis(5),
+                apiKeyAvailable = true,
+            )
             val once = awaitOne(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME)
             val periodic = awaitPeriodicInterval(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME, TimeUnit.HOURS.toMillis(2))
             assertEquals(WorkInfo.State.ENQUEUED, once.state)
