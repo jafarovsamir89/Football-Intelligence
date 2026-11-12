@@ -1,5 +1,9 @@
 package az.simplesoft.footballintelligence.analytics
 
+import java.util.Random
+import kotlin.math.ceil
+import kotlin.math.floor
+
 data class GoalModelComparisonReport(
     val validationStartMillis: Long?,
     val holdoutStartMillis: Long?,
@@ -21,6 +25,11 @@ data class GoalModelComparisonReport(
     val goalPairedHoldout: EloExperimentMetrics,
     val eloHomeAwayPairedHoldout: EloExperimentMetrics,
     val homeAwayPairedHoldout: EloExperimentMetrics,
+    val eloMinusPoissonBrier95: MetricConfidenceInterval95?,
+    val eloMinusPoissonLogLoss95: MetricConfidenceInterval95?,
+    val eloMinusHomeAwayBrier95: MetricConfidenceInterval95?,
+    val eloMinusHomeAwayLogLoss95: MetricConfidenceInterval95?,
+    val minimumPairedFixturesForIntervals: Int,
     val selectedEloConfig: EloConfig,
     val usedValidationSelectedEloConfig: Boolean,
     val goalConfig: GoalExpectationConfig,
@@ -43,9 +52,16 @@ object GoalModelComparisonEngine {
     /** Conservative values valid across the model's bounded 0.05–5.0 goal rates. */
     val DIXON_COLES_RHO_GRID: List<Double> = listOf(-0.15, -0.10, -0.05, 0.0, 0.02)
     const val DEFAULT_MINIMUM_VALIDATION_FORECASTS_FOR_RHO_SELECTION = 100
+    const val MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS = 30
+    private const val BOOTSTRAP_RESAMPLES = 2_000
 
     private data class ModelScore(val brier: Double, val logLoss: Double)
     private data class FixtureKey(val competition: String, val targetId: String)
+    private data class PairedDifference(val brier: Double, val logLoss: Double)
+    private data class PairedIntervals(
+        val brier: MetricConfidenceInterval95,
+        val logLoss: MetricConfidenceInterval95,
+    )
 
     fun evaluate(
         datasets: List<EloExperimentDataset>,
@@ -82,6 +98,11 @@ object GoalModelComparisonEngine {
                 goalPairedHoldout = empty,
                 eloHomeAwayPairedHoldout = empty,
                 homeAwayPairedHoldout = empty,
+                eloMinusPoissonBrier95 = null,
+                eloMinusPoissonLogLoss95 = null,
+                eloMinusHomeAwayBrier95 = null,
+                eloMinusHomeAwayLogLoss95 = null,
+                minimumPairedFixturesForIntervals = MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS,
                 selectedEloConfig = eloConfig,
                 usedValidationSelectedEloConfig = eloExperiment.selectionAvailable,
                 goalConfig = baseGoalConfig,
@@ -158,6 +179,8 @@ object GoalModelComparisonEngine {
         val goalPaired = pairedMetrics(commonKeys.size, commonGoal)
         val eloHomeAwayPaired = pairedMetrics(commonHomeAwayKeys.size, commonHomeAwayElo)
         val homeAwayPaired = pairedMetrics(commonHomeAwayKeys.size, commonHomeAway)
+        val eloMinusPoissonIntervals = pairedBootstrapIntervals("elo-poisson", commonKeys, eloScores, goalScores)
+        val eloMinusHomeAwayIntervals = pairedBootstrapIntervals("elo-home-away", commonHomeAwayKeys, eloScores, homeAwayScores)
         return GoalModelComparisonReport(
             validationStartMillis = validationStart,
             holdoutStartMillis = holdoutStart,
@@ -174,6 +197,11 @@ object GoalModelComparisonEngine {
             goalPairedHoldout = goalPaired,
             eloHomeAwayPairedHoldout = eloHomeAwayPaired,
             homeAwayPairedHoldout = homeAwayPaired,
+            eloMinusPoissonBrier95 = eloMinusPoissonIntervals?.brier,
+            eloMinusPoissonLogLoss95 = eloMinusPoissonIntervals?.logLoss,
+            eloMinusHomeAwayBrier95 = eloMinusHomeAwayIntervals?.brier,
+            eloMinusHomeAwayLogLoss95 = eloMinusHomeAwayIntervals?.logLoss,
+            minimumPairedFixturesForIntervals = MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS,
             selectedEloConfig = eloConfig,
             usedValidationSelectedEloConfig = eloExperiment.selectionAvailable,
             selectedRhoValidationMetrics = selectedRho?.validation,
@@ -239,6 +267,68 @@ object GoalModelComparisonEngine {
             meanBrierScore = scores.map { it.brier }.average().takeIf { scores.isNotEmpty() },
             meanLogLoss = scores.map { it.logLoss }.average().takeIf { scores.isNotEmpty() },
         )
+
+    /** Bootstrap fixture-wise Elo-minus-baseline score deltas; the holdout is never tuned. */
+    private fun pairedBootstrapIntervals(
+        label: String,
+        fixtureKeys: Set<FixtureKey>,
+        eloScores: Map<FixtureKey, ModelScore>,
+        baselineScores: Map<FixtureKey, ModelScore>,
+    ): PairedIntervals? {
+        if (fixtureKeys.size < MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS) return null
+        val orderedKeys = fixtureKeys.sortedWith(compareBy<FixtureKey> { it.competition }.thenBy { it.targetId })
+        val differences = orderedKeys.map { key ->
+            val elo = requireNotNull(eloScores[key])
+            val baseline = requireNotNull(baselineScores[key])
+            PairedDifference(elo.brier - baseline.brier, elo.logLoss - baseline.logLoss)
+        }
+        val random = Random(stableSeed(label, orderedKeys))
+        val brierSamples = DoubleArray(BOOTSTRAP_RESAMPLES)
+        val logLossSamples = DoubleArray(BOOTSTRAP_RESAMPLES)
+        repeat(BOOTSTRAP_RESAMPLES) { sampleIndex ->
+            var brierSum = 0.0
+            var logLossSum = 0.0
+            repeat(differences.size) {
+                val row = differences[random.nextInt(differences.size)]
+                brierSum += row.brier
+                logLossSum += row.logLoss
+            }
+            brierSamples[sampleIndex] = brierSum / differences.size
+            logLossSamples[sampleIndex] = logLossSum / differences.size
+        }
+        return PairedIntervals(
+            brier = percentileInterval95(brierSamples),
+            logLoss = percentileInterval95(logLossSamples),
+        )
+    }
+
+    private fun stableSeed(label: String, keys: List<FixtureKey>): Long {
+        var seed = -3750763034362895579L
+        fun mix(value: String) {
+            value.forEach { character ->
+                seed = (seed xor character.code.toLong()) * 1099511628211L
+            }
+            seed = (seed xor 0xffL) * 1099511628211L
+        }
+        mix(label)
+        keys.forEach { key ->
+            mix(key.competition)
+            mix(key.targetId)
+        }
+        return seed
+    }
+
+    private fun percentileInterval95(samples: DoubleArray): MetricConfidenceInterval95 {
+        val sorted = samples.sortedArray()
+        fun percentile(fraction: Double): Double {
+            val index = (sorted.lastIndex * fraction).coerceIn(0.0, sorted.lastIndex.toDouble())
+            val lowerIndex = floor(index).toInt()
+            val upperIndex = ceil(index).toInt()
+            val weight = index - lowerIndex
+            return sorted[lowerIndex] * (1.0 - weight) + sorted[upperIndex] * weight
+        }
+        return MetricConfidenceInterval95(percentile(0.025), percentile(0.975))
+    }
 
     private fun List<EloExperimentDataset>.selectTargets(
         predicate: (Long) -> Boolean,

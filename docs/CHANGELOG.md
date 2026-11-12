@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — добавить парные интервалы сравнения моделей (local checks passed; Actions pending)
+
+- Add deterministic 2,000-resample paired percentile-bootstrap 95% intervals for Elo-minus-Poisson and Elo-minus-Home/Away Brier/Log Loss differences on shared chronological holdout fixtures. Require at least 30 paired fixtures, label negative loss differences as favoring Elo, and document the independence limitation from recurring teams/rounds. Intervals are descriptive and never tune the holdout or live model. Local grouped verification passed 175 JVM tests, Android-test Kotlin compilation and both APK builds; Actions remains pending.
+
 ## Unreleased — добавить venue-split Home/Away baseline (CI/API 26/API 34 passed)
 
 - Add a separate research model for home-team home scoring/conceding and away-team away scoring/conceding, shrink venue rates toward league rates, and gate forecasts on prior league and venue-specific sample sizes. Run it through strict availability walk-forward and report validation plus paired Elo holdout metrics. It does not alter live forecasts, virtual coupons, or model selection. Local grouped cycle passed 174 JVM tests, Android-test Kotlin compilation and both APK assemblies. Actions [43269913184](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43269913184) passed 56 API 34 tests and all 56 discovered API 26 tests with one offline-only skip and zero failures; keyless builds succeeded and debug artifact `13968736908` was uploaded. Downloaded APK SHA-256 `d790d87706eab44cbb48196546327cf2aada6d7642849204552fcfb5d1bafc3b`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; personal credential absent.

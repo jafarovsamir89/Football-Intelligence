@@ -116,6 +116,10 @@ internal fun FootballBacktestTabContent(
                             "Holdout на общих матчах ${comparison.pairedHoldoutTargetCount}: Elo ${eloPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${eloPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Poisson ${goalPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${goalPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}. Доступность прогнозов на holdout: Elo ${comparison.eloHoldoutForecastCount}, Poisson ${comparison.goalHoldoutForecastCount} из ${comparison.holdoutTargetCount}.",
                             style=MaterialTheme.typography.bodySmall,
                         )
+                        Text(
+                            "Парный bootstrap 95% Elo−Poisson (Δ=Elo−Poisson; минус означает ниже loss), n=${comparison.pairedHoldoutTargetCount}: Brier ${comparison.eloMinusPoissonBrier95?.let { "[%.4f; %.4f]".format(it.lower, it.upper) } ?: "не рассчитан при n<${comparison.minimumPairedFixturesForIntervals}"}; Log Loss ${comparison.eloMinusPoissonLogLoss95?.let { "[%.4f; %.4f]".format(it.lower, it.upper) } ?: "не рассчитан при n<${comparison.minimumPairedFixturesForIntervals}"}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
                         val eloHomeAwayPaired=comparison.eloHomeAwayPairedHoldout
                         val homeAwayPaired=comparison.homeAwayPairedHoldout
                         Text(
@@ -123,11 +127,15 @@ internal fun FootballBacktestTabContent(
                             style=MaterialTheme.typography.bodySmall,
                         )
                         Text(
+                            "Парный bootstrap 95% Elo−Home/Away (Δ=Elo−Home/Away; минус означает ниже loss), n=${comparison.homeAwayPairedHoldoutTargetCount}: Brier ${comparison.eloMinusHomeAwayBrier95?.let { "[%.4f; %.4f]".format(it.lower, it.upper) } ?: "не рассчитан при n<${comparison.minimumPairedFixturesForIntervals}"}; Log Loss ${comparison.eloMinusHomeAwayLogLoss95?.let { "[%.4f; %.4f]".format(it.lower, it.upper) } ?: "не рассчитан при n<${comparison.minimumPairedFixturesForIntervals}"}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
                             "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}. Poisson использует общие голы команды, Home/Away отдельно считает домашние и гостевые голы и сглаживает их на ${comparison.homeAwayConfig.smoothingMatches.toInt()} псевдоматчах. Для Home/Away нужно ${comparison.homeAwayConfig.minimumLeagueMatches} матчей лиги и минимум ${comparison.homeAwayConfig.minimumMatchesPerSplit} домашних матчей хозяев и гостевых матчей гостей. Holdout не используется для выбора параметров.",
                             style=MaterialTheme.typography.labelSmall,
                         )
                     }
-                    Text("Все сравниваемые модели используют только результаты, доступные до cutoff. Это одна проверка текущих исторических файлов; она не подтверждает будущую точность или преимущество. Home/Away пока исследовательская модель и не влияет на live-прогнозы или купоны.",style=MaterialTheme.typography.labelSmall)
+                    Text("Все сравниваемые модели используют только результаты, доступные до cutoff. Bootstrap независимо пересэмплирует матчи; повторяющиеся команды и туры могут занижать неопределённость. Это одна проверка текущих исторических файлов, не подтверждение будущей точности или преимущества. Home/Away пока исследовательская модель и не влияет на live-прогнозы или купоны.",style=MaterialTheme.typography.labelSmall)
                 }
                 HorizontalDivider()
                 Text("Дополнительный импортированный CSV",fontWeight=FontWeight.SemiBold)

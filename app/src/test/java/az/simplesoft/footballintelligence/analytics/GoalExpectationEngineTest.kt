@@ -111,6 +111,51 @@ class GoalExpectationEngineTest {
         assertFalse(comparison.rhoSelectionAvailable)
         assertNull(comparison.selectedDixonColesRho)
         assertNull(comparison.goalConfig.dixonColesRho)
+        assertTrue(comparison.pairedHoldoutTargetCount < GoalModelComparisonEngine.MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS)
+        assertNull(comparison.eloMinusPoissonBrier95)
+        assertNull(comparison.eloMinusHomeAwayLogLoss95)
+    }
+
+    @Test fun pairedBootstrapIntervalsAreDeterministicAndRespectThirtyFixtureGate() {
+        fun compare(size: Int): GoalModelComparisonReport {
+            val rows = history(size)
+            val dataset = EloExperimentDataset("Synthetic League", rows, targets(rows))
+            val eloReport = EloParameterExperimentEngine.evaluate(
+                datasets = listOf(dataset),
+                parameterGrid = listOf(EloConfig()),
+                minimumHistoryMatches = 0,
+                minimumMatchesPerTeam = 0,
+                minimumValidationForecastsForSelection = 1,
+            )
+            return GoalModelComparisonEngine.evaluate(
+                datasets = listOf(dataset),
+                eloExperiment = eloReport,
+                goalConfig = GoalExpectationConfig(minimumLeagueMatches = 0, minimumMatchesPerTeam = 0),
+                minimumValidationForecastsForRhoSelection = 1,
+                homeAwayConfig = HomeAwayPerformanceConfig(minimumLeagueMatches = 0, minimumMatchesPerSplit = 0),
+            )
+        }
+
+        val first = compare(200)
+        val repeated = compare(200)
+        assertTrue(first.pairedHoldoutTargetCount >= GoalModelComparisonEngine.MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS)
+        assertTrue(first.homeAwayPairedHoldoutTargetCount >= GoalModelComparisonEngine.MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS)
+        assertNotNull(first.eloMinusPoissonBrier95)
+        assertNotNull(first.eloMinusPoissonLogLoss95)
+        assertNotNull(first.eloMinusHomeAwayBrier95)
+        assertNotNull(first.eloMinusHomeAwayLogLoss95)
+        assertEquals(first.eloMinusPoissonBrier95, repeated.eloMinusPoissonBrier95)
+        assertEquals(first.eloMinusPoissonLogLoss95, repeated.eloMinusPoissonLogLoss95)
+        assertEquals(first.eloMinusHomeAwayBrier95, repeated.eloMinusHomeAwayBrier95)
+        assertEquals(first.eloMinusHomeAwayLogLoss95, repeated.eloMinusHomeAwayLogLoss95)
+
+        val small = compare(100)
+        assertTrue(small.pairedHoldoutTargetCount < GoalModelComparisonEngine.MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS)
+        assertTrue(small.homeAwayPairedHoldoutTargetCount < GoalModelComparisonEngine.MINIMUM_PAIRED_FIXTURES_FOR_INTERVALS)
+        assertNull(small.eloMinusPoissonBrier95)
+        assertNull(small.eloMinusPoissonLogLoss95)
+        assertNull(small.eloMinusHomeAwayBrier95)
+        assertNull(small.eloMinusHomeAwayLogLoss95)
     }
 
     @Test fun dixonColesRhoIsSelectedOnValidationAndUsedForUntouchedHoldout() {

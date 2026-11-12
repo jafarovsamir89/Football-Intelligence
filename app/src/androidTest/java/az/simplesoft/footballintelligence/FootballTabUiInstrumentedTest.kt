@@ -219,6 +219,11 @@ class FootballTabUiInstrumentedTest {
             goalPairedHoldout = metrics,
             eloHomeAwayPairedHoldout = metrics,
             homeAwayPairedHoldout = metrics.copy(targetCount = 1, forecastCount = 1),
+            eloMinusPoissonBrier95 = null,
+            eloMinusPoissonLogLoss95 = null,
+            eloMinusHomeAwayBrier95 = null,
+            eloMinusHomeAwayLogLoss95 = null,
+            minimumPairedFixturesForIntervals = 30,
             selectedEloConfig = EloConfig(),
             usedValidationSelectedEloConfig = true,
             goalConfig = GoalExpectationConfig(),
@@ -247,6 +252,8 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Elo, Poisson и Home/Away performance").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Validation Home/Away:", substring = true).assertExists()
         composeRule.onNodeWithText("Holdout Elo/Home-Away на общих матчах 1:", substring = true).assertExists()
+        composeRule.onNodeWithText("Парный bootstrap 95% Elo−Poisson", substring = true).assertExists()
+        composeRule.onNodeWithText("не рассчитан при n<30", substring = true).assertExists()
         composeRule.onNodeWithText("Home/Away пока исследовательская модель", substring = true).assertExists()
     }
 
