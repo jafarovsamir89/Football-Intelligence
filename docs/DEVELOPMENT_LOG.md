@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — direct UI coverage for extracted Compose tabs (in progress)
+
+- The five extracted tab panels passed local compilation and the prior grouped CI instrumentation, but existing Android tests did not exercise Compose nodes or callbacks. Added `FootballTabUiInstrumentedTest.kt` with five focused tests for Matches, Coupons, Results, Backtest and Settings, using static inputs and asserting rendered content and selection/import/backtest/toggle callbacks. Added Compose UI test rules and the manifest dependency.
+- The only currently connected ADB target is emulator `5558`; the app package is not installed, so its saved forecast ledger cannot be inspected without an install. Avoid installing or altering its data for this stage. Run one grouped local test/build and one CI cycle after the test dependencies and cases are complete.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`. `git diff --check` passed. The fresh-emulator UI test run in GitHub Actions is the remaining verification for this stage.
+
 ## 2026-11-12 — extract the remaining Compose panels (CI passed)
 
 - Extracted Matches, Results and Settings into `FootballBrowseTabs.kt`, Coupons into `FootballCouponTab.kt`, and walk-forward/CSV diagnostics into `FootballBacktestTab.kt`. The screen host continues to own app state, local persistence, forecast and coupon calculations, and user actions; child panels receive read models and callbacks explicitly.
