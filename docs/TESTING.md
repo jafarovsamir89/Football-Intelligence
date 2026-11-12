@@ -1,5 +1,11 @@
 # Testing
 
+## International odds link precision and v17 migration (Actions passed)
+
+- JVM coverage checks exact kickoff preference, unique date-only linking, rejection of ambiguous candidates, and refusal to fall back to a date-only row when an exact-time same-day candidate is outside tolerance.
+- API 26/API 34 isolated SQLite coverage checks v16→v17 preservation/backfill and date-only→exact upgrade for saved current/history quotes. Local verification passed 150 JVM tests, Android-test Kotlin compilation and debug/personal assembly; after the exact-match precedence refinement, the 150-test suite passed again.
+- Actions [43200257001](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43200257001) passed 43 API 34 tests and 43 API 26 tests with one existing network/radio-dependent skip and zero failures; keyless variants built, and only debug artifact `13935831014` was signed/uploaded. The personal local APK contains the user's key and remains private. No install or existing database modification occurred.
+
 ## Compose tab interaction coverage (Actions passed)
 
 - `FootballTabUiInstrumentedTest.kt` checks all five extracted tabs with Compose semantics: Matches displays a fixture and calls the selection callback; Coupons expands public prices and keeps Misli/TOPAZ sections distinct; Results renders a saved score; Backtest returns competition selection and run actions; Settings returns CSV text and launch actions.

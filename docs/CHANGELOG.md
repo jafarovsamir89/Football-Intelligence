@@ -1,10 +1,11 @@
 # Changelog
 
-## Track fixture-link precision for international odds
+## Track fixture-link precision for international odds (CI verified)
 
 - Keep exact-kickoff matching, and allow a local date-only fixture only when normalized home/away teams and UTC date identify one unfinished local row. Reject same-day ambiguities, orientation changes, and wrong dates.
 - Store and display whether the link used exact kickoff or a unique date-only fixture. When a later source adds kickoff time, relink the saved international current/history rows and upgrade the basis. Local bookmaker matching remains exact-kickoff-only.
 - Migrate SQLite v16→v17 by adding nullable columns to both international odds tables; previously linked rows are labeled exact, and prices/history remain intact. Add parser, relink-upgrade, schema-migration and UI coverage.
+- Local verification passed 150 JVM tests, Android-test Kotlin compilation and debug/personal APK assembly; after tightening exact-match precedence, all 150 unit tests passed again. Actions [43200257001](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43200257001) passed all 43 API 34 tests and API 26 with 43 passed, one radio-dependent skip and zero failures, then built both variants keyless and uploaded the stable-signed debug artifact `13935831014`. APK hash/signature and the private local APK hash are recorded in `docs/DEVELOPMENT_LOG.md`. No install or persistent database change was made.
 
 ## Correct prospective evaluation sampling (CI verified)
 
