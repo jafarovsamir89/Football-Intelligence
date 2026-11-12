@@ -1,11 +1,11 @@
 # Testing
 
-## The Odds API distributed free-quota schedule (local passed; Actions pending)
+## The Odds API distributed free-quota schedule (local and Actions passed)
 
 - Unit tests verify the two-hour app-open gate, rolling 24-hour limit of 12 attempts and exact boundary, refusal to use a future attempt timestamp, monthly release of a persisted ≤20-credit reserve, and respect for a persisted server retry cooldown.
 - API 26/API 34 WorkManager tests enqueue an old 24-hour periodic request and verify the scheduler updates it to two hours; worker coverage confirms a multi-league catalog is queried one league per run and a second run inside the cooldown makes no request. SharedPreferences instrumentation fills the rolling quota, verifies it opens only as the oldest attempt exits the window, and checks that a low response quota blocks through the first UTC day of the next month.
 - Upgrade gate coverage verifies that the legacy single batch timestamp blocks a new API attempt for the remaining old 24-hour window, since the previous version cannot reveal how many league requests that batch made.
-- The one-market/one-region budget is 12 calls per rolling day maximum; the request gate persists provider quota headers and pauses at a known balance of 20 credits or less until after the next monthly reset. No live API calls are used by tests. The grouped local cycle passed 160 JVM tests, Android-test Kotlin compilation and both APK assemblies. Local API instrumentation is unavailable because ADB lists only unrelated emulator `5558`; Actions must verify API 26/34 instrumentation and keyless artifact creation.
+- The one-market/one-region budget is 12 calls per rolling day maximum; the request gate persists provider quota headers and pauses at a known balance of 20 credits or less until after the next monthly reset. No live API calls are used by tests. The grouped local cycle passed 160 JVM tests, Android-test Kotlin compilation and both APK assemblies. Actions [43227026352](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43227026352) passed API 34 with 46/46 and API 26 with 46/46 complete, one radio-dependent skip and zero failures; keyless variants were signed and only debug artifact `13948652972` was uploaded. Local API instrumentation was unavailable because ADB listed only unrelated emulator `5558`.
 
 ## The Odds API duplicate and catalog-cache freshness (CI/API 26/API 34 passed)
 

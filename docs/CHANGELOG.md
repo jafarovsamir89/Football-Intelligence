@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased — distribute free Odds API refreshes across the day
+## Distribute free Odds API refreshes across the day (CI/API 26/API 34 passed)
 
 - Change from a once-daily batch of 12 leagues to one rotating league per two-hour WorkManager run. A synchronized persisted gate allows at most 12 attempts in any rolling 24-hour window, stores quota response headers, pauses when 20 or fewer credits remain until after the monthly reset window, and honors server `Retry-After` after HTTP 429/503 responses.
 - On upgrade, wait out the old 24-hour batch window because the prior version stored only a batch timestamp, not one time per league request.
 - Update existing periodic work with WorkManager `UPDATE` so installations migrate from the old 24-hour schedule. Network-connected and best-effort Android behavior remains in force.
-- Add tests for two-hour staleness, rolling request limits, quota reserve and monthly reset, retry cooldown, one-league worker runs, and migration of an already-enqueued 24-hour periodic request. The final grouped local cycle passed 160 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly; Actions API 26/34 verification is pending. APK hashes and the local signer fingerprint are in `docs/DEVELOPMENT_LOG.md`.
+- Add tests for two-hour staleness, rolling request limits, quota reserve and monthly reset, retry cooldown, one-league worker runs, and migration of an already-enqueued 24-hour periodic request. The final local cycle passed 160 JVM tests and both APK builds. Actions [43227026352](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43227026352) passed 46 API 34 tests and API 26 with 46/46 complete, one existing radio-dependent skip and zero failures. Both variants built keyless in CI; only debug artifact `13948652972` was uploaded. Downloaded APK SHA-256 `e59393fb49b164c5c5145e06fae62ce1f9491a6b7dce14a58906815ec683f131`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; no personal key found. Full hashes and local APK audit are in `docs/DEVELOPMENT_LOG.md`.
 
 ## Prefer freshest duplicate Odds API lines and validate catalog-cache clock (CI verified)
 
