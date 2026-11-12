@@ -64,7 +64,7 @@
 
 ## Проверки текущей ревизии
 
-- Последний кодовый milestone `1eff091` прошёл Actions [43252033127](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43252033127): локально 163 JVM tests, Android-test Kotlin compilation и debug/personal APK assembly; CI unit-test task, API 34 instrumentation 51/51 и API 26 (51 тест завершён, один сетевой пропуск, без ошибок), сборка keyless вариантов и загрузка только debug artifact `13959732145`.
+- Последний кодовый milestone `2fd46af` прошёл Actions [43265092713](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43265092713): локально 169 JVM tests, Android-test Kotlin compilation и debug/personal APK assembly; CI unit-test task, API 34 instrumentation 55/55 и API 26 с одним offline-only skip и нулём ошибок, keyless сборка обоих вариантов и загрузка debug artifact `13965318819`. Загруженный APK SHA-256 `af132850e1e46abed9be68b0588f5618c2da21e3e77c01984408d8f8903457e0`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; credential отсутствует. APK не устанавливался.
 - The Odds API host POC подтвердил credential/endpoint; Worker, scheduler и SQLite проверены Android instrumentation с fake HTTP. Live key-enabled Worker на Android ещё не запускался. Физический телефон не подключён, единственный ADB target `5558` посторонний и должен оставаться нетронутым.
 - Многосезонная OpenFootball/OpenLigaDB синхронизация, offline cache и update-install ранее проверены на Android; детали и сохранённые количества есть в журнале. Эти проверки не подтверждают запуск The Odds API на телефоне в Азербайджане.
 

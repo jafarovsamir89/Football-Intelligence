@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — add rate-limited automatic current-season match statistics (local checks passed; Actions pending)
+## Unreleased — add rate-limited automatic current-season match statistics (CI/API 26/API 34 passed)
 
 - Add a Football-Data.co.uk worker which makes at most two requests in any rolling seven days, persists the request reservation before HTTP (including failures), rotates one current-season European division at a time, and saves only shots, shots on target, corners, fouls and cards for a unique exact local completed match. The results history shows source, capture time and availability; no CSV odds are parsed or saved, and no model input changes.
-- Add parser, season rollover, rolling-quota, schema migration, fake-network/database integration and Compose display coverage. Local batch passed 169 JVM tests, Android-test Kotlin compilation, `assembleDebug` and `assemblePersonal`. APK hashes: debug `54d558c75c2bcbc8f851d778ccf2d94c5f964b37de205e8467005edda4844182`; private personal `896ec6366593dd67bc22236e1c34d4d8215323baf2f52bc547c1289e4a498b42`. Both local APK signatures verified; DEX audit confirmed the key is absent from debug and present only in the private personal build. GitHub Actions instrumentation remains pending.
+- Add parser, season rollover, rolling-quota, schema migration, fake-network/database integration and Compose display coverage. Local batch passed 169 JVM tests, Android-test Kotlin compilation, `assembleDebug` and `assemblePersonal`. Local APK hashes: debug `54d558c75c2bcbc8f851d778ccf2d94c5f964b37de205e8467005edda4844182`; private personal `896ec6366593dd67bc22236e1c34d4d8215323baf2f52bc547c1289e4a498b42`. Actions [43265092713](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43265092713) passed 55/55 API 34 instrumentation tests and API 26 with one offline-only skip and zero failures; both variants built keyless. Debug artifact `13965318819` has APK SHA-256 `af132850e1e46abed9be68b0588f5618c2da21e3e77c01984408d8f8903457e0` and signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. DEX inspection found no personal credential. No APK installation occurred.
 
 ## Unreleased — repair partially present v17 international odds tables (CI/API 26/API 34 passed)
 
