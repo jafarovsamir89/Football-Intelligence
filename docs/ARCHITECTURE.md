@@ -26,7 +26,7 @@ The v16 screen-read model and repository adapter are covered by an isolated SQLi
 
 The follow-up `6bcb3c5` moved the byte-identical v16 store implementation to `Store.kt`; Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311) passed the added isolated close/reopen persistence check on both API levels, the existing migration/Worker suites, APK build and stable signing. API 26 again printed 33 after 32 declared tests, with one radio-dependent test skipped and zero failures. No database schema change or emulator install was made.
 
-The current source split keeps the Android lifecycle host in `MainActivity.kt`, the native interface and analysis effects in `FootballScreen.kt`, foreground public-page capture in `BookmakerPageCollectors.kt`, and shared app data models in `FootballModels.kt`. This is a same-package source organization change; UI behavior, collectors, and SQLite APIs remain unchanged.
+The current source split keeps the Android lifecycle host in `MainActivity.kt`, the native interface and analysis effects in `FootballScreen.kt`, foreground public-page capture in `BookmakerPageCollectors.kt`, and shared app data models in `FootballModels.kt`. This is a same-package source organization change; UI behavior, collectors, and SQLite APIs remain unchanged. The grouped local cycle passed 131 JVM tests, Android-test compilation, and APK assembly. Actions [43168786087](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43168786087) passed 32 API 34 tests and API 26 instrumentation (one network-radio skip), APK build, and stable signing; the API 26 runner printed 33 after 32 declared tests, with Gradle successful.
 
 ### Persistence technology decision
 

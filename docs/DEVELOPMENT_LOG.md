@@ -1,10 +1,12 @@
 # Development log
 
-## 2026-11-12 — split the activity, Compose screen, and bookmaker collectors (local checks passed; Actions pending)
+## 2026-11-12 — split the activity, Compose screen, and bookmaker collectors (local and Actions checks passed)
 
 - Reduced `MainActivity.kt` to the Activity lifecycle host and moved `FootballScreen`/supporting composables to `FootballScreen.kt`, ordinary public WebView collectors to `BookmakerPageCollectors.kt`, and shared match/quote/pick/ticket models to `FootballModels.kt`.
 - Retained the existing package and declarations used by the repository, Store, workers, tests, and manifest. This source organization batch does not change queries, model calculations, page routes, visible DOM policy, or refresh timing.
-- The single grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `c3e355f713ef5ec132afa4b6813630d058557082049f36c22dc6a0c40df5c4b3`; `git diff --check` passed. Actions must pass API 34 and API 26 before the split is verified. No persistent emulator or phone data is touched.
+- The single grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `c3e355f713ef5ec132afa4b6813630d058557082049f36c22dc6a0c40df5c4b3`; `git diff --check` passed.
+- Commit `5a779ef` passed Actions [43168786087](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43168786087): unit tests, all 32 API 34 instrumentation tests, API 26 instrumentation, APK build, stable signing, and artifact upload `13922000243` (16,890,767 bytes). API 26 logged 32 declared tests, 32/32 with one network-radio skip, then “Finished 33 tests”; Gradle succeeded with zero failures. The radio-off behavior remains unverified on API 26.
+- Downloaded CI APK SHA-256: `c605462a1adb3a354a3d7c65fe4af13ee36aca47793b27c28cb69449f9484862`; `apksigner verify` passed with signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No emulator/phone install or persistent database change was made.
 
 ## 2026-11-12 — separate SQLite ownership from the activity (local and Actions checks passed)
 
