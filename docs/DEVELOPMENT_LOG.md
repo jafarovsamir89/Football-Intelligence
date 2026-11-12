@@ -1,6 +1,6 @@
 # Development log
 
-## 2026-11-12 — integrate a permitted international bookmaker feed (local verification passed; CI correction in progress)
+## 2026-11-12 — integrate a permitted international bookmaker feed (CI passed; Azerbaijan device check pending)
 
 - Researched public Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker pages and reviewed their current terms. Their terms/age/region rules do not support automated extraction or republication in this app; no WebView data collector, page scraper or undocumented route was added. Static-vs-JavaScript page internals were not reverse-engineered because those sources fail the permission gate.
 - MoviOdds documents a free/no-key soccer Full Time Result feed and its terms permit use in one's own app, while requiring users to be 18+ and prohibiting limits/security bypass. The displayed attribution is “bet365 via MoviOdds,” and the app does not imply bet365 endorsement or first-party access. A one-time local 18+ confirmation gates both scheduler and Worker; football and TipsAudit updates remain independent.
@@ -12,8 +12,8 @@
 ### CI follow-up — schema v13 migration expectations
 
 - Actions run [43134637312](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43134637312) passed JVM tests but failed four migration instrumentation assertions because they expected schema v12 after the international-market migration had advanced the database to v13. The failures were in v1, v9, v10 and v11 upgrade tests; no migration/data assertion failed beyond the stale final-version number.
-- Updated those four final-version expectations to v13. The combined local cycle passed again: 119 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Current local APK SHA-256: `8bda323fc03f2f86f454e43bfc6d60735295f68ac565631620bd18941d3738a1`. `git diff --check` passed. The corrected instrumentation tests have not yet run on CI; do not call the milestone CI-verified until the rerun succeeds.
-- ADB currently exposes only emulator `5558`; the Xiaomi is not connected. No app was installed and neither persistent emulator database was touched.
+- Corrected those four final-version expectations to v13. The combined local cycle passed again: 119 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `8bda323fc03f2f86f454e43bfc6d60735295f68ac565631620bd18941d3738a1`. `git diff --check` passed. Follow-up commit `828f469` passed Actions [43135555477](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43135555477): unit tests, all 22 API 34 instrumentation tests, APK build, stable signature, and artifact upload `13907840944` (16,855,155 bytes). Downloaded CI APK SHA-256: `d80cd80c7caa9b4145526012f53bc0d0ad52c280c1959286dec9a32048cab9a1`; signer certificate SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- ADB exposes only emulator `5558`; the physical Xiaomi is disconnected. No app was installed and neither persistent emulator database was touched. The CI APK has not been checked on a physical phone in Azerbaijan; feed availability there and current live prices remain unverified.
 
 ## 2026-11-12 — add a goals-based Poisson holdout comparison (local and Actions verification passed)
 

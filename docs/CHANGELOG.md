@@ -1,13 +1,13 @@
 # Changelog
 
-## Unreleased — add a gated international 1X2 market feed (CI migration-test correction pending)
+## Unreleased — add a gated international 1X2 market feed (CI passed)
 
 - Researched the requested public pages. Oddsbunch, BetExplorer, Oddspedia and OddsPortal terms do not permit automated reuse without consent; Oddschecker has regional limits and can block robotic access. No scraper, WebView collector or undocumented route was added for them.
 - Integrated the documented free/no-key MoviOdds soccer group-40 feed as `Bet365ViaMoviOddsProvider`; the bookmaker label and intermediary attribution remain distinct. The single-book no-vig reference is not called consensus and its prices never enter local Misli/TOPAZ coupons.
 - Added source market-poll and per-outcome price-change timestamps, complete prematch 1X2/suspension/duplicate/exact-fixture gates, a 15-minute freshness window, offline current state, 30-day price-change history, and app-open plus best-effort 30-minute WorkManager refresh.
 - Added a one-time 18+ confirmation gate required by MoviOdds terms, including a Worker-side guard so queued work cannot fetch before consent. The OpenFootball/OpenLigaDB football-data flow is unaffected. Azerbaijan device access and prospective price/model value remain unverified.
 - Direct POC at `2026-11-12T00:39:24Z` received 923 soccer rows; 904 passed the app-equivalent freshness and market-quality filter. These are historical POC observations, not current prices.
-- Local combined verification passed: 119 JVM tests, Android-test Kotlin compilation and debug APK assembly. The first Actions run passed unit tests but found four migration tests still expecting schema v12; those assertions now expect v13. The corrected test/build cycle passed locally; Actions rerun is pending. Current local APK SHA-256 `8bda323fc03f2f86f454e43bfc6d60735295f68ac565631620bd18941d3738a1`. ADB currently lists only emulator `5558`, so no app was installed and persistent emulator data remains untouched.
+- Local combined verification passed: 119 JVM tests, Android-test Kotlin compilation and debug APK assembly. Actions [43135555477](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43135555477) passed all 22 API 34 instrumentation tests, APK build, stable signing and artifact upload `13907840944` (16,855,155 bytes). CI APK SHA-256 `d80cd80c7caa9b4145526012f53bc0d0ad52c280c1959286dec9a32048cab9a1`; certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The Xiaomi is disconnected; the APK was not installed, and emulator databases remain untouched. Public feed behavior on an Azerbaijan physical device is not yet verified.
 
 ## Unreleased — add a chronological goals-based Poisson baseline
 
