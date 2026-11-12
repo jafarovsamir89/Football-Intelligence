@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-12 — verify the supplied Odds API credential and live public feed (host POC passed; Android Worker pending)
+
+- The ignored local `THE_ODDS_API_KEY` is present and was accepted by the official V4 endpoint using the `x-api-key` header. The key value was not printed, committed, or put in an APK during this check.
+- The free `/v4/sports/` catalog returned HTTP 200 with 46 soccer competitions and `x-requests-last: 0`. One EU EPL `/odds` request returned 20 upcoming events and 298 complete future 1X2 bookmaker lines; observed provider update times included 14:37:17–14:37:54 UTC. The response reported that the request cost one credit, cumulative use 3, and 497/500 remaining. This is a host-side source/credential proof, not an Android sync or Azerbaijan availability test. The response was not imported into the app database.
+- Tried a disposable API 34 AVD with the temporary data partition reduced to 2 GB. Emulator 36.4.9 rewrote the setting to its 6 GB default and refused startup because it required 7,372.80 MB while 5,475 MB was available. Deleted only this temporary AVD; existing emulator `5558` and its database were not touched. No physical handset is connected.
+- No code changed, so no APK rebuild or duplicate test run was needed. The current provider implementation remains covered by the latest CI run [43236311635](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43236311635); the host POC complements those automated tests but does not replace live Android verification.
+- Next: run the already-built private personal APK on the user's phone or a disposable API 34 emulator when one is available without touching data-bearing AVDs. Confirm the Worker records provider status, timestamped quote rows, and quota headers; preserve keyless CI artifacts and keep the personal APK private.
+
+
 ## 2026-11-12 — hide stale aggregate metrics during background recalculation (local and CI verification passed)
 
 - Follow-up inspection found that moving calculations off the Compose thread left the prior completed market/prospective summary briefly visible after source snapshots changed. That could pair fresh quote rows with an older aggregate.
