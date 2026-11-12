@@ -41,6 +41,8 @@ data class AccumulatorPerformanceReport(
     val couponHitRate95Low: Double?,
     val couponHitRate95High: Double?,
     val pricedSettledCoupons: Int,
+    val settledCouponsWithoutPrice: Int,
+    val settledPriceCoverage: Double?,
     val virtualRoi: Double?,
     val profitFactor: Double?,
     val maximumDrawdown: Double?,
@@ -86,6 +88,7 @@ object AccumulatorEngine {
         }
         val state = when {
             pending == picks.size -> AccumulatorSettlementState.PENDING
+            incorrect > 0 -> AccumulatorSettlementState.LOST
             pending > 0 -> AccumulatorSettlementState.IN_PROGRESS
             incorrect == 0 -> AccumulatorSettlementState.WON
             else -> AccumulatorSettlementState.LOST
@@ -97,7 +100,7 @@ object AccumulatorEngine {
 object AccumulatorPerformanceEngine {
     private const val WILSON_Z = 1.96
 
-    /** Reports only settled saved coupons; ROI is omitted unless every counted coupon had a same-book price. */
+    /** Reports only settled saved coupons; return metrics require complete price coverage for that cohort. */
     fun evaluate(
         entries: List<VirtualAccumulatorHistoryEntry>,
         providerId: String,
@@ -114,19 +117,23 @@ object AccumulatorPerformanceEngine {
         val hitRate = (won.toDouble() / settled.size).takeIf { settled.isNotEmpty() }
         val (low, high) = hitRate?.let { wilsonInterval(won, settled.size) } ?: (null to null)
         val priced = settled.filter { it.combinedDecimalOdds?.let { odds -> odds.isFinite() && odds > 1.0 } == true }
-        val roi = if (priced.isEmpty()) null else {
+        val missingPriceCount = settled.size - priced.size
+        val priceCoverage = priced.size.toDouble().div(settled.size).takeIf { settled.isNotEmpty() }
+        val completePriceCoverage = settled.isNotEmpty() && priced.size == settled.size
+        val roi = if (!completePriceCoverage) null else {
             (priced.sumOf { if (it.settlement.state == AccumulatorSettlementState.WON) it.combinedDecimalOdds!! else 0.0 } / priced.size) - 1.0
         }
         val grossProfit = priced.filter { it.settlement.state == AccumulatorSettlementState.WON }
             .sumOf { (it.combinedDecimalOdds ?: 1.0) - 1.0 }
         val grossLoss = priced.count { it.settlement.state == AccumulatorSettlementState.LOST }.toDouble()
-        val profitFactor = (grossProfit / grossLoss).takeIf { grossLoss > 0.0 && it.isFinite() }
-        val drawdown = if (priced.isEmpty()) null else maximumDrawdown(priced)
+        val profitFactor = (grossProfit / grossLoss).takeIf { completePriceCoverage && grossLoss > 0.0 && it.isFinite() }
+        val drawdown = if (completePriceCoverage) maximumDrawdown(priced) else null
         val relevantMatchIds = settled.flatMap { it.picks }.map { it.matchId }.toSet()
         val singleRows = settledSingles.distinctBy { it.matchId }.filter { it.matchId in relevantMatchIds }
         val singleHitRate = (singleRows.count { it.correct }.toDouble() / singleRows.size).takeIf { singleRows.isNotEmpty() }
         return AccumulatorPerformanceReport(
-            settled.size, won, lost, hitRate, low, high, priced.size, roi, profitFactor, drawdown,
+            settled.size, won, lost, hitRate, low, high, priced.size, missingPriceCount, priceCoverage,
+            roi, profitFactor, drawdown,
             singleRows.size, singleHitRate,
         )
     }

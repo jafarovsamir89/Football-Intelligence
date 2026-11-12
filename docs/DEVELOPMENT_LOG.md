@@ -1,6 +1,16 @@
 # Development log
 
-## 2026-11-11 — add a separate international fair-market reference (local code/build passed; CI pending)
+## 2026-11-11 — bundle P2 Elo research and P4 accumulator correctness (local verification passed; Actions pending)
+
+- User requested that work be batched so APK builds, emulator installs and full test cycles do not run after every small change. Updated `AGENTS.md` to require one combined local verification/build and one CI cycle after related code, tests and docs are complete. Existing API 34 emulator databases are preserved; this grouped milestone will not update-install unless a specific acceptance check later needs it.
+- Added immediate `LOST` settlement when any finished leg is incorrect, even while another leg is pending. The result retains correct/incorrect/pending counts and the history label now says how many legs were actually checked.
+- Added settled-price coverage (`priced/settled`, percentage and missing count). ROI, profit factor and drawdown now require complete valid combined prices for every settled coupon in the same provider/size/strategy group; partial-price cohorts show coverage but no return metrics.
+- Added a deterministic 27-point Elo grid over K={10,20,30}, home advantage={0,65,100} and draw prior={0.22,0.25,0.28}. Distinct forecast cutoff timestamps split 60% warm-up / 20% validation / 20% final holdout. Select by validation Log Loss only with at least 100 validation forecasts; then compare the selected configuration against production defaults on holdout. Each competition keeps its own ratings and strict availability cutoff. The report does not change production settings or saved prospective forecasts.
+- The analysis screen displays warm-up scores, validation/test dates, chosen parameters, holdout Brier/Log Loss against defaults and the three leading validation configurations. Added regression cases for a loss with another leg pending, incomplete price coverage, insufficient validation samples and holdout exclusion.
+- One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed: 102 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and debug APK assembly. `git diff --check` passed. APK SHA-256: `421046664c314aa6aa001819cdb6543eb79987572778c7ecbdcbc6b33ed8b0da`.
+- No APK was installed and no emulator was started or modified. Next: commit and push this grouped milestone once; verify its single clean-runner Actions cycle. Do not update-install during routine verification.
+
+## 2026-11-11 — add a separate international fair-market reference (CI passed; no local emulator install)
 
 ### Research and implementation
 
@@ -13,9 +23,10 @@
 
 ### Verification and continuation
 
-- `./gradlew --no-daemon :app:testDebugUnitTest` passed 98 JUnit tests, and Android-test Kotlin compilation passed. The debug APK was assembled locally (21,061,736 bytes; SHA-256 `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`). `git diff --check` passed.
-- Local API 34 instrumentation did not start: the persistent test emulator already has the stable-CI-signed app, so Android refused to install the locally debug-signed target (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, zero tests executed). No uninstall, data clear or emulator wipe was performed. CI's clean emulator is the next verification path for the new Worker, schema and scheduler.
-- Next: push this milestone, verify GitHub Actions (expected 98 JVM + 16 API 34 instrumentation, APK/stable signing/artifact upload), then update-install the CI artifact onto the data-bearing API 34 emulator without uninstall. Confirm schema v12 and preserve the existing match/result/coupon/forecast rows. Do not disturb the user10 import/backoff profile on emulator 5558.
+- `./gradlew --no-daemon :app:testDebugUnitTest` passed 98 JUnit tests, Android-test Kotlin compilation passed, and the debug APK was assembled locally (21,061,736 bytes; SHA-256 `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`).
+- Local API 34 instrumentation did not start because the persistent emulator has the stable-CI-signed app while the local build has a different signing key (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`, zero tests executed). No uninstall, data clear or emulator wipe was performed.
+- Commit `4badae9` passed Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746): unit task, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901058686` (16,768,389 bytes). The stable signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- In line with the user's request to batch device work, the signed artifact was not installed on the existing data-bearing API 34 emulators. The CI migration and Worker checks provide the required code verification; no emulator profile was changed.
 
 ## 2026-11-11 — complete clean API 34 import and update-install the shared-budget APK
 

@@ -151,6 +151,13 @@ class AccumulatorEngineTest {
 
         assertEquals(AccumulatorSettlementState.PENDING, AccumulatorEngine.settle(picks, emptyMap()).state)
         assertEquals(AccumulatorSettlementState.IN_PROGRESS, AccumulatorEngine.settle(picks, mapOf(1 to homeWin)).state)
+        val lostWhileLegPending = AccumulatorEngine.settle(
+            picks,
+            mapOf(1 to homeWin.copy(homeGoals = 0, awayGoals = 1)),
+        )
+        assertEquals(AccumulatorSettlementState.LOST, lostWhileLegPending.state)
+        assertEquals(1, lostWhileLegPending.incorrectLegs)
+        assertEquals(1, lostWhileLegPending.pendingLegs)
         assertEquals(AccumulatorSettlementState.WON, AccumulatorEngine.settle(picks, mapOf(1 to homeWin, 2 to awayWin)).state)
         assertEquals(
             AccumulatorSettlementState.LOST,
@@ -182,6 +189,9 @@ class AccumulatorEngineTest {
         assertEquals(2,report.settledCoupons)
         assertEquals(1,report.wonCoupons)
         assertEquals(.5,report.couponHitRate!!,1e-12)
+        assertEquals(2,report.pricedSettledCoupons)
+        assertEquals(0,report.settledCouponsWithoutPrice)
+        assertEquals(1.0,report.settledPriceCoverage!!,1e-12)
         assertEquals(.5,report.virtualRoi!!,1e-12)
         assertEquals(2.0,report.profitFactor!!,1e-12)
         assertEquals(.25,report.maximumDrawdown!!,1e-12)
@@ -197,6 +207,25 @@ class AccumulatorEngineTest {
         )
         assertEquals(1,report.settledCoupons)
         assertEquals(0,report.pricedSettledCoupons)
+        assertEquals(1,report.settledCouponsWithoutPrice)
+        assertEquals(0.0,report.settledPriceCoverage!!,1e-12)
+        assertNull(report.virtualRoi)
+        assertNull(report.profitFactor)
+        assertNull(report.maximumDrawdown)
+    }
+
+    @Test fun partialPriceCoverageIsReportedButCannotProduceBiasedReturnMetrics() {
+        val report=AccumulatorPerformanceEngine.evaluate(
+            listOf(
+                history(1,AccumulatorSettlementState.WON,3.0,10,1),
+                history(2,AccumulatorSettlementState.LOST,null,20,3),
+            ),"misli",2,CouponSelectionBasis.MODEL_RANKED,emptyList(),
+        )
+
+        assertEquals(2,report.settledCoupons)
+        assertEquals(1,report.pricedSettledCoupons)
+        assertEquals(1,report.settledCouponsWithoutPrice)
+        assertEquals(.5,report.settledPriceCoverage!!,1e-12)
         assertNull(report.virtualRoi)
         assertNull(report.profitFactor)
         assertNull(report.maximumDrawdown)

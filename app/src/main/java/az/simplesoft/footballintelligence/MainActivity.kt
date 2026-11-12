@@ -45,6 +45,9 @@ import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
+import az.simplesoft.footballintelligence.analytics.EloChronologicalExperimentReport
+import az.simplesoft.footballintelligence.analytics.EloExperimentDataset
+import az.simplesoft.footballintelligence.analytics.EloParameterExperimentEngine
 import az.simplesoft.footballintelligence.analytics.CalibrationDiagnostics
 import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
@@ -548,7 +551,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         return result
     }
-    fun automaticWalkForwardReport():EloWalkForwardReport {
+    fun automaticBacktestReports():Pair<EloWalkForwardReport,EloChronologicalExperimentReport> {
         data class Row(val history:HistoricalMatch,val target:WalkForwardTarget)
         val byLeague=linkedMapOf<String,MutableList<Row>>()
         readableDatabase.rawQuery(
@@ -574,11 +577,14 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 byLeague.getOrPut(c.getString(1)) { mutableListOf() }.add(row)
             }
         }
-        val reports=byLeague.values.map { rows ->
-            EloWalkForwardEngine.evaluate(rows.map { it.history },rows.map { it.target })
+        val datasets=byLeague.map { (league,rows) ->
+            EloExperimentDataset(league,rows.map { it.history },rows.map { it.target })
+        }
+        val reports=datasets.map { dataset ->
+            EloWalkForwardEngine.evaluate(dataset.history,dataset.targets)
         }
         val predictions=reports.flatMap { it.predictions }
-        return EloWalkForwardReport(
+        val walkForward=EloWalkForwardReport(
             targetCount=reports.sumOf { it.targetCount },
             forecastCount=predictions.size,
             skippedForInsufficientHistory=reports.sumOf { it.skippedForInsufficientHistory },
@@ -586,6 +592,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             meanLogLoss=predictions.map { it.logLoss }.average().takeIf { predictions.isNotEmpty() },
             predictions=predictions,
         )
+        val parameterExperiment=EloParameterExperimentEngine.evaluate(datasets)
+        return walkForward to parameterExperiment
     }
     fun recordProspectiveForecastSnapshots(
         forecasts:List<ForecastedMatch>,
@@ -1421,6 +1429,7 @@ class MainActivity:ComponentActivity() {
     var automaticBacktestRunning by remember { mutableStateOf(false) }
     var automaticBacktestMessage by remember { mutableStateOf("") }
     var automaticBacktestReport by remember { mutableStateOf<EloWalkForwardReport?>(null) }
+    var automaticEloExperiment by remember { mutableStateOf<EloChronologicalExperimentReport?>(null) }
     var automaticBacktestRevision by remember { mutableIntStateOf(-1) }
     var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var showBookmakerQuotes by remember { mutableStateOf(false) }
@@ -1668,9 +1677,10 @@ class MainActivity:ComponentActivity() {
         automaticBacktestMessage="Расчёт по локальной автоматической истории…"
         Thread {
             try {
-                val report=store.automaticWalkForwardReport()
+                val (report,experiment)=store.automaticBacktestReports()
                 activity.runOnUiThread {
                     automaticBacktestReport=report
+                    automaticEloExperiment=experiment
                     automaticBacktestRevision=revision
                     automaticBacktestRunning=false
                     automaticBacktestMessage=""
@@ -1886,7 +1896,7 @@ class MainActivity:ComponentActivity() {
                         AccumulatorSettlementState.PENDING -> "Ожидает матчей"
                         AccumulatorSettlementState.IN_PROGRESS -> "Завершено ${entry.settlement.settledLegs}/${entry.legCount}"
                         AccumulatorSettlementState.WON -> "Все ${entry.legCount} совпали"
-                        AccumulatorSettlementState.LOST -> "Не совпало ${entry.settlement.incorrectLegs}; завершено ${entry.legCount}/${entry.legCount}"
+                        AccumulatorSettlementState.LOST -> "Купон проиграл: не совпало ${entry.settlement.incorrectLegs}; проверено ${entry.settlement.settledLegs}/${entry.legCount}"
                         AccumulatorSettlementState.SCHEDULE_CHANGED -> "Kickoff изменён · требуется повторная проверка"
                         AccumulatorSettlementState.INVALID -> "Некорректная запись"
                     }
@@ -1907,8 +1917,9 @@ class MainActivity:ComponentActivity() {
                     val hit=report.couponHitRate?.let { "${report.wonCoupons}/${report.settledCoupons} (${"%.1f".format(it*100)}%)" } ?: "ожидает исходов"
                     val singleHit=report.singlePickHitRate?.let { " · одиночные прогнозы тех же матчей ${report.matchingSinglePicks}, ${"%.1f".format(it*100)}%" }.orEmpty()
                     val roi=report.virtualRoi?.let { " · виртуальный ROI по полной линии ${"%.1f".format(it*100)}% (n=${report.pricedSettledCoupons})" }
-                        ?: " · ROI/прибыль недоступны: нет полного снимка коэффициентов для завершённых купонов"
-                    Text("Проверка $provider · ${key.second} исхода $basisLabel: купоны ${report.settledCoupons}, попадания $hit$singleHit$roi",style=MaterialTheme.typography.bodySmall)
+                        ?: if(report.settledCoupons>0&&report.pricedSettledCoupons>0) " · ROI скрыт: цены есть только у части завершённых купонов" else " · ROI недоступен: нет полной цены у завершённых купонов"
+                    val priceCoverage=report.settledPriceCoverage?.let { "${report.pricedSettledCoupons}/${report.settledCoupons} (${"%.0f".format(it*100)}%; без полной цены ${report.settledCouponsWithoutPrice})" } ?: "нет завершённых купонов"
+                    Text("Проверка $provider · ${key.second} исхода $basisLabel: купоны ${report.settledCoupons}, попадания $hit$singleHit · покрытие ценами $priceCoverage$roi",style=MaterialTheme.typography.bodySmall)
                     if(report.settledCoupons>0&&report.couponHitRate95Low!=null&&report.couponHitRate95High!=null) {
                         Text("95% Wilson-интервал доли выигравших экспрессов: ${(report.couponHitRate95Low*100).roundToInt()}–${(report.couponHitRate95High*100).roundToInt()}%; CLV не вычисляется без зафиксированной цены около kickoff.",style=MaterialTheme.typography.labelSmall)
                     }
@@ -1984,6 +1995,52 @@ class MainActivity:ComponentActivity() {
                     else Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
                     WalkForwardCalibrationSummary(report)
                     Text("Срез рассчитан отдельно в границах соревнований. Результат не является обещанием прибыли.",style=MaterialTheme.typography.bodySmall)
+                }
+                automaticEloExperiment?.let { experiment ->
+                    HorizontalDivider()
+                    Text("Хронологический выбор параметров Elo",fontWeight=FontWeight.SemiBold)
+                    Text(
+                        "Первые 60% временных срезов — разогрев, следующие 20% — выбор по Log Loss, последние 20% — отдельная проверка. Рейтинг ведётся отдельно по соревнованиям; holdout не участвует в выборе.",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Разогрев: ${experiment.training.forecastCount}/${experiment.training.targetCount} прогнозов · Brier ${experiment.training.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} · Log Loss ${experiment.training.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                    val validationDay=experiment.validationStartMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString() } ?: "—"
+                    val testDay=experiment.testStartMillis?.let { Instant.ofEpochMilli(it).atZone(ZoneOffset.UTC).toLocalDate().toString() } ?: "—"
+                    Text("Начало validation: $validationDay · начало holdout: $testDay · сетка ${experiment.candidates.size} конфигураций",style=MaterialTheme.typography.bodySmall)
+                    val selected=experiment.selectedConfig
+                    val selectedValidation=experiment.selectedValidation
+                    val selectedTest=experiment.selectedTest
+                    if(selected!=null&&selectedValidation!=null&&selectedTest!=null) {
+                        Text(
+                            "Выбор validation: K=${selected.kFactor.toInt()}, home=${selected.homeAdvantage.toInt()}, draw prior=${"%.2f".format(selected.priorDrawProbability)} · Log Loss ${selectedValidation.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${selectedValidation.forecastCount})",
+                            fontWeight=FontWeight.Medium,
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Holdout: выбранные Brier ${selectedTest.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${selectedTest.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${selectedTest.forecastCount}); текущие настройки Brier ${experiment.defaultTest.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${experiment.defaultTest.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${experiment.defaultTest.forecastCount}).",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        val bestValidationForecasts=experiment.candidates.maxOfOrNull { it.validation.forecastCount } ?: 0
+                        Text(
+                            "Настройки не выбраны: validation дала максимум $bestValidationForecasts прогнозов; нужно не меньше ${experiment.minimumValidationForecastsForSelection}. Holdout показан только для текущих настроек.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Holdout текущих настроек: Brier ${experiment.defaultTest.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${experiment.defaultTest.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${experiment.defaultTest.forecastCount}).",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                    experiment.candidates.take(3).forEachIndexed { index,candidate ->
+                        Text(
+                            "${index+1}. K=${candidate.config.kFactor.toInt()}, home=${candidate.config.homeAdvantage.toInt()}, draw prior=${"%.2f".format(candidate.config.priorDrawProbability)} · validation Log Loss ${candidate.validation.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · Brier ${candidate.validation.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} (n=${candidate.validation.forecastCount})",
+                            style=MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    Text("Это один ретроспективный split текущей локальной базы, без архивных версий исходных файлов. Параметры не меняют сохранённые прогнозы и не означают будущую точность или прибыль.",style=MaterialTheme.typography.labelSmall)
                 }
                 HorizontalDivider()
                 Text("Дополнительный импортированный CSV",fontWeight=FontWeight.SemiBold)

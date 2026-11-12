@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — batch Elo research and correct accumulator history
+
+- Add a chronological 27-setting Elo experiment with 60% warm-up, 20% validation, and 20% isolated holdout windows. Select by validation Log Loss only when at least 100 validation forecasts exist; show the selected configuration and holdout comparison with current defaults without changing live forecasts.
+- Mark an accumulator lost immediately after any incorrect finished leg, even while other legs remain pending.
+- Report complete-price coverage for settled coupon groups and suppress ROI, profit factor, and drawdown unless every settled coupon has a complete combined price.
+- Add regression coverage for holdout isolation, insufficient validation samples, a lost coupon with pending legs, and partial price coverage. The combined local run passed 102 JVM tests, Android-test Kotlin compilation and APK assembly; the grouped Actions run is pending.
+
 ## Unreleased — add an attributed international fair-market reference
 
 - Researched official access conditions for Pinnacle, Betfair Exchange and bet365; none currently provides a verified free, no-account, permitted raw-odds path under the user's zero-touch constraints.
@@ -7,7 +14,7 @@
 - Accept only timestamped `fair_source=live` 1X2 observations no older than 30 minutes and before kickoff; reject stale/future timestamps, inconsistent fair odds/probabilities, duplicate or invalid rows and non-source URLs. Ignore best-soft prices and value flags.
 - Show descriptive probability differences against fresh local Misli/TOPAZ lines and Elo when one exact fixture is available. Never use this derived reference for local-bookmaker coupons, payout odds, EV, or a multi-source consensus.
 - The 2026-11-11 direct API POC returned 98 events, but Türkiye—Belgium's fair source read was ~47 minutes old; no current reference was eligible in that capture. The UI therefore needs to show unavailable until a genuinely fresh read is observed.
-- Verification is being completed for parser rejection rules, v11→v12 data-preserving migration, Worker scheduling/network constraints, and APK/Actions.
+- Commit `4badae9` passed Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746): 16 API 34 instrumentation tests covered the v11→v12 migration, Worker scheduling/network constraints and socket-free failure path; APK build, stable signing and upload `13901058686` passed. The data-bearing local emulators were left untouched per the user's batching request.
 
 ## Unreleased — finish clean-install data and odds runtime verification
 

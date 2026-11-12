@@ -1,10 +1,16 @@
 # Testing
 
-## Current milestone verification (2026-11-11; CI pending)
+## Latest completed milestone (2026-11-11; GitHub Actions passed)
 
 - Added parser tests for timestamp age/future-time rejection, logged/model fallback rejection, fair probability/price consistency, duplicate IDs, HTTPS source host and exact local fixture matching. Added market-reference WorkManager cadence/network-constraint coverage, a socket-free Worker instrumentation test, and a v11→v12 migration-preservation test.
-- Local `:app:testDebugUnitTest` passed 98 tests (0 failures/errors); `:app:compileDebugAndroidTestKotlin` passed; the local debug APK exists at 21,061,736 bytes. The connected instrumentation command could not install the workstation-signed target over the persistent stable-CI-signed app (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), so it executed zero tests. No app uninstall or data clear was done. GitHub Actions on a clean emulator remains required before calling instrumentation/CI verified.
+- Commit `4badae9` passed Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746): unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901058686` (16,768,389 bytes). The local API 34 instrumentation command could not install the workstation-signed target over the persistent stable-CI-signed app (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), so it executed zero tests; no app uninstall or data clear was done. Following the user's batching request, the stable APK was not installed on either data-bearing emulator.
 - APK SHA-256: `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`. This is the local debug-key build; use the CI stable-signed artifact for data-preserving update installation.
+
+## Current grouped milestone (2026-11-11; local verification passed, Actions pending)
+
+- Added tests for immediate loss when one coupon leg is wrong while another is pending, partial settled-price coverage suppression, chronological Elo parameter selection, and final-holdout isolation.
+- One combined local cycle passed 102 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin`, and `:app:assembleDebug`. APK SHA-256: `421046664c314aa6aa001819cdb6543eb79987572778c7ecbdcbc6b33ed8b0da`.
+- The single clean-runner GitHub Actions cycle is pending. No APK update-install is planned for this milestone; CI instrumentation uses its clean API 34 runner.
 
 ## Latest verification status (2026-11-10)
 
@@ -31,9 +37,10 @@
 ## Local checks
 
 ```sh
-./gradlew --no-daemon :app:testDebugUnitTest :app:assembleDebug
-ANDROID_SERIAL=emulator-5558 ./gradlew --no-daemon :app:connectedDebugAndroidTest
+./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug
 ```
+
+Use GitHub Actions for API 34 instrumentation on its clean runner. Do not run `connectedDebugAndroidTest` against the persistent stable-CI-signed data-bearing emulators with the locally debug-signed APK; Android rejects the signer mismatch. Never uninstall or clear an emulator profile to work around it.
 
 The v11 forecast-ledger revision passed locally: 88 JVM tests, all 5 Android instrumentation tests on API 34, and `assembleDebug`. Actions [42765702211](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42765702211) passed all steps and uploaded the stable-signed APK. The update-installed artifact preserved 39,181 matches, 315 quote snapshots and all 59 prior accumulators/328 legs; after normal startup the totals were 69/384 because 10/56 new coupon records were generated. SQLite migrated to v11 and the UI showed 62 immutable future forecast snapshots with 0 settlements. Instrumentation covers v10→v11 table creation, once-per-day forecast immutability, delayed settlement until safe source/capture availability, result-source provenance and corrected scores without changing frozen probabilities.
 
@@ -56,13 +63,13 @@ Coverage includes:
 - Conservative cross-provider same-date/team/home-away dedupe identity, provenance merging, settled-score retention on incomplete/conflicting updates, and date-only fixture promotion.
 - Misli visible-DOM 1X2 parsing, local timezone conversion, strict alias/orientation/date/kickoff fixture mapping, and rejection of expired, live-score, incomplete, ambiguous and conflicting rows.
 - Independent Misli/TOPAZ visible-page parsers, eTopaz inferred-year rules, exact alias/date/kickoff matching, operator isolation, expiry, and no fabricated odds.
-- TipsAudit fair-market parser: fresh `fair_source=live` filtering, source/capture/kickoff timestamp boundaries, mutually consistent 1X2 fair odds/probabilities, duplicate suppression, allowed source URL and exact fixture matching. Its worker, attribution and v11→v12 migration need the pending Actions run described above.
+- TipsAudit fair-market parser: fresh `fair_source=live` filtering, source/capture/kickoff timestamp boundaries, mutually consistent 1X2 fair odds/probabilities, duplicate suppression, allowed source URL and exact fixture matching. Its worker, attribution and v11→v12 migration passed the 16 API 34 instrumentation tests in Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746).
 - Provider status freshness and latest-snapshot-per-event selection after repeated WebView reloads.
 - Coupon draft separation, most-probable outcome selection, stable match dedupe/order, same-provider pricing, quote timestamps and fresh-only accumulator construction, stale/future quote rejection, Fréchet bounds, settlement and price-backed performance summaries.
 - Rejection of placeholder team identities in source parsers, read-side lists and historical evaluation.
 - Streaming chronological walk-forward equivalence with independent as-of Elo fits, shared availability batches, and future-result exclusion.
 - Equal-width one-vs-rest calibration bins: per-outcome sample sizes, observed frequencies, mean predicted probabilities, bin edge handling and empty-input behavior.
-- AndroidJUnitRunner SQLite upgrades from the original v1 schema through v11, from v9/v10 to v11, preserving user records and final scores. The new isolated v11→v12 market-reference table test awaits CI execution.
+- AndroidJUnitRunner SQLite upgrades from v1, v9, v10 and v11 through v12, preserving user records and final scores. The v11→v12 market-reference table test passed with the rest of the 16-test API 34 suite in Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746).
 - WorkManager instrumentation checks the persisted 24-hour periodic request and its CONNECTED constraint, a delayed one-time request and no started attempts, KEEP behavior across repeated enqueue, and fresh-data suppression. A separate offline test disables Wi-Fi and airplane connectivity, confirms `activeNetwork == null`, and verifies immediate plus periodic work stay `ENQUEUED` with zero attempts; it restores radio state and cancels its requests. Commit `8d9da3c` passed 88 JVM and all 8 API 34 instrumentation tests, stable signing, APK build and upload in Actions [42769411532](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42769411532). The artifact was update-installed over the existing app without data clear.
 
 The older data-bearing API 34 installation has 39,181 merged rows, 30,090 completed-result rows, 184 competitions, season keys `2022` through `2026-27`; provider source counts are OpenFootball 25,904 and OpenLigaDB 17,776. The separate clean-install run completed at 38,609 matches / 29,612 completed results / 183 competition labels, with source counts OpenFootball 25,904 and OpenLigaDB 17,202. Current code rejects 566 previously stored placeholder-identity rows from reads, model input and backtests (kept in SQLite for ID/migration safety). The installed app recomputed post-filter automatic walk-forward: 29,588 targets, 19,185 forecasts and 10,403 insufficient-history skips. Older unfiltered figures are obsolete.
@@ -89,7 +96,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 
 ## Remaining verification gaps
 
-- SQLite v1→v11, v9→v11 and v10→v11 migration preservation, cross-provider score retention during incomplete/conflicting refresh, and WAL foreground-reader access during a provider write have isolated instrumentation coverage. The tests use separate random database names.
+- SQLite v1/v9/v10→v12 and v11→v12 migration preservation, cross-provider score retention during incomplete/conflicting refresh, and WAL foreground-reader access during a provider write have isolated instrumentation coverage. The tests use separate random database names.
 - WorkManager offline queue gating, delayed exponential retry/backoff, network-proof Worker failure routing, and SQLite WAL/read-concurrency pass locally and in CI [42912446156](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42912446156). API 34 update-install preserved local data and a new foreground capture succeeded. API 26 stable update-install plus an app-open Worker refresh completed successfully without SQLite lock or data loss. ETag/304, provider pacing, lock expiry and a physical handset still lack dedicated validation.
 
 Commit `92836d8` passed Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971): **84 JUnit tests**, **3 API 34 instrumentation tests**, APK build, stable signing and artifact upload. The instrumentation job confirmed the SQLite migration tests and WorkManager scheduler test on its API 34 emulator.
