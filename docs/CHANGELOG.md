@@ -1,13 +1,13 @@
 # Changelog
 
-## Unreleased — add a gated international 1X2 market feed
+## Unreleased — add a gated international 1X2 market feed (CI migration-test correction pending)
 
 - Researched the requested public pages. Oddsbunch, BetExplorer, Oddspedia and OddsPortal terms do not permit automated reuse without consent; Oddschecker has regional limits and can block robotic access. No scraper, WebView collector or undocumented route was added for them.
 - Integrated the documented free/no-key MoviOdds soccer group-40 feed as `Bet365ViaMoviOddsProvider`; the bookmaker label and intermediary attribution remain distinct. The single-book no-vig reference is not called consensus and its prices never enter local Misli/TOPAZ coupons.
 - Added source market-poll and per-outcome price-change timestamps, complete prematch 1X2/suspension/duplicate/exact-fixture gates, a 15-minute freshness window, offline current state, 30-day price-change history, and app-open plus best-effort 30-minute WorkManager refresh.
 - Added a one-time 18+ confirmation gate required by MoviOdds terms, including a Worker-side guard so queued work cannot fetch before consent. The OpenFootball/OpenLigaDB football-data flow is unaffected. Azerbaijan device access and prospective price/model value remain unverified.
 - Direct POC at `2026-11-12T00:39:24Z` received 923 soccer rows; 904 passed the app-equivalent freshness and market-quality filter. These are historical POC observations, not current prices.
-- Local combined verification passed: 119 JVM tests, Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256 `1d20ace4ea5470ba77270608b024c18562a895407506544e7bbe44a6a3cfc0c9`. GitHub Actions and a signed device update-install are pending for this grouped milestone.
+- Local combined verification passed: 119 JVM tests, Android-test Kotlin compilation and debug APK assembly. The first Actions run passed unit tests but found four migration tests still expecting schema v12; those assertions now expect v13. The corrected test/build cycle passed locally; Actions rerun is pending. Current local APK SHA-256 `8bda323fc03f2f86f454e43bfc6d60735295f68ac565631620bd18941d3738a1`. ADB currently lists only emulator `5558`, so no app was installed and persistent emulator data remains untouched.
 
 ## Unreleased — add a chronological goals-based Poisson baseline
 
