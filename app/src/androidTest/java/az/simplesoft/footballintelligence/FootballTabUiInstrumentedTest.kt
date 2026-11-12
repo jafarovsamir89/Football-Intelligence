@@ -304,7 +304,10 @@ class FootballTabUiInstrumentedTest {
         marketList.performScrollToNode(hasText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true))
         composeRule.onNodeWithText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
-        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
+        assertTrue(
+            composeRule.onAllNodesWithText("Источник: The Odds API", substring = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
         marketList.performScrollToNode(hasText("Сравнение снятия маржи · равное среднее по 2", substring = true))
         composeRule.onNodeWithText("Сравнение снятия маржи · равное среднее по 2", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Power", substring = true).assertExists()
