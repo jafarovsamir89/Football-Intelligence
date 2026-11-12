@@ -274,6 +274,10 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     private fun ensureInternationalOddsQuoteSideSchema(db:SQLiteDatabase) {
         val tables = listOf("international_odds_snapshots", "international_odds_current")
+        val currentTableMissing = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='international_odds_current'",
+            null,
+        ).use { !it.moveToFirst() }
         val missingTable = tables.any { table ->
             db.rawQuery(
                 "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
@@ -284,7 +288,6 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             // Some older or partially initialized databases may have sync state without quote tables.
             // Create only missing tables; CREATE TABLE IF NOT EXISTS preserves any existing quote data.
             createInternationalOddsTables(db)
-            return
         }
         val required = setOf("source_market_key", "quote_side", "home_bet_limit", "draw_bet_limit", "away_bet_limit")
         tables.forEach { table ->
@@ -333,6 +336,22 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.execSQL("INSERT INTO $temp($copiedColumns) SELECT $selectedColumns FROM $table")
             db.execSQL("DROP TABLE $table")
             db.execSQL("ALTER TABLE $temp RENAME TO $table")
+        }
+        if (currentTableMissing) {
+            val currentColumns = "provider_id,bookmaker_id,event_id,match_id,match_link_basis,source_url,league,region," +
+                "captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds," +
+                "home_price_changed_at,draw_price_changed_at,away_price_changed_at,source_market_key,quote_side," +
+                "home_bet_limit,draw_bet_limit,away_bet_limit"
+            db.execSQL(
+                "INSERT OR REPLACE INTO international_odds_current($currentColumns) " +
+                    "SELECT $currentColumns FROM international_odds_snapshots snapshot " +
+                    "WHERE NOT EXISTS (SELECT 1 FROM international_odds_snapshots newer " +
+                    "WHERE newer.provider_id=snapshot.provider_id AND newer.bookmaker_id=snapshot.bookmaker_id " +
+                    "AND newer.event_id=snapshot.event_id AND newer.market=snapshot.market " +
+                    "AND newer.source_market_key=snapshot.source_market_key AND newer.quote_side=snapshot.quote_side " +
+                    "AND (newer.captured_at>snapshot.captured_at OR " +
+                    "(newer.captured_at=snapshot.captured_at AND newer.id>snapshot.id)))",
+            )
         }
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_fresh_idx ON international_odds_snapshots(provider_id,provider_polled_at,kickoff)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_fresh_idx ON international_odds_current(provider_id,provider_polled_at,kickoff)")

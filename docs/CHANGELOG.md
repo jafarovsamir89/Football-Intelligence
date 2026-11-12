@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — repair partially present v17 international odds tables (Actions pending)
+
+- When upgrading a partial v17 database with history rows but no current-quote table, create the absent table, continue migrating existing history rows to the v18 Back/Lay schema, and rehydrate current quotes from the newest saved row per market/side. Add an API instrumentation regression that verifies row identity, source market, fixture link, new schema columns, current-row recovery and reads after migration.
+- Local batch passed 163 JVM tests, Android-test Kotlin compilation and both APK builds. API 26/API 34 instrumentation and keyless CI artifact verification are pending.
+
 ## Unreleased — retain The Odds API exchange Back/Lay markets (CI/API 26/API 34 passed)
 
 - Parse both documented V4 exchange sides returned with `h2h`, request available `bet_limit` fields, and retain source market, Back/Lay side, capture timestamps and per-outcome limits in SQLite v18. Migrate v17 odds rows without dropping their identifiers or link precision.

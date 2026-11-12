@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — repair partially present v17 odds tables during upgrade (local batch passed; Actions pending)
+
+- Reviewed the new v17→v18 path after the previous verification. It recovered correctly when both international quote tables were absent, but returned early after creating a missing table; a partially present v17 database could therefore leave the existing snapshot table without v18 columns.
+- The migration now creates only absent odds tables and continues the normal quote-side/limit migration on every existing table. If the current table was missing, it rehydrates one latest row per provider/book/event/market/source-market/side from preserved snapshots. Added an isolated Android SQLite regression starting with a v17 snapshot history table but no current table; it checks current-table creation, schema upgrade, row ID/source/match-link preservation, current-quote rehydration, and successful reads after migration.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 163 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug APK SHA-256 `62d37fd08ed3efe1b97a62caddd9bfcad0414b78097e8a4f22a1757229217bb6`; private personal APK SHA-256 `693e4a04c737949cf6f71048f1fc88858d523bedf25a43ef632d0f8512f05ffd`. Both local signatures verify; DEX audit found the configured key absent from debug and present only in the private personal APK. `git diff --check` passed.
+- Android instrumentation is compiled but not run locally because the only ADB target is unrelated emulator `5558`; it and its data remain untouched. No APK was installed and no API quota was used. Next: commit/push this grouped migration correction, run one API 34/API 26 Actions pass, and record the actual result before calling it verified.
+
 ## 2026-11-12 — retain The Odds API exchange Back/Lay lines (local, CI, API 26/API 34 passed)
 
 - Rechecked the official [V4 odds guide](https://the-odds-api.com/liveapi/guides/v4/): an `h2h` response automatically includes `h2h_lay` for covered exchanges, and `includeBetLimits=true` requests any outcome-level source limits. This needs no second market request. A prior direct public response in this session showed both sides and limit fields; no additional live request or credit was used during the code batch.

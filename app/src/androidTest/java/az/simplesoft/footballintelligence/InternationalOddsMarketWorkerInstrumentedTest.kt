@@ -168,6 +168,63 @@ class InternationalOddsMarketWorkerInstrumentedTest {
         }
     }
 
+    @Test fun v17UpgradeRepairsMissingCurrentTableAndPreservesLegacySnapshot() {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "fi-v17-partial-odds-${UUID.randomUUID()}.db"
+        base.deleteDatabase(name)
+        val captured = System.currentTimeMillis()
+        val kickoff = captured + TimeUnit.HOURS.toMillis(2)
+        try {
+            base.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { db ->
+                val legacyColumns = "id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, " +
+                    "event_id TEXT NOT NULL, match_id INTEGER, match_link_basis TEXT, source_url TEXT NOT NULL, " +
+                    "league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, " +
+                    "kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, " +
+                    "home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, " +
+                    "home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL"
+                db.execSQL(
+                    "CREATE TABLE international_odds_snapshots ($legacyColumns, " +
+                        "UNIQUE(provider_id,bookmaker_id,event_id,market,captured_at))",
+                )
+                db.execSQL(
+                    "INSERT INTO international_odds_snapshots(id,provider_id,bookmaker_id,event_id,match_id,match_link_basis, " +
+                        "source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team," +
+                        "home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at) " +
+                        "VALUES(7,'the_odds_api','betfair_ex_eu','partial-event',42,'EXACT_KICKOFF'," +
+                        "'https://api.the-odds-api.com/v4/sports/soccer_epl/odds','EPL','eu',?,?,?,?,?,?,2.1,3.4,3.8,?,?,?)",
+                    arrayOf(captured,captured,kickoff,"1X2","Manchester City","Fulham",captured,captured,captured),
+                )
+                db.version = 17
+            }
+
+            Store(base, name).use { store ->
+                val db = store.writableDatabase
+                assertEquals(18, db.version)
+                assertTrue(tableExists(db, "international_odds_current"))
+                assertTrue(columnExists(db, "international_odds_snapshots", "quote_side"))
+                assertTrue(columnExists(db, "international_odds_snapshots", "home_bet_limit"))
+                assertTrue(columnExists(db, "international_odds_current", "quote_side"))
+                val migrated = store.internationalOddsHistory().single()
+                assertEquals("partial-event", migrated.eventId)
+                assertEquals("h2h", migrated.sourceMarketKey)
+                assertEquals(InternationalOddsQuoteSide.BACK, migrated.quoteSide)
+                assertEquals(42, migrated.matchId)
+                assertEquals(1, store.freshInternationalOdds(captured).size)
+                db.rawQuery(
+                    "SELECT id,source_market_key,quote_side FROM international_odds_snapshots WHERE event_id='partial-event'",
+                    null,
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(7, cursor.getLong(0))
+                    assertEquals("h2h", cursor.getString(1))
+                    assertEquals("BACK", cursor.getString(2))
+                }
+            }
+        } finally {
+            base.deleteDatabase(name)
+        }
+    }
+
     @Test fun dateOnlyLinkIsLabeledAndUpgradedWhenExactKickoffArrives() {
         val base=InstrumentationRegistry.getInstrumentation().targetContext
         val name="fi-date-only-odds-link-${UUID.randomUUID()}.db"
@@ -403,6 +460,20 @@ class InternationalOddsMarketWorkerInstrumentedTest {
     private fun clearInternationalWork(manager:WorkManager) {
         manager.cancelUniqueWork(InternationalOddsMarketScheduler.UNIQUE_ONCE_NAME).result.get(10,TimeUnit.SECONDS)
         manager.cancelUniqueWork(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME).result.get(10,TimeUnit.SECONDS)
+    }
+
+    private fun tableExists(db:SQLiteDatabase,table:String):Boolean = db.rawQuery(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+        arrayOf(table),
+    ).use { it.moveToFirst() }
+
+    private fun columnExists(db:SQLiteDatabase,table:String,column:String):Boolean = db.rawQuery(
+        "PRAGMA table_info($table)",
+        null,
+    ).use { cursor ->
+        var found=false
+        while(cursor.moveToNext()) if(cursor.getString(cursor.getColumnIndexOrThrow("name"))==column) found=true
+        found
     }
 
     private class IsolatedDatabaseContext(base:Context,private val databaseName:String):ContextWrapper(base) {
