@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased — prevent false international market consensus (local pass; Actions pending)
+## Unreleased — prevent false international market consensus (local and Actions passed)
 
 - Require every quote in a consensus event group to match each other on normalized home/away order and five-minute kickoff tolerance. Conflicting exact local match IDs cannot merge, and ambiguous rows compatible with multiple groups are kept separate.
 - Add regression coverage for chained kickoff tolerances, midpoint ambiguity and conflicting fixture IDs.
 - Recheck international sources: Football-Data.co.uk's limited personal-use automation did not produce upcoming 1X2 prices or a quote-level time in the observed file; 1.ML's terms require written authorization for automated collection and local archiving. No new live adapter is claimed.
-- The grouped local cycle passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly; SHA-256 `5379bfe5d89557030589451661fc7cb0e55585015de4c22ff9b0e7a63a055882`. CI verification is pending.
+- The grouped local cycle passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly; SHA-256 `5379bfe5d89557030589451661fc7cb0e55585015de4c22ff9b0e7a63a055882`. Commit `d10f05b` passed Actions [43153122513](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43153122513), including all 30 API 34 instrumentation tests, APK build, stable signing and upload `13914359935`; CI APK SHA-256 `0702d9d704701baf7c5093f36986a5807fbba490109eeb37dcad6fdbb45eeccb`, signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Unreleased — retain international source-attempt history
 

@@ -1,11 +1,12 @@
 # Testing
 
-## International event-identity hardening (local verification passed; Actions pending)
+## International event-identity hardening (local and Actions passed)
 
 - Add regression cases for kickoff-tolerance chains, ambiguous midpoint quotes and conflicting non-null local match IDs. Consensus groups must not merge distinct or ambiguous fixtures through transitive matching.
 - Research source timestamps before accepting additional feeds. The 2026-11-12 Football-Data.co.uk current-season probe had no future 1X2 rows; its fixture CSV returned HTTP 429 once and was not retried.
 - The grouped local cycle `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. APK SHA-256: `5379bfe5d89557030589451661fc7cb0e55585015de4c22ff9b0e7a63a055882`; `git diff --check` passed.
-- Verify the pushed commit's GitHub Actions workflow. No device install was performed; do not modify or clear the persistent API 34 emulator profile.
+- Commit `d10f05b` passed Actions [43153122513](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43153122513): all 30 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and artifact upload `13914359935`. The downloaded APK SHA-256 is `0702d9d704701baf7c5093f36986a5807fbba490109eeb37dcad6fdbb45eeccb`; signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- No device install was performed; do not modify or clear the persistent API 34 emulator profile.
 
 ## In-progress international source-attempt history (verification pending)
 
