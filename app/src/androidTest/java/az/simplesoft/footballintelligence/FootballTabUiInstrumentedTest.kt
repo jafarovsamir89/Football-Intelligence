@@ -209,8 +209,8 @@ class FootballTabUiInstrumentedTest {
 
         composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
-        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Источник: The Odds API", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     private companion object {
