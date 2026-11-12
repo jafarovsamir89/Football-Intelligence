@@ -15,6 +15,8 @@ class EloWalkForwardEngineTest {
             listOf(
                 HistoricalMatch(200, "Alpha", "Beta", 0, 9),
                 HistoricalMatch(500, "Alpha", "Beta", 9, 0),
+                // A bad source timestamp cannot make a post-kickoff result available early.
+                HistoricalMatch(300, "Alpha", "Beta", 9, 0, availableAtMillis = 0),
             ),
             listOf(target),
             minimumHistoryMatches = 0,

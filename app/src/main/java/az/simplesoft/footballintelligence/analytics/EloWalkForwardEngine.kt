@@ -46,8 +46,8 @@ object EloWalkForwardEngine {
 
         // Stream availability batches once instead of refitting the full history for every
         // target. This keeps large local histories practical and preserves strict as-of rules.
-        val orderedHistory = history.sortedWith(
-            compareBy<HistoricalMatch> { it.availableAtMillis }
+        val orderedHistory = history.filter { it.safeAvailabilityMillisOrNull() != null }.sortedWith(
+            compareBy<HistoricalMatch> { requireNotNull(it.safeAvailabilityMillisOrNull()) }
                 .thenBy { it.kickoffMillis }
                 .thenBy { teamKey(it.homeTeam) }
                 .thenBy { teamKey(it.awayTeam) },
@@ -61,10 +61,10 @@ object EloWalkForwardEngine {
         var historyIndex = 0
 
         for ((cutoff, sameTimeTargets) in targetsByCutoff) {
-            while (historyIndex < orderedHistory.size && orderedHistory[historyIndex].availableAtMillis < cutoff) {
-                val availability = orderedHistory[historyIndex].availableAtMillis
+            while (historyIndex < orderedHistory.size && requireNotNull(orderedHistory[historyIndex].safeAvailabilityMillisOrNull()) < cutoff) {
+                val availability = requireNotNull(orderedHistory[historyIndex].safeAvailabilityMillisOrNull())
                 var batchEnd = historyIndex + 1
-                while (batchEnd < orderedHistory.size && orderedHistory[batchEnd].availableAtMillis == availability) batchEnd++
+                while (batchEnd < orderedHistory.size && orderedHistory[batchEnd].safeAvailabilityMillisOrNull() == availability) batchEnd++
 
                 // Results becoming available together use one shared pre-batch rating snapshot.
                 val ratingDeltas = mutableMapOf<String, Double>()

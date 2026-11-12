@@ -1,11 +1,18 @@
 # Changelog
 
+## Unreleased — add a chronological goals-based Poisson baseline
+
+- Estimate home/away goal rates from preceding same-competition scores using league-average smoothing and explicit league/team sample floors.
+- Update goal features in strict effective-availability batches; reject result rows whose provider availability timestamp predates kickoff instead of guessing when they became usable.
+- Compare Poisson with the validation-selected Elo on identical final-holdout fixtures where both have forecasts; show model coverage separately. Do not fit Dixon–Coles rho or change live probabilities.
+- Synthetic-data regression tests pass in the combined local cycle: 107 JVM tests, Android-test Kotlin compilation and APK assembly. Actions is pending for this grouped model stage.
+
 ## Unreleased — batch Elo research and correct accumulator history
 
 - Add a chronological 27-setting Elo experiment with 60% warm-up, 20% validation, and 20% isolated holdout windows. Select by validation Log Loss only when at least 100 validation forecasts exist; show the selected configuration and holdout comparison with current defaults without changing live forecasts.
 - Mark an accumulator lost immediately after any incorrect finished leg, even while other legs remain pending.
 - Report complete-price coverage for settled coupon groups and suppress ROI, profit factor, and drawdown unless every settled coupon has a complete combined price.
-- Add regression coverage for holdout isolation, insufficient validation samples, a lost coupon with pending legs, and partial price coverage. The combined local run passed 102 JVM tests, Android-test Kotlin compilation and APK assembly; the grouped Actions run is pending.
+- Add regression coverage for holdout isolation, insufficient validation samples, a lost coupon with pending legs, and partial price coverage. The combined local run passed 102 JVM tests, Android-test Kotlin compilation and APK assembly; Actions [43124533252](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43124533252) passed 16 API 34 instrumentation tests, APK build, stable signing and artifact upload.
 
 ## Unreleased — add an attributed international fair-market reference
 

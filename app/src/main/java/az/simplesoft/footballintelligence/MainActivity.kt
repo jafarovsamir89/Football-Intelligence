@@ -48,6 +48,9 @@ import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.EloChronologicalExperimentReport
 import az.simplesoft.footballintelligence.analytics.EloExperimentDataset
 import az.simplesoft.footballintelligence.analytics.EloParameterExperimentEngine
+import az.simplesoft.footballintelligence.analytics.GoalModelComparisonEngine
+import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
+import az.simplesoft.footballintelligence.analytics.AutomaticBacktestReports
 import az.simplesoft.footballintelligence.analytics.CalibrationDiagnostics
 import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
@@ -551,7 +554,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         return result
     }
-    fun automaticBacktestReports():Pair<EloWalkForwardReport,EloChronologicalExperimentReport> {
+    fun automaticBacktestReports():AutomaticBacktestReports {
         data class Row(val history:HistoricalMatch,val target:WalkForwardTarget)
         val byLeague=linkedMapOf<String,MutableList<Row>>()
         readableDatabase.rawQuery(
@@ -593,7 +596,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             predictions=predictions,
         )
         val parameterExperiment=EloParameterExperimentEngine.evaluate(datasets)
-        return walkForward to parameterExperiment
+        val goalModelComparison=GoalModelComparisonEngine.evaluate(datasets,parameterExperiment)
+        return AutomaticBacktestReports(walkForward,parameterExperiment,goalModelComparison)
     }
     fun recordProspectiveForecastSnapshots(
         forecasts:List<ForecastedMatch>,
@@ -1430,6 +1434,7 @@ class MainActivity:ComponentActivity() {
     var automaticBacktestMessage by remember { mutableStateOf("") }
     var automaticBacktestReport by remember { mutableStateOf<EloWalkForwardReport?>(null) }
     var automaticEloExperiment by remember { mutableStateOf<EloChronologicalExperimentReport?>(null) }
+    var automaticGoalComparison by remember { mutableStateOf<GoalModelComparisonReport?>(null) }
     var automaticBacktestRevision by remember { mutableIntStateOf(-1) }
     var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var showBookmakerQuotes by remember { mutableStateOf(false) }
@@ -1677,10 +1682,11 @@ class MainActivity:ComponentActivity() {
         automaticBacktestMessage="Расчёт по локальной автоматической истории…"
         Thread {
             try {
-                val (report,experiment)=store.automaticBacktestReports()
+                val reports=store.automaticBacktestReports()
                 activity.runOnUiThread {
-                    automaticBacktestReport=report
-                    automaticEloExperiment=experiment
+                    automaticBacktestReport=reports.eloWalkForward
+                    automaticEloExperiment=reports.eloParameterExperiment
+                    automaticGoalComparison=reports.goalModelComparison
                     automaticBacktestRevision=revision
                     automaticBacktestRunning=false
                     automaticBacktestMessage=""
@@ -2041,6 +2047,29 @@ class MainActivity:ComponentActivity() {
                         )
                     }
                     Text("Это один ретроспективный split текущей локальной базы, без архивных версий исходных файлов. Параметры не меняют сохранённые прогнозы и не означают будущую точность или прибыль.",style=MaterialTheme.typography.labelSmall)
+                }
+                automaticGoalComparison?.let { comparison ->
+                    HorizontalDivider()
+                    Text("Poisson по голам: сравнение с Elo",fontWeight=FontWeight.SemiBold)
+                    if(comparison.validationStartMillis==null||comparison.holdoutStartMillis==null) {
+                        Text("Недостаточно отдельных временных срезов для validation/holdout.",style=MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text(
+                            "Validation Poisson: Brier ${comparison.validationGoalMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${comparison.validationGoalMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · прогнозов ${comparison.validationGoalMetrics.forecastCount}/${comparison.validationTargetCount}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        val eloPaired=comparison.eloPairedHoldout
+                        val goalPaired=comparison.goalPairedHoldout
+                        Text(
+                            "Holdout на общих матчах ${comparison.pairedHoldoutTargetCount}: Elo ${eloPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${eloPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Poisson ${goalPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${goalPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}. Доступность прогнозов на holdout: Elo ${comparison.eloHoldoutForecastCount}, Poisson ${comparison.goalHoldoutForecastCount} из ${comparison.holdoutTargetCount}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}; Poisson сглаживает атаки/оборону на ${comparison.goalConfig.smoothingMatches.toInt()} псевдоматчах, требует ${comparison.goalConfig.minimumLeagueMatches} матчей лиги и ${comparison.goalConfig.minimumMatchesPerTeam} матчей команды. Dixon–Coles rho не подбирался.",
+                            style=MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                    Text("Обе модели используют только результаты, доступные до cutoff. Это одна проверка текущих исторических файлов; она не подтверждает будущую точность или преимущество.",style=MaterialTheme.typography.labelSmall)
                 }
                 HorizontalDivider()
                 Text("Дополнительный импортированный CSV",fontWeight=FontWeight.SemiBold)

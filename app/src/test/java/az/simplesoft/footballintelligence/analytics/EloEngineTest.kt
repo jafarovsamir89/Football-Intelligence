@@ -24,6 +24,14 @@ class EloEngineTest {
         assertEquals(0, model.matchesUsed)
     }
 
+    @Test fun sourceAvailabilityBeforeKickoffDoesNotMakeResultUsableBeforeTheMatch() {
+        val earlyTimestamp = HistoricalMatch(500, "Alpha", "Beta", 4, 0, availableAtMillis = 0)
+
+        val model = EloEngine.fit(listOf(earlyTimestamp), forecastKickoffMillis = 100)
+
+        assertEquals(0, model.matchesUsed)
+    }
+
     @Test fun sameAvailabilityBatchDoesNotDependOnInputRowOrder() {
         val first = HistoricalMatch(100, "Alpha", "Beta", 3, 0)
         val second = HistoricalMatch(100, "Alpha", "Gamma", 0, 2)

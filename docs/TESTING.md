@@ -6,11 +6,17 @@
 - Commit `4badae9` passed Actions [43121662746](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43121662746): unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901058686` (16,768,389 bytes). The local API 34 instrumentation command could not install the workstation-signed target over the persistent stable-CI-signed app (`INSTALL_FAILED_UPDATE_INCOMPATIBLE`), so it executed zero tests; no app uninstall or data clear was done. Following the user's batching request, the stable APK was not installed on either data-bearing emulator.
 - APK SHA-256: `1ba52ae3eb7a7a1a483fc95db7d2b026398adcea4833b844a535323551c8abd5`. This is the local debug-key build; use the CI stable-signed artifact for data-preserving update installation.
 
-## Current grouped milestone (2026-11-11; local verification passed, Actions pending)
+## Completed P2/P4 grouped milestone (2026-11-11; local and CI verification passed)
 
 - Added tests for immediate loss when one coupon leg is wrong while another is pending, partial settled-price coverage suppression, chronological Elo parameter selection, and final-holdout isolation.
 - One combined local cycle passed 102 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin`, and `:app:assembleDebug`. APK SHA-256: `421046664c314aa6aa001819cdb6543eb79987572778c7ecbdcbc6b33ed8b0da`.
-- The single clean-runner GitHub Actions cycle is pending. No APK update-install is planned for this milestone; CI instrumentation uses its clean API 34 runner.
+- Actions [43124533252](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43124533252) passed unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901853811`. No APK update-install was done on the persistent local emulators.
+
+## Current grouped goal-model milestone (2026-11-12; local verification passed, Actions pending)
+
+- Added a smoothed goals-based Poisson model, strict pre-kickoff effective availability, chronological comparison with selected Elo on paired holdout fixtures, and regression tests for cutoff isolation, sample gates and paired evaluation.
+- One combined local cycle passed 107 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin` and `:app:assembleDebug`. APK SHA-256: `d17edfe037ab7046be93ebbe4e353ae110b7ccc88d1af42e91d2bc87f0f6699e`. `git diff --check` passed; the Actions run is pending.
+- No APK was installed for this model stage. A separate user-requested install of the preceding stable CI APK on the connected phone is recorded in `docs/DEVELOPMENT_LOG.md`. Do not install on the persistent data-bearing emulators.
 
 ## Latest verification status (2026-11-10)
 

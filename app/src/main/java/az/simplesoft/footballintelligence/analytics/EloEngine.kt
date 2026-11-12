@@ -14,6 +14,9 @@ data class HistoricalMatch(
     val availableAtMillis: Long = kickoffMillis,
 )
 
+/** Reject a source timestamp that predates the match; do not guess when its result became available. */
+internal fun HistoricalMatch.safeAvailabilityMillisOrNull(): Long? = availableAtMillis.takeIf { it >= kickoffMillis }
+
 data class EloConfig(
     val initialRating: Double = 1500.0,
     val kFactor: Double = 20.0,
@@ -58,14 +61,16 @@ object EloEngine {
         forecastKickoffMillis: Long,
         config: EloConfig = EloConfig(),
     ): EloRatings {
-        val eligible = history.filter { it.availableAtMillis < forecastKickoffMillis }
+        val eligible = history.filter { match ->
+            match.safeAvailabilityMillisOrNull()?.let { it < forecastKickoffMillis } == true
+        }
             .onEach(::validateMatch)
-            .sortedWith(compareBy<HistoricalMatch> { it.availableAtMillis }.thenBy { it.kickoffMillis }.thenBy { teamKey(it.homeTeam) }.thenBy { teamKey(it.awayTeam) })
+            .sortedWith(compareBy<HistoricalMatch> { requireNotNull(it.safeAvailabilityMillisOrNull()) }.thenBy { it.kickoffMillis }.thenBy { teamKey(it.homeTeam) }.thenBy { teamKey(it.awayTeam) })
         val ratings = mutableMapOf<String, Double>()
         val played = mutableMapOf<String, Int>()
         var drawCount = 0
 
-        for (sameAvailability in eligible.groupBy { it.availableAtMillis }.toSortedMap().values) {
+        for (sameAvailability in eligible.groupBy { requireNotNull(it.safeAvailabilityMillisOrNull()) }.toSortedMap().values) {
             // A date-only source may give many matches the same availability boundary. Use one
             // pre-batch rating snapshot so result order cannot leak into other matches in that batch.
             val ratingDeltas = mutableMapOf<String, Double>()

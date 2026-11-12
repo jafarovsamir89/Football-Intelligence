@@ -1,6 +1,16 @@
 # Development log
 
-## 2026-11-11 — bundle P2 Elo research and P4 accumulator correctness (local verification passed; Actions pending)
+## 2026-11-12 — add a goals-based Poisson holdout comparison (local verification passed; Actions pending)
+
+- Continue batching after the completed Elo/accumulator stage. One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed: 107 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. APK SHA-256: `d17edfe037ab7046be93ebbe4e353ae110b7ccc88d1af42e91d2bc87f0f6699e`. `git diff --check` passed; GitHub Actions is pending.
+- Separately, at the user's explicit request, downloaded CI artifact `13901853811` from commit `6091a40` and installed it on the connected Xiaomi phone using `adb install -r`; package `0.1.0` launched as `MainActivity`, the process remained alive, and the recent log contained no fatal or SQLite-lock exception. This was a fresh install (`firstInstallTime` equals `lastUpdateTime`), so no prior phone app database existed to preserve. APK SHA-256: `c8c196018306d8087a74dd67d9b5c91ffd7e26c98a0be49f9986f8f50da9c6ae`. This older CI artifact does not contain the in-progress Poisson group; the persistent API 34 emulator profiles remain untouched.
+- Added a same-competition goal-rate model with league-average smoothing, an eight-match pseudo-count, minimum 50 league results / 5 team appearances, and lambda bounds 0.05–5.0. It uses historical goals, not external xG; Dixon–Coles rho remains unapplied.
+- Added streaming walk-forward goal forecasts with strict `< cutoff` use, shared equal-effective-availability batches, and separate history/expected-goal sample metadata. A source availability timestamp earlier than kickoff is rejected rather than clamped to kickoff; Elo and Poisson now share this guard.
+- The analysis pipeline compares the validation-selected Elo with Poisson on the exact same final-holdout fixtures where both produced a forecast, while showing each model's full holdout coverage separately. The production Elo and immutable prospective records are unchanged.
+- Added synthetic tests for early-source-timestamp leakage, walk-forward vs independent cutoff fits, sample gates, proper-score output, and paired holdout rows; tightened the Elo cutoff regression for source timestamps earlier than kickoff.
+- Updated README, architecture, research, limitations, roadmap, changelog, testing diary and `AGENTS.md` continuation. Next: commit and push this grouped change, then verify its single Actions run. No APK was installed for this model stage, and both data-bearing API 34 emulator profiles remain untouched.
+
+## 2026-11-11 — bundle P2 Elo research and P4 accumulator correctness (local and CI verification passed)
 
 - User requested that work be batched so APK builds, emulator installs and full test cycles do not run after every small change. Updated `AGENTS.md` to require one combined local verification/build and one CI cycle after related code, tests and docs are complete. Existing API 34 emulator databases are preserved; this grouped milestone will not update-install unless a specific acceptance check later needs it.
 - Added immediate `LOST` settlement when any finished leg is incorrect, even while another leg is pending. The result retains correct/incorrect/pending counts and the history label now says how many legs were actually checked.
@@ -8,7 +18,8 @@
 - Added a deterministic 27-point Elo grid over K={10,20,30}, home advantage={0,65,100} and draw prior={0.22,0.25,0.28}. Distinct forecast cutoff timestamps split 60% warm-up / 20% validation / 20% final holdout. Select by validation Log Loss only with at least 100 validation forecasts; then compare the selected configuration against production defaults on holdout. Each competition keeps its own ratings and strict availability cutoff. The report does not change production settings or saved prospective forecasts.
 - The analysis screen displays warm-up scores, validation/test dates, chosen parameters, holdout Brier/Log Loss against defaults and the three leading validation configurations. Added regression cases for a loss with another leg pending, incomplete price coverage, insufficient validation samples and holdout exclusion.
 - One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed: 102 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and debug APK assembly. `git diff --check` passed. APK SHA-256: `421046664c314aa6aa001819cdb6543eb79987572778c7ecbdcbc6b33ed8b0da`.
-- No APK was installed and no emulator was started or modified. Next: commit and push this grouped milestone once; verify its single clean-runner Actions cycle. Do not update-install during routine verification.
+- Commit `6091a40` passed Actions [43124533252](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43124533252): unit tests, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13901853811` (16,784,409 bytes). The API 34 test runner was the clean CI emulator.
+- No APK was installed and no local emulator was started or modified. The next code work is the separately logged Poisson model stage; do not start its verification until its grouped implementation is complete.
 
 ## 2026-11-11 — add a separate international fair-market reference (CI passed; no local emulator install)
 
