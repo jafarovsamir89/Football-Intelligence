@@ -5,8 +5,12 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
+import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
+import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastEvaluator
+import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
+import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
 import az.simplesoft.footballintelligence.data.KickoffPrecision
 import az.simplesoft.footballintelligence.data.ProviderMatch
 import org.junit.Assert.assertEquals
@@ -163,7 +167,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val db = store.writableDatabase
-                assertEquals(13, db.version)
+                assertEquals(14, db.version)
                 assertTrue(tableExists(db, "historical_results"))
                 assertTrue(tableExists(db, "provider_sync_state"))
                 assertTrue(tableExists(db, "bookmaker_odds_snapshots"))
@@ -172,6 +176,8 @@ class StoreMigrationInstrumentedTest {
                 assertTrue(tableExists(db, "prospective_forecast_settlements"))
                 assertTrue(tableExists(db, "market_reference_snapshots"))
                 assertTrue(tableExists(db, "market_reference_sync_state"))
+                assertTrue(columnExists(db, "virtual_accumulator_legs", "market_fair_probability"))
+                assertTrue(columnExists(db, "virtual_accumulator_legs", "model_minus_market"))
                 assertTrue(columnExists(db, "matches", "source_key"))
                 assertTrue(columnExists(db, "matches", "captured_at"))
 
@@ -237,7 +243,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(13, upgraded.version)
+                assertEquals(14, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulators", "selection_basis"))
                 upgraded.rawQuery(
                     "SELECT provider_id,leg_count,snapshot_key,selection_basis FROM virtual_accumulators",
@@ -280,7 +286,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(13, upgraded.version)
+                assertEquals(14, upgraded.version)
                 assertTrue(tableExists(upgraded, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(upgraded, "prospective_forecast_settlements"))
                 upgraded.rawQuery(
@@ -313,7 +319,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val upgraded=store.writableDatabase
-                assertEquals(13,upgraded.version)
+                assertEquals(14,upgraded.version)
                 assertTrue(tableExists(upgraded,"market_reference_snapshots"))
                 assertTrue(tableExists(upgraded,"market_reference_sync_state"))
                 val match=store.matches().single()
@@ -321,6 +327,93 @@ class StoreMigrationInstrumentedTest {
                 assertEquals("Türkiye",match.home)
                 assertEquals("Belgium",match.away)
                 assertTrue(store.freshMarketReferences().isEmpty())
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun versionThirteenUpgradeAddsMarketComparisonFieldsWithoutDroppingCouponLegs() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-v13-market-comparison-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        try {
+            val db = context.openOrCreateDatabase(databaseName, Context.MODE_PRIVATE, null)
+            db.execSQL(
+                "CREATE TABLE virtual_accumulator_legs (" +
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT, accumulator_id INTEGER NOT NULL, match_id INTEGER NOT NULL, " +
+                    "home_team TEXT NOT NULL, away_team TEXT NOT NULL, scheduled_kickoff INTEGER NOT NULL, " +
+                    "outcome TEXT NOT NULL, model_probability REAL NOT NULL, bookmaker_decimal_odds REAL, " +
+                    "bookmaker_odds_captured_at INTEGER, UNIQUE(accumulator_id,match_id))",
+            )
+            db.execSQL(
+                "INSERT INTO virtual_accumulator_legs(accumulator_id,match_id,home_team,away_team,scheduled_kickoff," +
+                    "outcome,model_probability,bookmaker_decimal_odds,bookmaker_odds_captured_at) " +
+                    "VALUES(1,42,'Alpha FC','Beta FC',200000,'H',0.61,1.9,150000)",
+            )
+            db.version = 13
+            db.close()
+
+            Store(context, databaseName).use { store ->
+                val upgraded = store.writableDatabase
+                assertEquals(14, upgraded.version)
+                assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "market_fair_probability"))
+                assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "model_minus_market"))
+                upgraded.rawQuery(
+                    "SELECT match_id,home_team,away_team,outcome,model_probability,bookmaker_decimal_odds," +
+                        "bookmaker_odds_captured_at,market_fair_probability,model_minus_market " +
+                        "FROM virtual_accumulator_legs WHERE accumulator_id=1",
+                    null,
+                ).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(42, cursor.getInt(0))
+                    assertEquals("Alpha FC", cursor.getString(1))
+                    assertEquals("Beta FC", cursor.getString(2))
+                    assertEquals("H", cursor.getString(3))
+                    assertEquals(.61, cursor.getDouble(4), 1e-12)
+                    assertEquals(1.9, cursor.getDouble(5), 1e-12)
+                    assertEquals(150000L, cursor.getLong(6))
+                    assertTrue(cursor.isNull(7))
+                    assertTrue(cursor.isNull(8))
+                    assertFalse(cursor.moveToNext())
+                }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun marketDisagreementCouponPersistsAndReloadsItsPriceComparison() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-market-comparison-roundtrip-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val capturedAt = System.currentTimeMillis()
+        val kickoff = capturedAt + TimeUnit.HOURS.toMillis(3)
+        val candidate = VirtualCouponCandidate(
+            providerId = "misli",
+            providerName = "Misli",
+            picks = listOf(
+                VirtualCouponPick(910101,"Alpha FC","Beta FC",kickoff,"H",.65,2.1,capturedAt,.50,.15),
+                VirtualCouponPick(910102,"Gamma FC","Delta FC",kickoff+60_000,"D",.42,3.0,capturedAt,.35,.07),
+            ),
+            combinedDecimalOdds = 6.3,
+            requestedLegCount = 2,
+            jointProbabilityBounds = JointProbabilityBounds(0.07,0.42),
+            selectionBasis = CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,
+        )
+        try {
+            Store(context,databaseName).use { store ->
+                assertEquals(1,store.recordAccumulatorDrafts(listOf(candidate),capturedAt))
+                assertEquals(0,store.recordAccumulatorDrafts(listOf(candidate),capturedAt))
+                val saved=store.virtualAccumulatorHistory().single()
+                assertEquals(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,saved.selectionBasis)
+                assertEquals(.50,saved.picks.first().marketFairProbability!!,1e-12)
+                assertEquals(.15,saved.picks.first().modelMinusMarket!!,1e-12)
+                assertEquals(2.1,saved.picks.first().bookmakerDecimalOdds!!,1e-12)
+                store.writableDatabase.rawQuery("SELECT strategy_version FROM virtual_accumulators",null).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT.strategyVersion,cursor.getString(0))
+                }
             }
         } finally {
             context.deleteDatabase(databaseName)

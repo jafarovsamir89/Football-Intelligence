@@ -105,6 +105,72 @@ class AccumulatorEngineTest {
         assertEquals(CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS,drafts.first().selectionBasis)
     }
 
+    @Test fun marketDisagreementDraftUsesOnlyFreshSameBookPricesAndRanksPositiveGaps() {
+        val now = 10_000L
+        val forecasts = listOf(
+            ForecastedMatch(1,"Home1","Away1",100,OutcomeProbabilities(.70,.20,.10)),
+            ForecastedMatch(2,"Home2","Away2",200,OutcomeProbabilities(.20,.60,.20)),
+            ForecastedMatch(3,"Home3","Away3",300,OutcomeProbabilities(.30,.24,.46)),
+        )
+        val prices = mapOf("misli" to mapOf(
+            1 to ThreeWayDecimalOdds(2.0,3.0,4.0,now),
+            2 to ThreeWayDecimalOdds(4.0,2.0,4.0,now),
+            3 to ThreeWayDecimalOdds(2.0,4.0,3.0,now),
+        ))
+
+        val candidate = VirtualCouponBuilder.buildAccumulators(
+            forecasts,listOf("misli" to "Misli"),prices,nowMillis=now,
+        ).single { it.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT&&it.requestedLegCount==2 }
+
+        assertEquals("misli",candidate.providerId)
+        assertEquals(listOf(1,3),candidate.picks.map { it.matchId })
+        assertEquals(listOf("H","A"),candidate.picks.map { it.outcome })
+        assertTrue(candidate.picks.all { (it.modelMinusMarket ?: 0.0)>0.0 })
+        assertTrue(candidate.picks.all { it.marketFairProbability!=null&&it.bookmakerOddsCapturedAtMillis==now })
+        assertEquals(6.0,candidate.combinedDecimalOdds!!,1e-12)
+    }
+
+    @Test fun modelMarketDisagreementIsNotCreatedForZeroEdgeOrStalePrice() {
+        val now=60L*60*1000
+        val forecasts=listOf(
+            ForecastedMatch(1,"Home1","Away1",now+1,OutcomeProbabilities(.7,.2,.1)),
+            ForecastedMatch(2,"Home2","Away2",now+2,OutcomeProbabilities(.7,.2,.1)),
+        )
+        val exactFair=ThreeWayDecimalOdds(1.0/.7,1.0/.2,1.0/.1,now)
+        val zeroDifference=VirtualCouponBuilder.buildAccumulators(
+            forecasts,listOf("misli" to "Misli"),mapOf("misli" to mapOf(1 to exactFair,2 to exactFair)),nowMillis=now,
+        )
+        val stale=VirtualCouponBuilder.buildAccumulators(
+            forecasts,listOf("misli" to "Misli"),
+            mapOf("misli" to mapOf(
+                1 to exactFair.copy(capturedAtMillis=now-VirtualCouponBuilder.BOOKMAKER_QUOTE_FRESHNESS_MILLIS-1),
+                2 to exactFair.copy(capturedAtMillis=now-VirtualCouponBuilder.BOOKMAKER_QUOTE_FRESHNESS_MILLIS-1),
+            )),
+            nowMillis=now,
+        )
+
+        assertTrue(zeroDifference.none { it.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT })
+        assertTrue(stale.none { it.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT })
+    }
+
+    @Test fun marketDisagreementNeverCombinesPricesFromDifferentLocalBooks() {
+        val now = 60L * 60 * 1000
+        val forecasts = listOf(
+            ForecastedMatch(1,"Home1","Away1",now+1,OutcomeProbabilities(.70,.20,.10)),
+            ForecastedMatch(2,"Home2","Away2",now+2,OutcomeProbabilities(.20,.60,.20)),
+        )
+        val splitPrices = mapOf(
+            "misli" to mapOf(1 to ThreeWayDecimalOdds(2.0,3.0,4.0,now)),
+            "topaz" to mapOf(2 to ThreeWayDecimalOdds(4.0,2.0,4.0,now)),
+        )
+
+        val drafts = VirtualCouponBuilder.buildAccumulators(
+            forecasts,listOf("misli" to "Misli","topaz" to "TOPAZ"),splitPrices,nowMillis=now,
+        )
+
+        assertTrue(drafts.none { it.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT })
+    }
+
     @Test fun staleAndFutureDatedPricesCannotCreatePricedAccumulatorLegs() {
         val now=60L*60*1000
         val forecasts=(1..3).map { forecast(it,it*100L,.7-(it*.05)) }
@@ -199,6 +265,20 @@ class AccumulatorEngineTest {
         assertEquals(.75,report.singlePickHitRate!!,1e-12)
         assertTrue(report.couponHitRate95Low!!<report.couponHitRate!!)
         assertTrue(report.couponHitRate95High!!>report.couponHitRate!!)
+    }
+
+    @Test fun marketDisagreementPerformanceNeverReportsReturnMetrics() {
+        val entry=history(7,AccumulatorSettlementState.WON,3.0,70,11)
+            .copy(selectionBasis=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT)
+
+        val report=AccumulatorPerformanceEngine.evaluate(
+            listOf(entry),"misli",2,CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,emptyList(),
+        )
+
+        assertEquals(1.0,report.settledPriceCoverage!!,0.0)
+        assertNull(report.virtualRoi)
+        assertNull(report.profitFactor)
+        assertNull(report.maximumDrawdown)
     }
 
     @Test fun performanceLeavesRoiUnavailableWhenASettledCouponHadNoCompletePrice() {

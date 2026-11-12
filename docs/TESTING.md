@@ -1,5 +1,11 @@
 # Testing
 
+## In-progress market-disagreement virtual coupon batch (verification pending)
+
+- Cover selection of the highest positive Elo minus local de-vigged probability, exact provider isolation (including split Misli/TOPAZ prices), stale/zero-difference rejection and suppression of ROI/profit factor/drawdown.
+- Add v13→v14 migration coverage preserving existing accumulator legs and a SQLite round-trip for saved market fair probability, price timestamp, delta and strategy version.
+- The single combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. APK SHA-256: `4703d7175c3dd07e1600bee54d23df603e784e1e292b81ddc7c15d977cc0da6c`; `git diff --check` passed. Actions and API 34 instrumentation execution are pending; persistent emulator databases remain untouched.
+
 ## Completed Dixon–Coles validation-selection batch (local and CI verification passed)
 
 - Added deterministic selection from five safe rho values using validation Log Loss, with a 100-forecast default floor and rho=0 fallback below the floor.

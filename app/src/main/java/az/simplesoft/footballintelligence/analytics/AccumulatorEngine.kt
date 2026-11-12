@@ -119,7 +119,8 @@ object AccumulatorPerformanceEngine {
         val priced = settled.filter { it.combinedDecimalOdds?.let { odds -> odds.isFinite() && odds > 1.0 } == true }
         val missingPriceCount = settled.size - priced.size
         val priceCoverage = priced.size.toDouble().div(settled.size).takeIf { settled.isNotEmpty() }
-        val completePriceCoverage = settled.isNotEmpty() && priced.size == settled.size
+        val completePriceCoverage = selectionBasis != CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT &&
+            settled.isNotEmpty() && priced.size == settled.size
         val roi = if (!completePriceCoverage) null else {
             (priced.sumOf { if (it.settlement.state == AccumulatorSettlementState.WON) it.combinedDecimalOdds!! else 0.0 } / priced.size) - 1.0
         }

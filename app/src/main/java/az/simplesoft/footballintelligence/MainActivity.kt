@@ -167,6 +167,12 @@ fun fairProbabilities(q: Quote, method: MarginMethod = MarginMethod.BASIC): Trip
     return Triple(p.home, p.draw, p.away)
 }
 private fun percentagePoints(value:Double):String = "%.1f".format(value*100.0)
+private fun signedPercentagePoints(value:Double):String = "%+.1f".format(value*100.0)
+private fun couponSelectionBasisLabel(basis:CouponSelectionBasis):String = when(basis) {
+    CouponSelectionBasis.MODEL_RANKED -> "по вероятности модели"
+    CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "по вероятности модели среди матчей со свежими линиями"
+    CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "по расхождению модели с линией"
+}
 
 /** Serializes SQLite writers shared by the foreground screen and WorkManager in this process. */
 internal object StoreWriteCoordinator {
@@ -202,7 +208,7 @@ internal object StoreWriteCoordinator {
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 13) {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 14) {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -262,6 +268,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<11) createProspectiveForecastTables(db)
         if(oldVersion<12) createMarketReferenceTables(db)
         if(oldVersion<13) createInternationalOddsTables(db)
+        if(oldVersion<14) ensureAccumulatorComparisonColumns(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -287,8 +294,25 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     private fun createAccumulatorTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS virtual_accumulators (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, leg_count INTEGER NOT NULL, captured_at INTEGER NOT NULL, snapshot_key TEXT NOT NULL, strategy_version TEXT NOT NULL, selection_basis TEXT NOT NULL DEFAULT 'MODEL_RANKED', combined_decimal_odds REAL, joint_probability_lower REAL NOT NULL, joint_probability_upper REAL NOT NULL, UNIQUE(provider_id,leg_count,snapshot_key))")
         db.execSQL("CREATE INDEX IF NOT EXISTS virtual_accumulators_history_idx ON virtual_accumulators(provider_id,leg_count,captured_at)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS virtual_accumulator_legs (id INTEGER PRIMARY KEY AUTOINCREMENT, accumulator_id INTEGER NOT NULL, match_id INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, scheduled_kickoff INTEGER NOT NULL, outcome TEXT NOT NULL, model_probability REAL NOT NULL, bookmaker_decimal_odds REAL, bookmaker_odds_captured_at INTEGER, UNIQUE(accumulator_id,match_id))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS virtual_accumulator_legs (id INTEGER PRIMARY KEY AUTOINCREMENT, accumulator_id INTEGER NOT NULL, match_id INTEGER NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, scheduled_kickoff INTEGER NOT NULL, outcome TEXT NOT NULL, model_probability REAL NOT NULL, bookmaker_decimal_odds REAL, bookmaker_odds_captured_at INTEGER, market_fair_probability REAL, model_minus_market REAL, UNIQUE(accumulator_id,match_id))")
         db.execSQL("CREATE INDEX IF NOT EXISTS virtual_accumulator_legs_match_idx ON virtual_accumulator_legs(match_id,accumulator_id)")
+    }
+    private fun ensureAccumulatorComparisonColumns(db: SQLiteDatabase) {
+        val legsTableExists = db.rawQuery(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='virtual_accumulator_legs'",
+            null,
+        ).use { it.moveToFirst() }
+        if (!legsTableExists) createAccumulatorTables(db)
+        val columns = mutableSetOf<String>()
+        db.rawQuery("PRAGMA table_info(virtual_accumulator_legs)", null).use { cursor ->
+            while (cursor.moveToNext()) columns += cursor.getString(cursor.getColumnIndexOrThrow("name"))
+        }
+        if ("market_fair_probability" !in columns) {
+            db.execSQL("ALTER TABLE virtual_accumulator_legs ADD COLUMN market_fair_probability REAL")
+        }
+        if ("model_minus_market" !in columns) {
+            db.execSQL("ALTER TABLE virtual_accumulator_legs ADD COLUMN model_minus_market REAL")
+        }
     }
     private fun createProspectiveForecastTables(db:SQLiteDatabase) {
         db.execSQL(
@@ -843,11 +867,14 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 val bounds=candidate.jointProbabilityBounds ?: continue
                 if(size !in VirtualCouponBuilder.supportedAccumulatorSizes || candidate.picks.size!=size || candidate.picks.any { it.kickoffMillis<=nowMillis }) continue
                 val signature=candidate.selectionBasis.name+":"+candidate.picks.joinToString(";") { pick ->
-                    listOf(pick.matchId,pick.outcome,pick.modelProbability.toBits(),pick.bookmakerDecimalOdds?.toBits()).joinToString(":")
+                    listOf(
+                        pick.matchId,pick.outcome,pick.modelProbability.toBits(),pick.bookmakerDecimalOdds?.toBits(),
+                        pick.marketFairProbability?.toBits(),pick.modelMinusMarket?.toBits(),
+                    ).joinToString(":")
                 }
                 val values=ContentValues().apply {
                     put("provider_id",candidate.providerId);put("leg_count",size);put("captured_at",nowMillis)
-                    put("snapshot_key",signature);put("strategy_version","elo-max-1x2-frechet-v1")
+                    put("snapshot_key",signature);put("strategy_version",candidate.selectionBasis.strategyVersion)
                     put("selection_basis",candidate.selectionBasis.name)
                     if(candidate.combinedDecimalOdds==null) putNull("combined_decimal_odds") else put("combined_decimal_odds",candidate.combinedDecimalOdds)
                     put("joint_probability_lower",bounds.lower);put("joint_probability_upper",bounds.upper)
@@ -860,6 +887,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                         put("scheduled_kickoff",pick.kickoffMillis);put("outcome",pick.outcome);put("model_probability",pick.modelProbability)
                         if(pick.bookmakerDecimalOdds==null) putNull("bookmaker_decimal_odds") else put("bookmaker_decimal_odds",pick.bookmakerDecimalOdds)
                         if(pick.bookmakerOddsCapturedAtMillis==null) putNull("bookmaker_odds_captured_at") else put("bookmaker_odds_captured_at",pick.bookmakerOddsCapturedAtMillis)
+                        if(pick.marketFairProbability==null) putNull("market_fair_probability") else put("market_fair_probability",pick.marketFairProbability)
+                        if(pick.modelMinusMarket==null) putNull("model_minus_market") else put("model_minus_market",pick.modelMinusMarket)
                     }
                     db.insertOrThrow("virtual_accumulator_legs",null,leg)
                 }
@@ -880,7 +909,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             val picks=mutableListOf<az.simplesoft.footballintelligence.analytics.VirtualCouponPick>()
             val results=mutableMapOf<Int,AccumulatorMatchResult>()
             readableDatabase.rawQuery(
-                "SELECT l.match_id,l.home_team,l.away_team,l.scheduled_kickoff,l.outcome,l.model_probability,l.bookmaker_decimal_odds,l.bookmaker_odds_captured_at,m.kickoff,m.finished,m.home_score,m.away_score FROM virtual_accumulator_legs l LEFT JOIN matches m ON m.id=l.match_id WHERE l.accumulator_id=? ORDER BY l.scheduled_kickoff",
+                "SELECT l.match_id,l.home_team,l.away_team,l.scheduled_kickoff,l.outcome,l.model_probability,l.bookmaker_decimal_odds,l.bookmaker_odds_captured_at,l.market_fair_probability,l.model_minus_market,m.kickoff,m.finished,m.home_score,m.away_score FROM virtual_accumulator_legs l LEFT JOIN matches m ON m.id=l.match_id WHERE l.accumulator_id=? ORDER BY l.scheduled_kickoff",
                 arrayOf(header.id.toString()),
             ).use { c ->
                 while(c.moveToNext()) {
@@ -888,11 +917,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                     picks+=az.simplesoft.footballintelligence.analytics.VirtualCouponPick(
                         matchId,c.getString(1),c.getString(2),c.getLong(3),c.getString(4),c.getDouble(5),
                         if(c.isNull(6)) null else c.getDouble(6),if(c.isNull(7)) null else c.getLong(7),
+                        if(c.isNull(8)) null else c.getDouble(8),if(c.isNull(9)) null else c.getDouble(9),
                     )
-                    if(!c.isNull(8)) {
-                        val actualKickoff=runCatching { Instant.parse(c.getString(8)).toEpochMilli() }.getOrNull()
+                    if(!c.isNull(10)) {
+                        val actualKickoff=runCatching { Instant.parse(c.getString(10)).toEpochMilli() }.getOrNull()
                         if(actualKickoff!=null) results[matchId]=AccumulatorMatchResult(
-                            matchId,actualKickoff,c.getInt(9)==1,if(c.isNull(10)) null else c.getInt(10),if(c.isNull(11)) null else c.getInt(11),
+                            matchId,actualKickoff,c.getInt(11)==1,if(c.isNull(12)) null else c.getInt(12),if(c.isNull(13)) null else c.getInt(13),
                         )
                     }
                 }
@@ -2010,11 +2040,12 @@ class MainActivity:ComponentActivity() {
                 }
                 Text("Виртуальные экспрессы",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
                 Text("Размеры 2 / 3 / 5 / 8 / 10 доступны только при достаточном числе будущих матчей с точным kickoff и историей для модели. Отбираются исходы с наибольшими расчётными маргинальными вероятностями; более слабые матчи не добавляются ради размера.",style=MaterialTheme.typography.bodySmall)
+                Text("Исследовательские купоны по расхождению показывают только положительную разницу между Elo и вероятностью без маржи из полной свежей линии того же букмекера. Модель не калибрована: это не EV, не прибыль и не рекомендация; при отсутствии точной свежей линии такие исходы не строятся.",style=MaterialTheme.typography.labelSmall)
                 if(accumulatorDrafts.isEmpty()) Text("Пока недостаточно прогнозируемых матчей для экспресса из двух исходов. Доступно матчей: ${forecastedMatches.size}.",style=MaterialTheme.typography.bodySmall)
                 accumulatorDrafts.forEach { draft ->
                     ElevatedCard {
                         Column(Modifier.fillMaxWidth().padding(14.dp),verticalArrangement=Arrangement.spacedBy(7.dp)) {
-                            val basisLabel=if(draft.selectionBasis==CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) "по свежим линиям" else "по модели"
+                            val basisLabel=couponSelectionBasisLabel(draft.selectionBasis)
                             Text("${draft.providerName} · ${draft.requestedLegCount} исхода · $basisLabel",fontWeight=FontWeight.Bold)
                             val currentQuotes=if(draft.providerId=="misli") misliOdds else topazOdds
                             val linkedCurrentQuotes=currentQuotes.count { it.matchId!=null }
@@ -2027,18 +2058,27 @@ class MainActivity:ComponentActivity() {
                                     val quoteTime=pick.bookmakerOddsCapturedAtMillis?.let { DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) }
                                     " · ${draft.providerName} $odds${quoteTime?.let { " (снимок $it)" }.orEmpty()}"
                                 }.orEmpty()
-                                Text("${niceTime(Instant.ofEpochMilli(pick.kickoffMillis).toString())} · ${pick.homeTeam} — ${pick.awayTeam}: ${labelOutcome(pick.outcome)} ${"%.1f".format(pick.modelProbability*100)}%$price")
+                                val modelMarket=if(draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
+                                    val marketProbability=pick.marketFairProbability
+                                    val difference=pick.modelMinusMarket
+                                    if(marketProbability!=null&&difference!=null) " · рынок без маржи ${"%.1f".format(marketProbability*100)}% · Δ ${signedPercentagePoints(difference)} п.п." else ""
+                                } else ""
+                                Text("${niceTime(Instant.ofEpochMilli(pick.kickoffMillis).toString())} · ${pick.homeTeam} — ${pick.awayTeam}: ${labelOutcome(pick.outcome)} · модель ${"%.1f".format(pick.modelProbability*100)}%$modelMarket$price")
                             }
                             draft.jointProbabilityBounds?.let { bounds ->
                                 Text("Совместная вероятность: только математические границы ${(bounds.lower*100).roundToInt()}–${(bounds.upper*100).roundToInt()}%; зависимость матчей не смоделирована.",style=MaterialTheme.typography.bodySmall)
-                                draft.combinedDecimalOdds?.let { odds ->
+                                draft.combinedDecimalOdds?.takeIf { draft.selectionBasis!=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT }?.let { odds ->
                                     val evLower=(odds*bounds.lower-1.0)*100.0
                                     val evUpper=(odds*bounds.upper-1.0)*100.0
                                     Text("Условный EV по этим модельным границам: ${"%.1f".format(evLower)}–${"%.1f".format(evUpper)}% на условную единицу; Elo не откалиброван, это не оценка реальной прибыли.",style=MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if(draft.combinedDecimalOdds!=null) Text("Условный общий коэффициент ${"%.2f".format(draft.combinedDecimalOdds)} — произведение только свежих линий ${draft.providerName}.",fontWeight=FontWeight.SemiBold)
-                            Text(if(draft.combinedDecimalOdds!=null) "Снимки коэффициентов фиксируются вместе с виртуальным купоном до матчей. Это не прогнозируемая прибыль: Elo не откалиброван, а совместный шанс известен лишь в указанном диапазоне." else "Нет полной свежей линии ${draft.providerName} для каждого исхода; общий коэффициент и денежная доходность недоступны. Виртуальный черновик сохраняет только модельные вероятности.",style=MaterialTheme.typography.labelSmall)
+                            Text(when {
+                                draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "Положительное расхождение Elo с линией без маржи — только исследовательский фильтр. Модель не откалибрована; EV/ROI скрыты и прибыль не оценивается."
+                                draft.combinedDecimalOdds!=null -> "Снимки коэффициентов фиксируются вместе с виртуальным купоном до матчей. Это не прогнозируемая прибыль: Elo не откалиброван, а совместный шанс известен лишь в указанном диапазоне."
+                                else -> "Нет полной свежей линии ${draft.providerName} для каждого исхода; общий коэффициент и денежная доходность недоступны. Виртуальный черновик сохраняет только модельные вероятности."
+                            },style=MaterialTheme.typography.labelSmall)
                         }
                     }
                 }
@@ -2048,7 +2088,7 @@ class MainActivity:ComponentActivity() {
                 if(accumulatorHistory.isEmpty()) Text("История начнёт заполняться автоматически при наличии минимум двух доступных прогнозов.",style=MaterialTheme.typography.bodySmall)
                 accumulatorHistory.take(30).forEach { entry ->
                     val provider=oddsProviders.firstOrNull { it.providerId==entry.providerId }?.displayName ?: entry.providerId
-                    val basisLabel=if(entry.selectionBasis==CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) "по линиям" else "по модели"
+                    val basisLabel=couponSelectionBasisLabel(entry.selectionBasis)
                     val checked=DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(entry.capturedAtMillis))
                     val stateLabel=when(entry.settlement.state) {
                         AccumulatorSettlementState.PENDING -> "Ожидает матчей"
@@ -2059,6 +2099,11 @@ class MainActivity:ComponentActivity() {
                         AccumulatorSettlementState.INVALID -> "Некорректная запись"
                     }
                     Text("$checked · $provider · ${entry.legCount} исхода $basisLabel · $stateLabel${entry.combinedDecimalOdds?.let { " · общий коэффициент ${"%.2f".format(it)}" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
+                    if(entry.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) entry.picks.forEach pickLoop@ { pick ->
+                        val market=pick.marketFairProbability ?: return@pickLoop
+                        val delta=pick.modelMinusMarket ?: return@pickLoop
+                        Text("${pick.homeTeam} — ${pick.awayTeam}: модель ${"%.1f".format(pick.modelProbability*100)}%, линия без маржи ${"%.1f".format(market*100)}%, Δ ${signedPercentagePoints(delta)} п.п.",style=MaterialTheme.typography.labelSmall)
+                    }
                 }
                 accumulatorHistory.groupBy { Triple(it.providerId,it.legCount,it.selectionBasis) }.forEach { (key, entries) ->
                     val singles=checkedCouponHistory.asSequence().filter { it.providerId==key.first }
@@ -2071,11 +2116,15 @@ class MainActivity:ComponentActivity() {
                         }.toList()
                     val report=AccumulatorPerformanceEngine.evaluate(entries,key.first,key.second,key.third,singles)
                     val provider=oddsProviders.firstOrNull { it.providerId==key.first }?.displayName ?: key.first
-                    val basisLabel=if(key.third==CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) "по линиям" else "по модели"
+                    val basisLabel=couponSelectionBasisLabel(key.third)
                     val hit=report.couponHitRate?.let { "${report.wonCoupons}/${report.settledCoupons} (${"%.1f".format(it*100)}%)" } ?: "ожидает исходов"
                     val singleHit=report.singlePickHitRate?.let { " · одиночные прогнозы тех же матчей ${report.matchingSinglePicks}, ${"%.1f".format(it*100)}%" }.orEmpty()
-                    val roi=report.virtualRoi?.let { " · виртуальный ROI по полной линии ${"%.1f".format(it*100)}% (n=${report.pricedSettledCoupons})" }
-                        ?: if(report.settledCoupons>0&&report.pricedSettledCoupons>0) " · ROI скрыт: цены есть только у части завершённых купонов" else " · ROI недоступен: нет полной цены у завершённых купонов"
+                    val roi=when {
+                        key.third==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> " · ROI скрыт: исследовательское сравнение модели с рынком"
+                        report.virtualRoi!=null -> " · виртуальный ROI по полной линии ${"%.1f".format(report.virtualRoi*100)}% (n=${report.pricedSettledCoupons})"
+                        report.settledCoupons>0&&report.pricedSettledCoupons>0 -> " · ROI скрыт: цены есть только у части завершённых купонов"
+                        else -> " · ROI недоступен: нет полной цены у завершённых купонов"
+                    }
                     val priceCoverage=report.settledPriceCoverage?.let { "${report.pricedSettledCoupons}/${report.settledCoupons} (${"%.0f".format(it*100)}%; без полной цены ${report.settledCouponsWithoutPrice})" } ?: "нет завершённых купонов"
                     Text("Проверка $provider · ${key.second} исхода $basisLabel: купоны ${report.settledCoupons}, попадания $hit$singleHit · покрытие ценами $priceCoverage$roi",style=MaterialTheme.typography.bodySmall)
                     if(report.settledCoupons>0&&report.couponHitRate95Low!=null&&report.couponHitRate95High!=null) {

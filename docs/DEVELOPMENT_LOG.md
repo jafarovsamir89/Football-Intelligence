@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-12 — research-only market-disagreement coupon basis (local verification passed; CI pending)
+
+- Added a separate same-book virtual accumulator pool. For every exact-linked fixture with a complete fresh 1X2 line, it removes the book margin proportionally, selects only the largest positive Elo-minus-market probability gap, and ranks legs by that gap. Misli and TOPAZ stay separate. Numerical noise at or below `1e-12` is ignored.
+- Saved the selected fair market probability and signed model-market difference per leg in SQLite v14. Existing coupon legs are preserved with nullable migration columns; strategy versions and uniqueness signatures retain the comparison values.
+- The UI labels the basis as research, shows the model/market probabilities and difference, and suppresses EV/ROI/profit factor/drawdown for this basis. No market-comparison draft is generated without two eligible exact-linked fresh-price legs.
+- Added JVM selection/quality/performance and cross-book isolation coverage, plus API 34 v13→v14 migration and SQLite round-trip coverage. The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. APK SHA-256: `4703d7175c3dd07e1600bee54d23df603e784e1e292b81ddc7c15d977cc0da6c`; `git diff --check` passed.
+- Rechecked the requested international pages/terms. Oddsbunch's terms prohibit automated scraping/excess requests and require permission for reproduction beyond personal viewing; BetExplorer's terms prohibit automated requests, aggregation and scraping without consent and its page presents an age gate; Oddspedia's terms prohibit reproduction without written consent, while the separate widget/API agreement requires a registered account and asset/domain binding. No adapter/WebView collector or hidden-route inspection was added. The already integrated MoviOdds source remains gated on the user's own 18+ confirmation; physical access from Azerbaijan is unverified.
+- Next: commit/push this milestone and verify the v14 migration and all API 34 instrumentation cases in Actions. Do not install on or alter the persistent API 34 profile.
+
 ## 2026-11-12 — validation-only Dixon–Coles rho selection (local and CI verification passed)
 
 - Extended the chronological goal-model comparison to select rho from `{-0.15, -0.10, -0.05, 0, 0.02}` by validation Log Loss, with a 100-forecast floor. Under the floor it retains rho=0. The chosen value is then applied to the later holdout; the holdout is never used to select a value.

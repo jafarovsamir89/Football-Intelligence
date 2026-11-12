@@ -21,6 +21,10 @@ data class VirtualCouponPick(
     val modelProbability: Double,
     val bookmakerDecimalOdds: Double? = null,
     val bookmakerOddsCapturedAtMillis: Long? = null,
+    /** De-vigged probability from the same operator's full 1X2 line, for research drafts only. */
+    val marketFairProbability: Double? = null,
+    /** Signed model probability minus same-book de-vigged probability. Not expected value. */
+    val modelMinusMarket: Double? = null,
 )
 
 data class ThreeWayDecimalOdds(
@@ -32,7 +36,18 @@ data class ThreeWayDecimalOdds(
 
 data class JointProbabilityBounds(val lower: Double, val upper: Double)
 
-enum class CouponSelectionBasis { MODEL_RANKED, MATCHED_FRESH_BOOKMAKER_ODDS }
+enum class CouponSelectionBasis {
+    MODEL_RANKED,
+    MATCHED_FRESH_BOOKMAKER_ODDS,
+    MODEL_MARKET_DISAGREEMENT;
+
+    val strategyVersion: String
+        get() = when (this) {
+            MODEL_RANKED -> "elo-max-1x2-frechet-v1"
+            MATCHED_FRESH_BOOKMAKER_ODDS -> "elo-priced-max-1x2-frechet-v1"
+            MODEL_MARKET_DISAGREEMENT -> "model-vs-local-devig-positive-delta-frechet-v1"
+        }
+}
 
 data class VirtualCouponCandidate(
     val providerId: String,
@@ -63,6 +78,7 @@ data class LoggedCouponPick(
 object VirtualCouponBuilder {
     val supportedAccumulatorSizes = listOf(2, 3, 5, 8, 10)
     const val BOOKMAKER_QUOTE_FRESHNESS_MILLIS = 30L * 60L * 1000L
+    private const val MIN_MARKET_DISAGREEMENT = 1e-12
 
     /** Builds separate model-only drafts. It deliberately does not multiply probabilities or invent odds. */
     fun buildModelOnly(
@@ -119,10 +135,20 @@ object VirtualCouponBuilder {
             val modelPool = eligible.map { forecast -> forecast.toPick(providerOdds[forecast.matchId]) }
             val pricedPool = eligible.filter { forecast -> providerOdds[forecast.matchId] != null }
                 .map { forecast -> forecast.toPick(providerOdds[forecast.matchId]) }
+            val disagreementPool = eligible.mapNotNull { forecast ->
+                forecast.toMarketDisagreementPick(providerOdds[forecast.matchId])
+            }
             buildSizedDrafts(providerId,providerName,pricedPool,CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) +
+                buildSizedDrafts(providerId,providerName,disagreementPool,CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) +
                 buildSizedDrafts(providerId,providerName,modelPool,CouponSelectionBasis.MODEL_RANKED)
         }
-            .sortedBy { if (it.selectionBasis == CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) 0 else 1 }
+            .sortedBy {
+                when (it.selectionBasis) {
+                    CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> 0
+                    CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> 1
+                    CouponSelectionBasis.MODEL_RANKED -> 2
+                }
+            }
     }
 
     private fun buildSizedDrafts(
@@ -131,7 +157,15 @@ object VirtualCouponBuilder {
         pool:List<VirtualCouponPick>,
         selectionBasis:CouponSelectionBasis,
     ):List<VirtualCouponCandidate> {
-        val ordered=pool.sortedWith(compareByDescending<VirtualCouponPick> { it.modelProbability }.thenBy { it.kickoffMillis })
+        val ordered=pool.sortedWith(
+            compareByDescending<VirtualCouponPick> {
+                if (selectionBasis == CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
+                    it.modelMinusMarket ?: Double.NEGATIVE_INFINITY
+                } else {
+                    it.modelProbability
+                }
+            }.thenByDescending { it.modelProbability }.thenBy { it.kickoffMillis },
+        )
         return supportedAccumulatorSizes.mapNotNull { size ->
             if(ordered.size<size) return@mapNotNull null
             val selected=ordered.take(size).sortedBy { it.kickoffMillis }
@@ -151,6 +185,35 @@ object VirtualCouponBuilder {
         val (outcome,probability)=listOf("H" to probabilities.home,"D" to probabilities.draw,"A" to probabilities.away).maxBy { it.second }
         val odds=when(outcome) { "H"->prices?.home;"D"->prices?.draw;else->prices?.away }
         return VirtualCouponPick(matchId,homeTeam,awayTeam,kickoffMillis,outcome,probability,odds,prices?.capturedAtMillis)
+    }
+
+    private fun ForecastedMatch.toMarketDisagreementPick(prices: ThreeWayDecimalOdds?): VirtualCouponPick? {
+        if (prices == null) return null
+        val market = ProbabilityEngine.removeMargin(prices.home, prices.draw, prices.away, MarginMethod.BASIC)
+        val choice = listOf(
+            Triple("H", probabilities.home, market.home),
+            Triple("D", probabilities.draw, market.draw),
+            Triple("A", probabilities.away, market.away),
+        ).maxByOrNull { it.second - it.third } ?: return null
+        val difference = choice.second - choice.third
+        if (difference <= MIN_MARKET_DISAGREEMENT) return null
+        val odds = when (choice.first) {
+            "H" -> prices.home
+            "D" -> prices.draw
+            else -> prices.away
+        }
+        return VirtualCouponPick(
+            matchId = matchId,
+            homeTeam = homeTeam,
+            awayTeam = awayTeam,
+            kickoffMillis = kickoffMillis,
+            outcome = choice.first,
+            modelProbability = choice.second,
+            bookmakerDecimalOdds = odds,
+            bookmakerOddsCapturedAtMillis = prices.capturedAtMillis,
+            marketFairProbability = choice.third,
+            modelMinusMarket = difference,
+        )
     }
 
     private fun ThreeWayDecimalOdds.isFreshValidThreeWay(nowMillis:Long):Boolean = capturedAtMillis!=null&&
