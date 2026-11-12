@@ -3,6 +3,7 @@
 ## Unreleased — разбить Elo walk-forward по лигам и сезонам
 
 - Сохранять исходную метку сезона в walk-forward target и группировать уже рассчитанные строгие as-of Elo оценки по соревнованию и сезону. Пропущенные метки остаются неизвестными; даты не используются для их угадывания. Экран показывает Brier/Log Loss, coverage и предупреждение для n<30. Добавлены unit и Compose regression tests.
+- Локальная групповая проверка прошла 179 JVM tests, Android-test Kotlin compilation и обе APK-сборки. Actions [43324379707](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43324379707) прошёл API 34 57/57, API 26 с одним offline-only skip и без ошибок, keyless builds/signing/upload. Артефакт `13992013550`, SHA-256 и DEX key audit записаны в [development log](DEVELOPMENT_LOG.md).
 
 ## Unreleased — добавить парные интервалы сравнения моделей (CI/API 26/API 34 passed)
 
