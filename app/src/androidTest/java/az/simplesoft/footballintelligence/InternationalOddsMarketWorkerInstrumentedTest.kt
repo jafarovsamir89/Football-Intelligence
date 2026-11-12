@@ -52,7 +52,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=12
             }
             Store(isolated,name).use { store ->
-                assertEquals(18,store.writableDatabase.version)
+                assertEquals(19, store.writableDatabase.version)
                 store.saveInternationalOddsCapture(now,InternationalOddsStatus.LIVE,listOf(
                     InternationalOddsSnapshot("moviodds_bet365","bet365","migration-event",MOVIODDS_API_URL,"Serie A",null,now,now,now+60*60*1000L,"1X2","Roma","Napoli",2.1,3.2,3.5,now,now,now),
                 ),"migration test")
@@ -62,7 +62,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 }
             }
             Store(base,name).use { store ->
-                assertEquals(18,store.writableDatabase.version)
+                assertEquals(19, store.writableDatabase.version)
                 assertEquals("migration-event",store.internationalOddsHistory().single().eventId)
             }
         } finally { base.deleteDatabase(name) }
@@ -86,7 +86,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=16
             }
             Store(base,name).use { store ->
-                assertEquals(18,store.writableDatabase.version)
+                assertEquals(19, store.writableDatabase.version)
                 val history=store.internationalOddsHistory().single()
                 assertEquals(42,history.matchId)
                 assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,history.matchLinkBasis)
@@ -121,7 +121,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
             }
 
             Store(base, name).use { store ->
-                assertEquals(18, store.writableDatabase.version)
+                assertEquals(19, store.writableDatabase.version)
                 val migrated = store.internationalOddsHistory().single()
                 assertEquals("h2h", migrated.sourceMarketKey)
                 assertEquals(InternationalOddsQuoteSide.BACK, migrated.quoteSide)
@@ -199,7 +199,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
 
             Store(base, name).use { store ->
                 val db = store.writableDatabase
-                assertEquals(18, db.version)
+                assertEquals(19, db.version)
                 assertTrue(tableExists(db, "international_odds_current"))
                 assertTrue(columnExists(db, "international_odds_snapshots", "quote_side"))
                 assertTrue(columnExists(db, "international_odds_snapshots", "home_bet_limit"))

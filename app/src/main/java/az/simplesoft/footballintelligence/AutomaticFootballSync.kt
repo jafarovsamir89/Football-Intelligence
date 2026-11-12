@@ -158,6 +158,7 @@ object FootballSyncScheduler {
         TipsAuditMarketReferenceScheduler.scheduleOnAppOpen(appContext)
         InternationalOddsMarketScheduler.scheduleOnAppOpen(appContext)
         TheOddsApiScheduler.scheduleOnAppOpen(appContext)
+        FootballDataStatsScheduler.scheduleOnAppOpen(appContext)
     }
 
     /**

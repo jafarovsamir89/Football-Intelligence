@@ -11,8 +11,9 @@ MainActivity host → FootballScreen / Compose
   │     └── TipsAuditMarketReferenceWorker → public fair-odds JSON, strict freshness parser
   │     └── InternationalOddsMarketWorker → documented MoviOdds group-40 soccer 1X2 feed, source-poll quality gate
   │     └── TheOddsApiOddsWorker → official V4 catalog + bounded EU h2h league batch, quota-aware rotation
+  │     └── FootballDataStatsWorker → one rotating current-season match-stat CSV, persisted two-per-week gate
   ├── Misli and TOPAZ public-page WebViews (foreground, visible DOM only, gated capture/reload at 30-minute freshness)
-  ├── Store.kt / SQLite v17 with WAL (matches, separate local/international bookmaker and derived-market ledgers, forecasts/history)
+  ├── Store.kt / SQLite v19 with WAL (matches, quotes, match statistics, forecasts/history)
   ├── EloEngine → exact-kickoff forecasts with safe-availability cutoff
   └── VirtualCouponBuilder → separate model-ranked and same-bookmaker fresh-price accumulator drafts
 ```
@@ -43,7 +44,7 @@ Commit `0ef0539` adds direct Compose UI instrumentation for the five extracted t
 
 ### Persistence technology decision
 
-Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-17 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v17 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
+Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-19 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v19 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
 
 ## Provider and persistence rules
 
@@ -70,6 +71,8 @@ Do not migrate to Room in the current milestone. The demonstrated UI problem was
 - `CalibrationDiagnostics` computes equal-width one-vs-rest reliability bins from walk-forward predictions and observed outcomes. The Backtest screen shows the macro mean calibration gap, per-outcome counts/ECE, and occupied-bin predicted-vs-observed frequencies. This is descriptive retrospective diagnostics; it neither fits a calibrator nor establishes prospective accuracy.
 - `EloParameterExperimentEngine` splits distinct forecast cutoff timestamps chronologically into 60% rating warm-up, 20% parameter validation and 20% final holdout. It scores a fixed 27-configuration grid by validation Log Loss, requires at least 100 validation forecasts before selecting, and only then evaluates the selected configuration on the untouched holdout beside the production defaults. It resets ratings per competition and keeps each prediction's strict availability cutoff. The screen labels this a single retrospective experiment on current source snapshots; it never changes model parameters or saved forecasts automatically.
 
+`FootballDataStatsSyncer` follows Football-Data.co.uk's stated personal-use light automation limit: `Store.reserveFootballDataStatsAttempt` transactionally records a request before network access and enforces at most two attempts in a rolling seven-day interval. Each request downloads only one division for the current season; the ordered division catalog rotates on later eligible runs. HTTP/network failures still consume the reservation. The parser reads only documented result and match-stat fields; odds columns are neither transformed nor stored. It saves non-null statistics only after one same-date, exact-orientation canonical team match to a local completed fixture. The source URL, capture time and conservative availability are retained; the Results tab shows saved fields offline. This feed does not enter Elo forecasts or model training. The v18→v19 migration creates isolated tables without touching existing football or bookmaker records.
+
 ## Forecasting
 
 `EloEngine.kt` fits same-league results whose safe availability time is strictly before the forecast cutoff. It uses initial rating 1500, K=20, home advantage +65, and a 25% draw prior weighted as four matches. Forecast display requires 10 league matches and 3 games per team. These defaults are transparent, not fitted or calibrated. The UI excludes date-only upcoming rows from kickoff-based forecasts.
@@ -82,4 +85,4 @@ Do not migrate to Room in the current milestone. The demonstrated UI problem was
 
 1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
 2. Verify the local personal APK's international providers on the physical Android phone in Azerbaijan when it is available to ADB. Current ADB has no physical phone; app access, source availability and fresh quotes in Azerbaijan remain unverified. The user has already confirmed 18+ for MoviOdds. Keep the key-bearing personal APK private and preserve all installed app data.
-3. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths. Keep Room + Flow deferred until a measured requirement and tested v17 backup/copy/rollback plan justify the migration surface.
+3. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths. Keep Room + Flow deferred until a measured requirement and tested v19 backup/copy/rollback plan justify the migration surface.

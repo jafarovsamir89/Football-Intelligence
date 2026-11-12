@@ -11,6 +11,8 @@ import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
+import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
+import az.simplesoft.footballintelligence.data.StoredFootballMatchStats
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -22,6 +24,9 @@ data class FootballScreenStoreSnapshot(
     val providerSyncSummaries: List<ProviderSyncSummary>,
     val matches: List<Match>,
     val recentResults: List<Match>,
+    val recentMatchStats: Map<Int, StoredFootballMatchStats>,
+    val footballDataStatsAttempt: FootballDataStatsAttempt?,
+    val footballDataStatsNextAllowedAtMillis: Long,
     val importedCompetitionCodes: List<String>,
     val selectedQuotes: List<Quote>,
     val selectedPicks: List<Pick>,
@@ -51,6 +56,9 @@ data class FootballScreenStoreSnapshot(
             providerSyncSummaries = emptyList(),
             matches = emptyList(),
             recentResults = emptyList(),
+            recentMatchStats = emptyMap(),
+            footballDataStatsAttempt = null,
+            footballDataStatsNextAllowedAtMillis = 0L,
             importedCompetitionCodes = emptyList(),
             selectedQuotes = emptyList(),
             selectedPicks = emptyList(),
@@ -95,6 +103,12 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         val matchRows = matches()
         checkActive()
         val recent = recentCompletedMatches()
+        checkActive()
+        val recentStats = recentFootballMatchStats(recent.map { it.id })
+        checkActive()
+        val footballDataStatsAttempt = latestFootballDataStatsAttempt()
+        checkActive()
+        val footballDataStatsNextAllowedAt = footballDataStatsNextAllowedAt()
         checkActive()
         val competitionCodes = importedCompetitionCodes()
         checkActive()
@@ -142,6 +156,9 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
             providerSyncSummaries = summaries,
             matches = matchRows,
             recentResults = recent,
+            recentMatchStats = recentStats,
+            footballDataStatsAttempt = footballDataStatsAttempt,
+            footballDataStatsNextAllowedAtMillis = footballDataStatsNextAllowedAt,
             importedCompetitionCodes = competitionCodes,
             selectedQuotes = selected?.first.orEmpty(),
             selectedPicks = selected?.second.orEmpty(),

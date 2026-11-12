@@ -16,6 +16,89 @@ data class ImportedFootballResult(
     val awayTeam: String,
     val homeGoals: Int,
     val awayGoals: Int,
+    val matchStats: FootballMatchStatValues? = null,
+)
+
+data class FootballMatchStatValues(
+    val homeShots: Int? = null,
+    val awayShots: Int? = null,
+    val homeShotsOnTarget: Int? = null,
+    val awayShotsOnTarget: Int? = null,
+    val homeCorners: Int? = null,
+    val awayCorners: Int? = null,
+    val homeFouls: Int? = null,
+    val awayFouls: Int? = null,
+    val homeYellowCards: Int? = null,
+    val awayYellowCards: Int? = null,
+    val homeRedCards: Int? = null,
+    val awayRedCards: Int? = null,
+) {
+    fun hasAnyValue(): Boolean = listOf(
+        homeShots, awayShots, homeShotsOnTarget, awayShotsOnTarget, homeCorners, awayCorners,
+        homeFouls, awayFouls, homeYellowCards, awayYellowCards, homeRedCards, awayRedCards,
+    ).any { it != null }
+}
+
+data class StoredFootballMatchStats(
+    val matchId: Int,
+    val division: String,
+    val eventDate: LocalDate,
+    val sourceUrl: String,
+    val capturedAtMillis: Long,
+    val availableAtMillis: Long,
+    val values: FootballMatchStatValues,
+)
+
+data class FootballDataStatsAttempt(
+    val id: Long,
+    val attemptedAtMillis: Long,
+    val division: String,
+    val season: String,
+    val status: String,
+    val rowsRead: Int,
+    val rowsMatched: Int,
+    val detail: String?,
+)
+
+data class FootballDataStatsReservation(
+    val id: Long,
+    val division: String,
+    val season: String,
+)
+
+data class FootballStatsFixtureIdentity(
+    val matchId: Int,
+    val eventDate: LocalDate,
+    val homeTeam: String,
+    val awayTeam: String,
+)
+
+const val FOOTBALL_DATA_STATS_WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
+const val FOOTBALL_DATA_STATS_MIN_GAP_MILLIS = 4L * 24 * 60 * 60 * 1000
+
+/** Conservatively enforces Football-Data's personal-use limit across any rolling seven days. */
+fun footballDataStatsNextAllowedAt(attemptTimesMillis: Collection<Long>, nowMillis: Long): Long {
+    val futureAttempts = attemptTimesMillis.filter { it > nowMillis }
+    if (futureAttempts.isNotEmpty()) {
+        return futureAttempts.maxOrNull()!! + FOOTBALL_DATA_STATS_MIN_GAP_MILLIS
+    }
+    val recent = attemptTimesMillis
+        .filter { it >= nowMillis - FOOTBALL_DATA_STATS_WEEK_MILLIS && it <= nowMillis }
+        .sorted()
+    if (recent.size >= 2) return recent.first() + FOOTBALL_DATA_STATS_WEEK_MILLIS + 1L
+    val latest = recent.lastOrNull() ?: return nowMillis
+    return maxOf(nowMillis, latest + FOOTBALL_DATA_STATS_MIN_GAP_MILLIS)
+}
+
+fun footballDataCurrentSeasonCode(date: LocalDate): String {
+    val startYear = if (date.monthValue < 7) date.year - 1 else date.year
+    val endYear = startYear + 1
+    return "%02d%02d".format(Locale.ROOT, startYear % 100, endYear % 100)
+}
+
+val FOOTBALL_DATA_STATS_DIVISIONS = listOf(
+    "E0", "E1", "E2", "E3", "EC", "SC0", "SC1", "SC2", "SC3",
+    "D1", "D2", "I1", "I2", "SP1", "SP2", "F1", "F2", "N1", "B1", "P1", "T1", "G1",
 )
 
 data class FootballCsvImportReport(
@@ -104,6 +187,22 @@ object FootballDataCsvImporter {
                 val competition = competitionColumn?.let(::value)?.takeIf { it.isNotBlank() } ?: fallback
                     ?: error("missing Div; provide a competition code")
 
+                fun statColumn(vararg aliases: String): Int? = column(*aliases)
+                fun stat(vararg aliases: String): Int? {
+                    val index = statColumn(*aliases) ?: return null
+                    val raw = value(index)
+                    if (raw.isBlank()) return null
+                    return raw.toIntOrNull()?.takeIf { it >= 0 }
+                }
+                val stats = FootballMatchStatValues(
+                    homeShots = stat("HS"), awayShots = stat("AS"),
+                    homeShotsOnTarget = stat("HST"), awayShotsOnTarget = stat("AST"),
+                    homeCorners = stat("HC"), awayCorners = stat("AC"),
+                    homeFouls = stat("HF"), awayFouls = stat("AF"),
+                    homeYellowCards = stat("HY"), awayYellowCards = stat("AY"),
+                    homeRedCards = stat("HR"), awayRedCards = stat("AR"),
+                ).takeIf { it.hasAnyValue() }
+
                 val key = listOf(competition, date.toString(), normalizeTeam(home), normalizeTeam(away))
                     .joinToString("|") { it.lowercase(Locale.ROOT) }
                 if (!seen.add(key)) {
@@ -111,7 +210,7 @@ object FootballDataCsvImporter {
                     if (examples.size < 5) examples.add("Строка $lineNumber: дубль пропущен")
                     continue
                 }
-                results.add(ImportedFootballResult(competition, date, home, away, homeGoals, awayGoals))
+                results.add(ImportedFootballResult(competition, date, home, away, homeGoals, awayGoals, stats))
             } catch (e: Exception) {
                 rejected++
                 if (examples.size < 5) examples.add("Строка $lineNumber: ${e.message ?: "ошибка данных"}")

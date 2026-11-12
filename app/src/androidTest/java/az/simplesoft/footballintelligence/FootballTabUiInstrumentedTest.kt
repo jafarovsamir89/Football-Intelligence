@@ -22,6 +22,9 @@ import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
+import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
+import az.simplesoft.footballintelligence.data.FootballMatchStatValues
+import az.simplesoft.footballintelligence.data.StoredFootballMatchStats
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -52,6 +55,8 @@ class FootballTabUiInstrumentedTest {
                     marketReferences = emptyList(),
                     syncSummaries = emptyList(),
                     syncBusy = false,
+                    footballDataStatsAttempt = null,
+                    footballDataStatsNextAllowedAtMillis = 0L,
                     matches = listOf(testMatch),
                     storeLoaded = true,
                     storeError = null,
@@ -62,6 +67,7 @@ class FootballTabUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Test sync status").assertIsDisplayed()
+        composeRule.onNodeWithText("Football-Data.co.uk статистика: ожидает первой проверки", substring=true).assertExists()
         composeRule.onNodeWithText("Source Home FC — Source Away FC").performClick()
 
         assertEquals(testMatch.id, selectedMatchId)
@@ -130,11 +136,27 @@ class FootballTabUiInstrumentedTest {
             MaterialTheme {
                 FootballResultsTabContent(
                     recentResults = listOf(testMatch.copy(finished = true, homeScore = 2, awayScore = 1)),
+                    matchStats = mapOf(testMatch.id to StoredFootballMatchStats(
+                        matchId=testMatch.id,
+                        division="E0",
+                        eventDate=java.time.LocalDate.of(2026,11,1),
+                        sourceUrl="https://www.football-data.co.uk/mmz4281/2627/E0.csv",
+                        capturedAtMillis=1_800_000_000_000L,
+                        availableAtMillis=1_800_000_000_000L,
+                        values=FootballMatchStatValues(homeShots=14,awayShots=5,homeCorners=7,awayCorners=2),
+                    )),
+                    latestStatsAttempt=FootballDataStatsAttempt(
+                        id=1,attemptedAtMillis=1_800_000_000_000L,division="E0",season="2627",
+                        status="OK",rowsRead=12,rowsMatched=4,detail=null,
+                    ),
+                    nextStatsSyncAtMillis=1_800_000_000_000L,
                 )
             }
         }
 
         composeRule.onNodeWithText("Source Home FC 2:1 Source Away FC").assertIsDisplayed()
+        composeRule.onNodeWithText("Удары 14:5 · Угловые 7:2").assertIsDisplayed()
+        composeRule.onNodeWithText("Football-Data.co.uk · E0", substring=true).assertExists()
     }
 
     @Test

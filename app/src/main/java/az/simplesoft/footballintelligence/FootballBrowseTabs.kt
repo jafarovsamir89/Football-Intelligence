@@ -17,6 +17,8 @@ import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceStatus
+import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
+import az.simplesoft.footballintelligence.data.StoredFootballMatchStats
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
 import az.simplesoft.footballintelligence.data.visibleBookmakerStatus
 import az.simplesoft.footballintelligence.data.visibleInternationalOddsStatus
@@ -38,6 +40,8 @@ internal fun FootballMatchesTabContent(
     marketReferences: List<MarketReferenceSnapshot>,
     syncSummaries: List<ProviderSyncSummary>,
     syncBusy: Boolean,
+    footballDataStatsAttempt: FootballDataStatsAttempt?,
+    footballDataStatsNextAllowedAtMillis: Long,
     matches: List<Match>,
     storeLoaded: Boolean,
     storeError: String?,
@@ -67,6 +71,13 @@ internal fun FootballMatchesTabContent(
                         val successful=summary.lastSuccessAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не было"
                         Text("${summary.providerId}: ${summary.status} · до ${summary.recordsStored} матчей · проверка $checked · успех $successful${summary.error?.let { " · $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
                     }
+                    val statsStatus=footballDataStatsAttempt?.let {
+                        "${it.status} · ${it.division}/${it.season} · совпадений ${it.rowsMatched}/${it.rowsRead}"
+                    } ?: "ожидает первой проверки"
+                    val nextStats=footballDataStatsNextAllowedAtMillis.takeIf { it>0L }
+                        ?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) }
+                        ?: "при первом запуске"
+                    Text("Football-Data.co.uk статистика: $statsStatus · следующая проверка $nextStats · лимит 2 загрузки за 7 дней",style=MaterialTheme.typography.bodySmall)
                     if(syncBusy) LinearProgressIndicator(Modifier.fillMaxWidth())
                     Text("Источники: OpenFootball (CC0, доступные сезоны) и OpenLigaDB (динамический каталог). Загрузка выполняется в фоне и может быть отложена Android.",style=MaterialTheme.typography.bodySmall)
                 }
@@ -97,17 +108,54 @@ internal fun FootballMatchesTabContent(
 }
 
 @Composable
-internal fun FootballResultsTabContent(recentResults: List<Match>) {
+internal fun FootballResultsTabContent(
+    recentResults: List<Match>,
+    matchStats: Map<Int, StoredFootballMatchStats>,
+    latestStatsAttempt: FootballDataStatsAttempt?,
+    nextStatsSyncAtMillis: Long,
+) {
     Column(Modifier.fillMaxSize().padding(14.dp)) {
                 Text("История результатов",style=MaterialTheme.typography.titleLarge)
                 Text("Сохранённые завершённые матчи из подключённых источников. Данные остаются доступны офлайн.",style=MaterialTheme.typography.bodySmall)
-                LazyColumn(verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                val dateFormat=DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault())
+                if(latestStatsAttempt==null) {
+                    Text("Дополнительная статистика: автоматический источник Football-Data.co.uk ещё не запускался.",style=MaterialTheme.typography.bodySmall)
+                } else {
+                    val status=when(latestStatsAttempt.status) {
+                        "OK" -> "сохранена"
+                        "NO_MATCH" -> "получена, точных локальных совпадений нет"
+                        "EMPTY" -> "в файле пока нет матчевой статистики"
+                        "UNAVAILABLE" -> "архив пока недоступен"
+                        "ERROR" -> "ошибка загрузки"
+                        else -> latestStatsAttempt.status
+                    }
+                    Text("Football-Data.co.uk: $status · ${latestStatsAttempt.division}/${latestStatsAttempt.season} · сопоставлено ${latestStatsAttempt.rowsMatched}/${latestStatsAttempt.rowsRead} · ${dateFormat.format(Instant.ofEpochMilli(latestStatsAttempt.attemptedAtMillis))}",style=MaterialTheme.typography.bodySmall)
+                    latestStatsAttempt.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                }
+                val nextStatsSync=if(nextStatsSyncAtMillis>0L) dateFormat.format(Instant.ofEpochMilli(nextStatsSyncAtMillis)) else "при первом запуске с интернетом"
+                Text("Автообновление по сети: не более 2 CSV-загрузок за любые 7 дней; следующая проверка не ранее $nextStatsSync. Коэффициенты из источника не сохраняются.",style=MaterialTheme.typography.bodySmall)
+                LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                     items(recentResults,key={it.id}) { m ->
                         ElevatedCard(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(12.dp)) {
                                 Text("${m.league} · ${niceMatchTime(m)}",style=MaterialTheme.typography.labelSmall)
                                 Text("${m.home} ${m.homeScore}:${m.awayScore} ${m.away}",fontWeight=FontWeight.SemiBold)
                                 Text("${m.sourceName} · сезон ${m.season ?: "не указан"}",style=MaterialTheme.typography.bodySmall)
+                                matchStats[m.id]?.let { saved ->
+                                    val values=saved.values
+                                    val lines=listOf(
+                                        "Удары" to (values.homeShots to values.awayShots),
+                                        "В створ" to (values.homeShotsOnTarget to values.awayShotsOnTarget),
+                                        "Угловые" to (values.homeCorners to values.awayCorners),
+                                        "Фолы" to (values.homeFouls to values.awayFouls),
+                                        "Жёлтые" to (values.homeYellowCards to values.awayYellowCards),
+                                        "Красные" to (values.homeRedCards to values.awayRedCards),
+                                    ).filter { (it.second.first!=null||it.second.second!=null) }
+                                    if(lines.isNotEmpty()) {
+                                        Text(lines.joinToString(" · ") { (label,pair) -> "$label ${pair.first ?: "—"}:${pair.second ?: "—"}" },style=MaterialTheme.typography.bodySmall)
+                                        Text("Football-Data.co.uk · ${saved.division} · получено ${dateFormat.format(Instant.ofEpochMilli(saved.capturedAtMillis))}",style=MaterialTheme.typography.labelSmall)
+                                    }
+                                }
                             }
                         }
                     }

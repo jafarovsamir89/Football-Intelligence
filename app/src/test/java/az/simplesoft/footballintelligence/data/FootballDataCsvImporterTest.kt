@@ -89,4 +89,34 @@ e0,01/09/24, alpha ,BETA,2,0
         val expected = LocalDate.of(2024, 8, 10).atStartOfDay().toInstant(ZoneOffset.UTC).toEpochMilli()
         assertEquals(expected, FootballDataCsvImporter.conservativeAvailabilityMillis(LocalDate.of(2024, 8, 8)))
     }
+
+    @Test fun parsesOnlyListedMatchStatisticsAndIgnoresPriceColumns() {
+        val csv = """Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,HS,AS,HST,AST,HC,AC,HF,AF,HY,AY,HR,AR,B365H,B365D,B365A
+            E0,01/11/26,Arsenal,Manchester City,2,0,14,5,8,1,7,2,11,14,1,3,0,0,2.10,3.20,3.50
+        """.trimIndent()
+
+        val stats = FootballDataCsvImporter.parse(csv).results.single().matchStats!!
+
+        assertEquals(14, stats.homeShots)
+        assertEquals(5, stats.awayShots)
+        assertEquals(8, stats.homeShotsOnTarget)
+        assertEquals(7, stats.homeCorners)
+        assertEquals(3, stats.awayYellowCards)
+        assertEquals(0, stats.homeRedCards)
+    }
+
+    @Test fun missingOrInvalidStatisticsRemainUnavailableWithoutRejectingVerifiedScore() {
+        val csv = """Div,Date,HomeTeam,AwayTeam,FTHG,FTAG,HS,AS,HC,AC
+            E0,01/11/26,Alpha,Beta,1,0,,,,
+            E0,02/11/26,Gamma,Delta,2,0,-1,3,2,1
+        """.trimIndent()
+
+        val report = FootballDataCsvImporter.parse(csv)
+
+        assertEquals(2, report.results.size)
+        assertEquals(null, report.results[0].matchStats)
+        assertEquals(3, report.results[1].matchStats?.awayShots)
+        assertEquals(null, report.results[1].matchStats?.homeShots)
+        assertEquals(0, report.rejectedRows)
+    }
 }

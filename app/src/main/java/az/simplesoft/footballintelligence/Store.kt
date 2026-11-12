@@ -35,6 +35,14 @@ import az.simplesoft.footballintelligence.data.FootballDataCsvImporter
 import az.simplesoft.footballintelligence.data.FootballCsvImportReport
 import az.simplesoft.footballintelligence.data.StoredFootballCsvImport
 import az.simplesoft.footballintelligence.data.ImportedHistoryRow
+import az.simplesoft.footballintelligence.data.StoredFootballMatchStats
+import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
+import az.simplesoft.footballintelligence.data.FOOTBALL_DATA_STATS_DIVISIONS
+import az.simplesoft.footballintelligence.data.FOOTBALL_DATA_STATS_WEEK_MILLIS
+import az.simplesoft.footballintelligence.data.footballDataStatsNextAllowedAt
+import az.simplesoft.footballintelligence.data.FootballDataStatsReservation
+import az.simplesoft.footballintelligence.data.FootballStatsFixtureIdentity
+import az.simplesoft.footballintelligence.data.FootballMatchStatValues
 import az.simplesoft.footballintelligence.data.KickoffPrecision
 import az.simplesoft.footballintelligence.data.ProviderMatch
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
@@ -114,7 +122,7 @@ private data class InternationalOddsRecordKey(
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 18), Closeable {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 19), Closeable {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -138,6 +146,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         createProspectiveForecastTables(db)
         createMarketReferenceTables(db)
         createInternationalOddsTables(db)
+        createFootballDataStatsTables(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if(oldVersion<2) createHistoricalImportTables(db)
@@ -179,6 +188,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<16) ensureInternationalOddsSyncAttemptsTable(db)
         if(oldVersion<17) ensureInternationalOddsMatchLinkBasisColumns(db)
         if(oldVersion<18) ensureInternationalOddsQuoteSideSchema(db)
+        if(oldVersion<19) createFootballDataStatsTables(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -257,6 +267,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_match_idx ON international_odds_current(match_id,bookmaker_id,provider_polled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_history_idx ON international_odds_snapshots(bookmaker_id,event_id,captured_at)")
         ensureInternationalOddsSyncAttemptsTable(db)
+    }
+    private fun createFootballDataStatsTables(db:SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS football_data_stats_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, attempted_at INTEGER NOT NULL, division TEXT NOT NULL, season TEXT NOT NULL, status TEXT NOT NULL, rows_read INTEGER NOT NULL DEFAULT 0, rows_matched INTEGER NOT NULL DEFAULT 0, detail TEXT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS football_data_stats_attempts_time_idx ON football_data_stats_attempts(attempted_at DESC,id DESC)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS football_data_match_stats (id INTEGER PRIMARY KEY AUTOINCREMENT, match_id INTEGER NOT NULL, division TEXT NOT NULL, event_date TEXT NOT NULL, source_url TEXT NOT NULL, captured_at INTEGER NOT NULL, available_at INTEGER NOT NULL, home_shots INTEGER, away_shots INTEGER, home_shots_on_target INTEGER, away_shots_on_target INTEGER, home_corners INTEGER, away_corners INTEGER, home_fouls INTEGER, away_fouls INTEGER, home_yellow_cards INTEGER, away_yellow_cards INTEGER, home_red_cards INTEGER, away_red_cards INTEGER, UNIQUE(match_id,captured_at))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS football_data_match_stats_latest_idx ON football_data_match_stats(match_id,captured_at DESC)")
     }
     private fun ensureInternationalOddsMatchLinkBasisColumns(db:SQLiteDatabase) {
         listOf("international_odds_snapshots", "international_odds_current").forEach { table ->
@@ -544,6 +560,116 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         db.insertWithOnConflict("provider_file_cache",null,values,SQLiteDatabase.CONFLICT_REPLACE)
         Unit
+    }
+    fun footballDataStatsAttemptTimes(nowMillis:Long=System.currentTimeMillis()):List<Long> = readableDatabase.rawQuery(
+        "SELECT attempted_at FROM football_data_stats_attempts WHERE attempted_at>=? ORDER BY attempted_at",
+        arrayOf((nowMillis-FOOTBALL_DATA_STATS_WEEK_MILLIS).toString()),
+    ).use { c -> buildList { while(c.moveToNext()) add(c.getLong(0)) } }
+
+    fun footballDataStatsNextAllowedAt(nowMillis:Long=System.currentTimeMillis()):Long =
+        footballDataStatsNextAllowedAt(footballDataStatsAttemptTimes(nowMillis),nowMillis)
+
+    /** Reserves a source request transactionally before network access, so failures still count toward the cap. */
+    fun reserveFootballDataStatsAttempt(nowMillis:Long,season:String):FootballDataStatsReservation? = StoreWriteCoordinator.withLock {
+        val db=writableDatabase
+        beginWriteTransaction(db)
+        try {
+            val attempts=db.rawQuery(
+                "SELECT attempted_at FROM football_data_stats_attempts WHERE attempted_at>=? ORDER BY attempted_at",
+                arrayOf((nowMillis-FOOTBALL_DATA_STATS_WEEK_MILLIS).toString()),
+            ).use { c -> buildList { while(c.moveToNext()) add(c.getLong(0)) } }
+            if(footballDataStatsNextAllowedAt(attempts,nowMillis)>nowMillis) return@withLock null
+            val total=db.rawQuery("SELECT COUNT(*) FROM football_data_stats_attempts",null).use { c -> if(c.moveToFirst()) c.getLong(0) else 0L }
+            val division=FOOTBALL_DATA_STATS_DIVISIONS[(total%FOOTBALL_DATA_STATS_DIVISIONS.size).toInt()]
+            val values=ContentValues().apply {
+                put("attempted_at",nowMillis);put("division",division);put("season",season);put("status","STARTED")
+            }
+            val id=db.insertOrThrow("football_data_stats_attempts",null,values)
+            db.setTransactionSuccessful()
+            FootballDataStatsReservation(id,division,season)
+        } finally { endWriteTransaction(db) }
+    }
+
+    fun completeFootballDataStatsAttempt(
+        reservationId:Long,
+        status:String,
+        rowsRead:Int,
+        rowsMatched:Int,
+        detail:String?,
+        stats:List<StoredFootballMatchStats>,
+    ) = StoreWriteCoordinator.withLock {
+        val db=writableDatabase
+        beginWriteTransaction(db)
+        try {
+            stats.forEach { item ->
+                val v=item.values
+                val values=ContentValues().apply {
+                    put("match_id",item.matchId);put("division",item.division);put("event_date",item.eventDate.toString())
+                    put("source_url",item.sourceUrl);put("captured_at",item.capturedAtMillis);put("available_at",item.availableAtMillis)
+                    if(v.homeShots==null) putNull("home_shots") else put("home_shots",v.homeShots)
+                    if(v.awayShots==null) putNull("away_shots") else put("away_shots",v.awayShots)
+                    if(v.homeShotsOnTarget==null) putNull("home_shots_on_target") else put("home_shots_on_target",v.homeShotsOnTarget)
+                    if(v.awayShotsOnTarget==null) putNull("away_shots_on_target") else put("away_shots_on_target",v.awayShotsOnTarget)
+                    if(v.homeCorners==null) putNull("home_corners") else put("home_corners",v.homeCorners)
+                    if(v.awayCorners==null) putNull("away_corners") else put("away_corners",v.awayCorners)
+                    if(v.homeFouls==null) putNull("home_fouls") else put("home_fouls",v.homeFouls)
+                    if(v.awayFouls==null) putNull("away_fouls") else put("away_fouls",v.awayFouls)
+                    if(v.homeYellowCards==null) putNull("home_yellow_cards") else put("home_yellow_cards",v.homeYellowCards)
+                    if(v.awayYellowCards==null) putNull("away_yellow_cards") else put("away_yellow_cards",v.awayYellowCards)
+                    if(v.homeRedCards==null) putNull("home_red_cards") else put("home_red_cards",v.homeRedCards)
+                    if(v.awayRedCards==null) putNull("away_red_cards") else put("away_red_cards",v.awayRedCards)
+                }
+                db.insertWithOnConflict("football_data_match_stats",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            val attempt=ContentValues().apply {
+                put("status",status);put("rows_read",rowsRead);put("rows_matched",rowsMatched)
+                if(detail==null) putNull("detail") else put("detail",detail.take(400))
+            }
+            db.update("football_data_stats_attempts",attempt,"id=?",arrayOf(reservationId.toString()))
+            db.setTransactionSuccessful()
+        } finally { endWriteTransaction(db) }
+    }
+
+    fun latestFootballDataStatsAttempt():FootballDataStatsAttempt? = readableDatabase.rawQuery(
+        "SELECT id,attempted_at,division,season,status,rows_read,rows_matched,detail FROM football_data_stats_attempts ORDER BY attempted_at DESC,id DESC LIMIT 1",null,
+    ).use { c ->
+        if(!c.moveToFirst()) null else FootballDataStatsAttempt(c.getLong(0),c.getLong(1),c.getString(2),c.getString(3),c.getString(4),c.getInt(5),c.getInt(6),if(c.isNull(7)) null else c.getString(7))
+    }
+
+    fun completedFootballStatsFixtures():List<FootballStatsFixtureIdentity> {
+        val result=mutableListOf<FootballStatsFixtureIdentity>()
+        readableDatabase.rawQuery(
+            "SELECT id,COALESCE(event_date,substr(kickoff,1,10)),home,away FROM matches WHERE finished=1 AND home_score IS NOT NULL AND away_score IS NOT NULL",null,
+        ).use { c ->
+            while(c.moveToNext()) {
+                val date=runCatching { LocalDate.parse(c.getString(1)) }.getOrNull() ?: continue
+                if(TeamDataQuality.isValidFixture(c.getString(2),c.getString(3))) result+=FootballStatsFixtureIdentity(c.getInt(0),date,c.getString(2),c.getString(3))
+            }
+        }
+        return result
+    }
+
+    fun recentFootballMatchStats(matchIds:List<Int>):Map<Int,StoredFootballMatchStats> {
+        if(matchIds.isEmpty()) return emptyMap()
+        val ids=matchIds.distinct().take(900)
+        val placeholders=ids.joinToString(",") { "?" }
+        val result=linkedMapOf<Int,StoredFootballMatchStats>()
+        readableDatabase.rawQuery(
+            "SELECT s.match_id,s.division,s.event_date,s.source_url,s.captured_at,s.available_at,s.home_shots,s.away_shots,s.home_shots_on_target,s.away_shots_on_target,s.home_corners,s.away_corners,s.home_fouls,s.away_fouls,s.home_yellow_cards,s.away_yellow_cards,s.home_red_cards,s.away_red_cards " +
+                "FROM football_data_match_stats s JOIN (SELECT match_id,MAX(captured_at) captured_at FROM football_data_match_stats WHERE match_id IN ($placeholders) GROUP BY match_id) latest ON latest.match_id=s.match_id AND latest.captured_at=s.captured_at",
+            ids.map { it.toString() }.toTypedArray(),
+        ).use { c ->
+            while(c.moveToNext()) {
+                fun optionalInt(index:Int)=if(c.isNull(index)) null else c.getInt(index)
+                val matchId=c.getInt(0)
+                val stats=StoredFootballMatchStats(
+                    matchId,c.getString(1),LocalDate.parse(c.getString(2)),c.getString(3),c.getLong(4),c.getLong(5),
+                    FootballMatchStatValues(optionalInt(6),optionalInt(7),optionalInt(8),optionalInt(9),optionalInt(10),optionalInt(11),optionalInt(12),optionalInt(13),optionalInt(14),optionalInt(15),optionalInt(16),optionalInt(17)),
+                )
+                result[matchId]=stats
+            }
+        }
+        return result
     }
     fun openLigaState(leagueKey:String):OpenLigaLeagueState? = readableDatabase.rawQuery("SELECT source_change,current_group_order,last_full_sync,checked_at,record_count FROM provider_league_state WHERE league_key=?",arrayOf(leagueKey)).use { c ->
         if(!c.moveToFirst()) null else OpenLigaLeagueState(if(c.isNull(0)) null else c.getString(0),if(c.isNull(1)) null else c.getInt(1),c.getLong(2),c.getLong(3),c.getInt(4))

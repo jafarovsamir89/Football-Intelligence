@@ -81,6 +81,8 @@ import androidx.work.WorkManager
     val internationalOddsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val theOddsApiOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TheOddsApiScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val theOddsApiPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TheOddsApiScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
+    val footballDataStatsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballDataStatsScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
+    val footballDataStatsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballDataStatsScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     LaunchedEffect(repository,revision,selected) {
         try {
             val snapshot=repository.readScreenSnapshot(selected.takeIf { it>=0 })
@@ -129,6 +131,7 @@ import androidx.work.WorkManager
     ) { revision++ }
     LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
     LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state },theOddsApiOnceSync.map { it.state },theOddsApiPeriodicSync.map { it.state }) { revision++ }
+    LaunchedEffect(footballDataStatsOnceSync.map { it.state },footballDataStatsPeriodicSync.map { it.state }) { revision++ }
     val matches=storeSnapshot.matches
     val recentResults=storeSnapshot.recentResults
     val importedCompetitionCodes=storeSnapshot.importedCompetitionCodes
@@ -383,6 +386,8 @@ import androidx.work.WorkManager
                 marketReferences=marketReferences,
                 syncSummaries=syncSummaries,
                 syncBusy=syncBusy,
+                footballDataStatsAttempt=storeSnapshot.footballDataStatsAttempt,
+                footballDataStatsNextAllowedAtMillis=storeSnapshot.footballDataStatsNextAllowedAtMillis,
                 matches=matches,
                 storeLoaded=storeLoadState.loaded,
                 storeError=storeLoadState.error,
@@ -414,7 +419,12 @@ import androidx.work.WorkManager
                 prospectiveForecastReport=prospectiveForecastReport,
                 analyticsUpdating=screenAnalyticsUpdating,
               )
-              3 -> FootballResultsTabContent(recentResults)
+              3 -> FootballResultsTabContent(
+                recentResults=recentResults,
+                matchStats=storeSnapshot.recentMatchStats,
+                latestStatsAttempt=storeSnapshot.footballDataStatsAttempt,
+                nextStatsSyncAtMillis=storeSnapshot.footballDataStatsNextAllowedAtMillis,
+              )
               4 -> FootballBacktestTabContent(
                 automaticBacktestRunning=automaticBacktestRunning,
                 automaticBacktestMessage=automaticBacktestMessage,
