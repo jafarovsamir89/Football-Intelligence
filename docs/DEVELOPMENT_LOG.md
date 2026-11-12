@@ -1,5 +1,10 @@
 # Development log
 
+## 2026-11-12 — Misli/TOPAZ timezone and local-date edges (in progress)
+
+- Existing bookmaker parser tests already cover exact fixture orientation, duplicates, live/past rows and one local timezone. Added offline page-text cases for Los Angeles, London, Baku and Tokyo kickoff conversion, exact local-date match linking across a midnight boundary, TOPAZ Baku kickoff conversion, January year inference across LA/Baku date boundaries, and rejection of unknown timezone IDs.
+- These are deterministic parser tests using visible-page fixtures; they validate timezone arithmetic and linking logic, not current live page availability or the sites' license/reuse rights. No provider/runtime behavior changed. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 137 JVM tests, Android-test Kotlin compilation and APK assembly (`UP-TO-DATE`; app APK SHA-256 remains `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`). `git diff --check` passed. The CI run after commit is pending. No local APK install occurred.
+
 ## 2026-11-12 — direct UI coverage for extracted Compose tabs (CI passed)
 
 - The five extracted tab panels passed local compilation and the prior grouped CI instrumentation, but existing Android tests did not exercise Compose nodes or callbacks. Added `FootballTabUiInstrumentedTest.kt` with five focused tests for Matches, Coupons, Results, Backtest and Settings, using static inputs and asserting rendered content and selection/import/backtest/toggle callbacks. Added Compose UI test rules and the manifest dependency.

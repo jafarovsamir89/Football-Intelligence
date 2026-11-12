@@ -41,6 +41,53 @@ class TopazOddsParserTest {
         assertEquals(OddsProviderStatus.LIVE,provider.status().status)
     }
 
+    @Test fun parsesKickoffAndExactFixtureInBakuTimezone() {
+        val page=page().copy(timeZoneId="Asia/Baku")
+        val localKickoff=Instant.parse("2026-11-12T05:00:00Z").toEpochMilli()
+        val result=TopazOddsProvider().parseVisiblePage(
+            page,
+            now,
+            listOf(FixtureIdentity(43,"Türkiye","Belgium",localKickoff)),
+        )
+
+        val quote=result.snapshots.single()
+        assertEquals(localKickoff,quote.kickoffMillis)
+        assertEquals("Asia/Baku",quote.timeZoneId)
+        assertEquals("2026-11-12",quote.eventDate)
+        assertEquals(43,quote.matchId)
+    }
+
+    @Test fun infersTheNextJanuaryEventYearAcrossTimezoneDateBoundaries() {
+        val capture=Instant.parse("2026-12-31T20:30:00Z").toEpochMilli()
+        val januaryPage=page(
+            pageText.replace("12 noy | 09:00","02 yan | 08:00"),
+        )
+        val cases=listOf(
+            "America/Los_Angeles" to "2027-01-02T16:00:00Z",
+            "Asia/Baku" to "2027-01-02T04:00:00Z",
+        )
+
+        cases.forEach { (zone,expectedKickoff) ->
+            val quote=TopazOddsProvider().parseVisiblePage(
+                januaryPage.copy(timeZoneId=zone),
+                capture,
+            ).snapshots.single()
+            assertEquals("2027-01-02",quote.eventDate)
+            assertEquals(Instant.parse(expectedKickoff).toEpochMilli(),quote.kickoffMillis)
+            assertTrue(quote.eventYearInferred)
+        }
+    }
+
+    @Test fun rejectsPageWithUnknownTimezoneInsteadOfAssumingUtc() {
+        val result=TopazOddsProvider().parseVisiblePage(
+            page().copy(timeZoneId="Unknown/Zone"),
+            now,
+        )
+
+        assertTrue(result.snapshots.isEmpty())
+        assertTrue(result.detail.contains("часовой пояс"))
+    }
+
     @Test fun exactOrientationRequiredForLocalFixtureLink() {
         val result=TopazOddsProvider().parseVisiblePage(page(),now,listOf(FixtureIdentity(42,"Belgium","Türkiye",kickoff)))
         assertNull(result.snapshots.single().matchId)
