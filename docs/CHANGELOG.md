@@ -4,7 +4,7 @@
 
 - Add a separate research-only accumulator basis that selects the largest positive difference between the current Elo marginal and proportional de-vigged probability from the same local bookmaker's full 1X2 line. It requires fresh prices and an exact linked local fixture; it never combines Misli and TOPAZ prices.
 - Save the fair market probability and signed difference per leg in SQLite v14, with a migration that preserves existing coupon legs. Display the comparison in drafts/history and suppress EV, ROI, profit factor and drawdown for this basis.
-- Add unit tests for ranking/market isolation (including split Misli/TOPAZ prices), zero-gap and stale-line rejection, disabled return metrics, plus API 34 migration and persistence round-trip coverage. One combined local cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly; APK SHA-256 `4703d7175c3dd07e1600bee54d23df603e784e1e292b81ddc7c15d977cc0da6c`. GitHub Actions verification is pending.
+- Add unit tests for ranking/market isolation (including split Misli/TOPAZ prices), zero-gap and stale-line rejection, disabled return metrics, plus API 34 migration and persistence round-trip coverage. The local cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43146575115](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43146575115) passed all 28 API 34 instrumentation tests, APK build, stable signing and artifact upload `13912041925`; CI APK SHA-256 `5ba558e02776225012524267b3ac08c7d074cdbec3d141e28d5d7e4e3bdd0734`.
 
 ## Unreleased — select Dixon–Coles rho without holdout tuning
 
