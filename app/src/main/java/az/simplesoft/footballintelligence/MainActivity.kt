@@ -9,7 +9,10 @@ import android.webkit.WebViewClient
 import androidx.compose.ui.platform.LocalContext
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.database.Cursor
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.content.ContentValues
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,6 +45,7 @@ import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.analytics.EloEngine
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
@@ -98,6 +102,13 @@ import az.simplesoft.footballintelligence.data.FixtureIdentity
 import az.simplesoft.footballintelligence.data.uniqueExactFixtureMatchId
 import az.simplesoft.footballintelligence.data.BOOKMAKER_CAPTURE_INTERVAL_MILLIS
 import az.simplesoft.footballintelligence.data.ForegroundBookmakerCaptureGate
+import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsStatus
+import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
+import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
+import az.simplesoft.footballintelligence.data.MOVIODDS_PROVIDER_ID
+import az.simplesoft.footballintelligence.data.uniqueExactInternationalFixtureMatchId
+import az.simplesoft.footballintelligence.data.visibleInternationalOddsStatus
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceStatus
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
@@ -191,7 +202,7 @@ internal object StoreWriteCoordinator {
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 12) {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 13) {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -214,6 +225,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         createAccumulatorTables(db)
         createProspectiveForecastTables(db)
         createMarketReferenceTables(db)
+        createInternationalOddsTables(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if(oldVersion<2) createHistoricalImportTables(db)
@@ -249,6 +261,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         else if(oldVersion<10) db.execSQL("ALTER TABLE virtual_accumulators ADD COLUMN selection_basis TEXT NOT NULL DEFAULT 'MODEL_RANKED'")
         if(oldVersion<11) createProspectiveForecastTables(db)
         if(oldVersion<12) createMarketReferenceTables(db)
+        if(oldVersion<13) createInternationalOddsTables(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -299,6 +312,16 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         db.execSQL("CREATE TABLE IF NOT EXISTS market_reference_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, external_event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, captured_at INTEGER NOT NULL, fair_read_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_key TEXT NOT NULL, away_key TEXT NOT NULL, home_fair_odds REAL NOT NULL, draw_fair_odds REAL NOT NULL, away_fair_odds REAL NOT NULL, home_probability REAL NOT NULL, draw_probability REAL NOT NULL, away_probability REAL NOT NULL, fair_source TEXT NOT NULL, methodology_version TEXT NOT NULL, UNIQUE(provider_id,external_event_id,captured_at))")
         db.execSQL("CREATE INDEX IF NOT EXISTS market_reference_match_idx ON market_reference_snapshots(match_id,provider_id,fair_read_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS market_reference_fresh_idx ON market_reference_snapshots(provider_id,fair_read_at,kickoff)")
+    }
+    private fun createInternationalOddsTables(db:SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, detail TEXT)")
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id,captured_at))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_current (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id))")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_fresh_idx ON international_odds_snapshots(provider_id,provider_polled_at,kickoff)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_fresh_idx ON international_odds_current(provider_id,provider_polled_at,kickoff)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_match_idx ON international_odds_snapshots(match_id,bookmaker_id,provider_polled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_match_idx ON international_odds_current(match_id,bookmaker_id,provider_polled_at)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_history_idx ON international_odds_snapshots(bookmaker_id,event_id,captured_at)")
     }
     fun upsert(matches: List<Match>) {
         val db = writableDatabase
@@ -942,6 +965,126 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.setTransactionSuccessful()
         } finally { endWriteTransaction(db) }
     }
+    fun internationalOddsSyncState():InternationalOddsSyncState? = readableDatabase.rawQuery(
+        "SELECT status,last_checked,last_success,fresh_records_stored,detail FROM international_odds_sync_state WHERE provider_id=?",
+        arrayOf(MOVIODDS_PROVIDER_ID),
+    ).use { c ->
+        if(!c.moveToFirst()) null else InternationalOddsSyncState(
+            MOVIODDS_PROVIDER_ID,
+            runCatching { InternationalOddsStatus.valueOf(c.getString(0)) }.getOrDefault(InternationalOddsStatus.ERROR),
+            c.getLong(1),if(c.isNull(2)) null else c.getLong(2),c.getInt(3),if(c.isNull(4)) null else c.getString(4),
+        )
+    }
+    fun saveInternationalOddsCapture(
+        checkedAtMillis:Long,
+        status:InternationalOddsStatus,
+        snapshots:List<InternationalOddsSnapshot>,
+        detail:String?,
+        replaceCurrentBoard:Boolean=false,
+    ) {
+        val db=writableDatabase
+        beginWriteTransaction(db)
+        try {
+            val previousCurrent=if(replaceCurrentBoard) {
+                readInternationalOdds("international_odds_current","WHERE provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID),5_000)
+                    .associateBy { Triple(it.providerId,it.bookmakerId,it.eventId) }
+            } else null
+            if(replaceCurrentBoard) db.delete("international_odds_current","provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID))
+            snapshots.forEach { snapshot ->
+                val values=ContentValues().apply {
+                    put("provider_id",snapshot.providerId);put("bookmaker_id",snapshot.bookmakerId);put("event_id",snapshot.eventId)
+                    if(snapshot.matchId==null) putNull("match_id") else put("match_id",snapshot.matchId)
+                    put("source_url",snapshot.sourceUrl);put("league",snapshot.league)
+                    if(snapshot.region==null) putNull("region") else put("region",snapshot.region)
+                    put("captured_at",snapshot.capturedAtMillis);put("provider_polled_at",snapshot.providerPolledAtMillis)
+                    put("kickoff",snapshot.kickoffMillis);put("market",snapshot.market)
+                    put("home_team",snapshot.homeTeam);put("away_team",snapshot.awayTeam)
+                    put("home_odds",snapshot.home);put("draw_odds",snapshot.draw);put("away_odds",snapshot.away)
+                    put("home_price_changed_at",snapshot.homePriceChangedAtMillis)
+                    put("draw_price_changed_at",snapshot.drawPriceChangedAtMillis)
+                    put("away_price_changed_at",snapshot.awayPriceChangedAtMillis)
+                }
+                val previous=previousCurrent?.get(Triple(snapshot.providerId,snapshot.bookmakerId,snapshot.eventId))
+                    ?: if(previousCurrent==null) readInternationalOdds(
+                        "international_odds_current",
+                        "WHERE provider_id=? AND bookmaker_id=? AND event_id=?",
+                        arrayOf(snapshot.providerId,snapshot.bookmakerId,snapshot.eventId),1,
+                    ).firstOrNull() else null
+                val priceOrSourceTimestampChanged=previous==null||
+                    previous.home!=snapshot.home||previous.draw!=snapshot.draw||previous.away!=snapshot.away||
+                    previous.homePriceChangedAtMillis!=snapshot.homePriceChangedAtMillis||
+                    previous.drawPriceChangedAtMillis!=snapshot.drawPriceChangedAtMillis||
+                    previous.awayPriceChangedAtMillis!=snapshot.awayPriceChangedAtMillis
+                if(priceOrSourceTimestampChanged) {
+                    db.insertWithOnConflict("international_odds_snapshots",null,values,SQLiteDatabase.CONFLICT_IGNORE)
+                }
+                db.insertWithOnConflict("international_odds_current",null,values,SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            val previous=internationalOddsSyncState()
+            val lastSuccess=if(status in setOf(InternationalOddsStatus.LIVE,InternationalOddsStatus.STALE,InternationalOddsStatus.UNAVAILABLE)) checkedAtMillis else previous?.lastSuccessAtMillis
+            val state=ContentValues().apply {
+                put("provider_id",MOVIODDS_PROVIDER_ID);put("status",status.name);put("last_checked",checkedAtMillis)
+                if(lastSuccess==null) putNull("last_success") else put("last_success",lastSuccess)
+                put("fresh_records_stored",snapshots.size)
+                if(detail==null) putNull("detail") else put("detail",detail.take(500))
+            }
+            db.insertWithOnConflict("international_odds_sync_state",null,state,SQLiteDatabase.CONFLICT_REPLACE)
+            db.delete("international_odds_snapshots","captured_at<?",arrayOf((checkedAtMillis-30L*24*60*60*1000).toString()))
+            db.delete("international_odds_current","kickoff<=? OR captured_at<?",arrayOf(checkedAtMillis.toString(),(checkedAtMillis-7L*24*60*60*1000).toString()))
+            db.setTransactionSuccessful()
+        } finally { endWriteTransaction(db) }
+    }
+    fun freshInternationalOdds(nowMillis:Long=System.currentTimeMillis()):List<InternationalOddsSnapshot> =
+        readInternationalOdds(
+            "international_odds_current",
+            "WHERE provider_id=? AND captured_at>=? AND captured_at<=? AND provider_polled_at>=? AND provider_polled_at<=? AND kickoff>?",
+            arrayOf(MOVIODDS_PROVIDER_ID,(nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString(),nowMillis.toString(),(nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString(),(nowMillis+60_000L).toString(),nowMillis.toString()),
+            5_000,
+        ).sortedBy { it.kickoffMillis }
+    fun internationalOddsHistory(limit:Int=500):List<InternationalOddsSnapshot> =
+        readInternationalOdds("international_odds_snapshots","WHERE provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID),limit.coerceIn(1,5_000))
+    private fun readInternationalOdds(table:String,where:String,args:Array<String>,limit:Int):List<InternationalOddsSnapshot> {
+        val result=mutableListOf<InternationalOddsSnapshot>()
+        readableDatabase.rawQuery(
+            "SELECT provider_id,bookmaker_id,event_id,source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at,match_id FROM $table $where ORDER BY captured_at DESC LIMIT ?",
+            args+limit.toString(),
+        ).use { c -> while(c.moveToNext()) result+=c.toInternationalOddsSnapshot() }
+        return result
+    }
+    private fun Cursor.toInternationalOddsSnapshot()=InternationalOddsSnapshot(
+        getString(0),getString(1),getString(2),getString(3),getString(4),if(isNull(5)) null else getString(5),
+        getLong(6),getLong(7),getLong(8),getString(9),getString(10),getString(11),getDouble(12),getDouble(13),getDouble(14),
+        getLong(15),getLong(16),getLong(17),if(isNull(18)) null else getInt(18),
+    )
+    /** Relinks saved market rows after a later football-data sync using exact orientation and kickoff. */
+    fun relinkUnmatchedInternationalOdds(nowMillis:Long=System.currentTimeMillis()):Int {
+        val fixtures=matchIdentities()
+        if(fixtures.isEmpty()) return 0
+        val rows=listOf("international_odds_current","international_odds_snapshots").flatMap { table ->
+            readInternationalOdds(
+                table,"WHERE provider_id=? AND match_id IS NULL AND captured_at>=? AND kickoff>?",
+                arrayOf(MOVIODDS_PROVIDER_ID,(nowMillis-30L*24*60*60*1000).toString(),nowMillis.toString()),5_000,
+            )
+        }
+        data class Link(val providerId:String,val bookmakerId:String,val eventId:String,val matchId:Int)
+        val links=rows.mapNotNull { snapshot ->
+            uniqueExactInternationalFixtureMatchId(snapshot.homeTeam,snapshot.awayTeam,snapshot.kickoffMillis,fixtures)
+                ?.let { Link(snapshot.providerId,snapshot.bookmakerId,snapshot.eventId,it) }
+        }.distinctBy { Triple(it.providerId,it.bookmakerId,it.eventId) }
+        if(links.isEmpty()) return 0
+        val db=writableDatabase
+        beginWriteTransaction(db)
+        try {
+            links.forEach { link ->
+                val values=ContentValues().apply { put("match_id",link.matchId) }
+                arrayOf("international_odds_current","international_odds_snapshots").forEach { table ->
+                    db.update(table,values,"provider_id=? AND bookmaker_id=? AND event_id=? AND match_id IS NULL",arrayOf(link.providerId,link.bookmakerId,link.eventId))
+                }
+            }
+            db.setTransactionSuccessful()
+        } finally { endWriteTransaction(db) }
+        return links.size
+    }
     fun saveMarketReferenceCapture(
         checkedAtMillis:Long,
         status:MarketReferenceStatus,
@@ -1438,11 +1581,15 @@ class MainActivity:ComponentActivity() {
     var automaticBacktestRevision by remember { mutableIntStateOf(-1) }
     var marginMethod by remember { mutableStateOf(MarginMethod.BASIC) }
     var showBookmakerQuotes by remember { mutableStateOf(false) }
+    var showInternationalHistory by remember { mutableStateOf(false) }
+    var internationalAgeConfirmed by remember(activity) { mutableStateOf(isMoviOddsAgeConfirmed(activity)) }
     val workManager=remember(activity) { WorkManager.getInstance(activity) }
     val oneTimeSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballSyncScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val periodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballSyncScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val marketReferenceOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val marketReferencePeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
+    val internationalOddsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
+    val internationalOddsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val syncSummaries=remember(revision) { store.providerSyncSummaries() }
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
@@ -1460,6 +1607,7 @@ class MainActivity:ComponentActivity() {
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
     ) { revision++ }
     LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
+    LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state }) { revision++ }
     var matches by remember { mutableStateOf<List<Match>>(emptyList()) }
     var recentResults by remember { mutableStateOf<List<Match>>(emptyList()) }
     var importedCompetitionCodes by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -1497,6 +1645,9 @@ class MainActivity:ComponentActivity() {
     val misliOdds=remember(revision) { store.freshBookmakerOdds("misli") }
     val topazSyncState=remember(revision) { store.bookmakerSyncState("topaz") }
     val topazOdds=remember(revision) { store.freshBookmakerOdds("topaz") }
+    val internationalOddsSyncState=remember(revision) { store.internationalOddsSyncState() }
+    val internationalOdds=remember(revision) { store.freshInternationalOdds() }
+    val internationalOddsHistory=remember(revision) { store.internationalOddsHistory(700) }
     val marketReferenceSyncState=remember(revision) { store.marketReferenceSyncState() }
     val marketReferences=remember(revision) { store.freshMarketReferences() }
     val activeMarketReference=remember(active?.id,marketReferences) { marketReferences.firstOrNull { it.matchId==active?.id } }
@@ -1515,6 +1666,7 @@ class MainActivity:ComponentActivity() {
         (misliOdds+topazOdds).map { listOf(it.providerId,it.matchId,it.kickoffMillis,it.home,it.draw,it.away,it.capturedAtMillis) }.hashCode()
     }
     var forecastedMatches by remember { mutableStateOf<List<ForecastedMatch>>(emptyList()) }
+    val internationalConsensus=remember(internationalOdds) { InternationalMarketEngine.consensus(internationalOdds) }
     LaunchedEffect(matchForecastKey,oddsForecastKey,historyVersion) {
         val matchSnapshot=matches
         val oddsSnapshot=misliOdds+topazOdds
@@ -1711,7 +1863,7 @@ class MainActivity:ComponentActivity() {
       }}) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                listOf("Матчи","Анализ","Купоны","Результаты","Бэктест","Настройки").forEachIndexed { i,title ->
+                    listOf("Матчи","Анализ","Купоны","Результаты","Бэктест","Настройки","Мировой рынок").forEachIndexed { i,title ->
                     FilterChip(selected=tab==i,onClick={tab=i;if(i==4) runAutomaticBacktest()},label={Text(title)})
                 }
             }
@@ -1726,7 +1878,7 @@ class MainActivity:ComponentActivity() {
                     Text("TOPAZ/eTopaz: ${visibleBookmakerStatus(topazSyncState?.status,topazSyncState?.lastCheckedAtMillis,topazOdds.size)} · снимок $topazChecked · актуальных будущих линий: ${topazOdds.size}${topazSyncState?.error?.let { " · $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
                     Text("Pinnacle: UNAVAILABLE · официальный API требует запроса доступа и имеет переменную стоимость.",style=MaterialTheme.typography.bodySmall)
                     Text("Betfair Exchange: UNAVAILABLE · API требует аккаунт, App Key и сессию; live-доступ требует платной активации.",style=MaterialTheme.typography.bodySmall)
-                    Text("bet365: BLOCKED · официальные условия ограничивают автоматическое извлечение данных.",style=MaterialTheme.typography.bodySmall)
+                    Text("bet365 через MoviOdds: ${if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,internationalOdds.size) else "ТРЕБУЕТСЯ 18+"} · свежих международных линий 1X2: ${internationalOdds.size}",style=MaterialTheme.typography.bodySmall)
                     val referenceChecked=marketReferenceSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
                     val referenceStatus=when {
                         marketReferenceSyncState==null -> "ОЖИДАЕТ ПРОВЕРКИ"
@@ -2101,10 +2253,107 @@ class MainActivity:ComponentActivity() {
                     }
                 }
               }
+              6 -> Column(Modifier.fillMaxSize().padding(horizontal=14.dp)) {
+                Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                    val checked=internationalOddsSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                    val workerBusy=(internationalOddsOnceSync+internationalOddsPeriodicSync).any { it.state==WorkInfo.State.RUNNING }
+                    Text("Мировой рынок · футбольный 1X2",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                    Text("bet365 через независимый агрегатор MoviOdds · ${if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,internationalOdds.size) else "ТРЕБУЕТСЯ 18+"} · проверка $checked · свежих матчей ${internationalOdds.size}${if(workerBusy) " · обновление выполняется" else ""}",style=MaterialTheme.typography.bodySmall)
+                    internationalOddsSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                    Text("Котировка считается свежей только при недавнем времени опроса рынка у источника (до 15 минут), независимо от того, когда изменился коэффициент. Приложение и источник сохраняются с разными отметками времени.",style=MaterialTheme.typography.bodySmall)
+                    Text("Данные bet365 поступают через MoviOdds, который не аффилирован с bet365. Условия MoviOdds требуют возраст 18+ и разрешают использование в собственных приложениях; точная доступность в Азербайджане на физическом телефоне ещё не проверена. Источник может быть неполным или недоступным.",style=MaterialTheme.typography.bodySmall)
+                    Text("Misli/TOPAZ остаются отдельными местными линиями. Международная цена не используется для виртуальных купонов Misli или TOPAZ. Цены и модели не являются доказательством преимущества или прибыли.",style=MaterialTheme.typography.bodySmall)
+                    if(!internationalAgeConfirmed) {
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                                Text("Международный источник доступен только пользователям 18+.",fontWeight=FontWeight.SemiBold)
+                                Text("Подтвердите возраст один раз, чтобы включить автоматическое обновление bet365 через MoviOdds. Остальная футбольная база обновляется независимо.",style=MaterialTheme.typography.bodySmall)
+                                TextButton(onClick={runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://moviodds.com/terms/"))) }}) {
+                                    Text("Условия MoviOdds")
+                                }
+                                Button(onClick={
+                                    activity.getSharedPreferences(MOVIODDS_AGE_CONSENT_PREFS,Context.MODE_PRIVATE)
+                                        .edit().putBoolean(MOVIODDS_AGE_CONSENT_KEY,true).apply()
+                                    internationalAgeConfirmed=true
+                                    InternationalOddsMarketScheduler.scheduleOnAppOpen(activity)
+                                }) { Text("Подтверждаю, мне 18 лет или больше") }
+                            }
+                        }
+                    }
+                }
+                LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(bottom=12.dp)) {
+                    if(internationalOdds.isEmpty()) {
+                        item {
+                            ElevatedCard(Modifier.fillMaxWidth()) {
+                                Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                                    Text("Сейчас нет подтверждённых свежих международных котировок.",fontWeight=FontWeight.SemiBold)
+                                    Text("Последние сохранённые снимки доступны ниже как исторические данные и не помечаются текущими ценами.",style=MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                    }
+                    items(internationalOdds,key={"${it.bookmakerId}:${it.eventId}"}) { quote ->
+                        val eventConsensus=internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
+                        val model=quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
+                        val localMisli=quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
+                        val localTopaz=quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
+                        val internationalFair=ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
+                        val movement=InternationalMarketEngine.latestMovement(quote,internationalOddsHistory)
+                        val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
+                        val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
+                        val priceTimes=listOf(quote.homePriceChangedAtMillis,quote.drawPriceChangedAtMillis,quote.awayPriceChangedAtMillis).joinToString(" / ") {
+                            DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
+                        }
+                        ElevatedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                                Text("${quote.league} · ${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())}",style=MaterialTheme.typography.labelMedium,color=blue)
+                                Text("${quote.homeTeam} — ${quote.awayTeam}",fontWeight=FontWeight.SemiBold)
+                                Text("bet365 · 1 ${"%.2f".format(quote.home)} / X ${"%.2f".format(quote.draw)} / 2 ${"%.2f".format(quote.away)}",fontWeight=FontWeight.Bold)
+                                Text("Рыночные вероятности без маржи: ${"%.1f".format(internationalFair.home*100)} / ${"%.1f".format(internationalFair.draw*100)} / ${"%.1f".format(internationalFair.away*100)}% · один букмекерский ориентир${quote.region?.let { " · регион источника $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
+                                Text("Проверено MoviOdds $pollTime · сохранено приложением $captureTime · цены менялись 1/X/2: $priceTimes",style=MaterialTheme.typography.bodySmall)
+                                Text(if((eventConsensus?.distinctBookmakerCount ?: 1)>=2) "Среднее после снятия маржи по ${eventConsensus?.distinctBookmakerCount} независимым букмекерам." else "Международный консенсус пока недоступен: есть только одна БК; цена не считается несколькими независимыми наблюдениями.",style=MaterialTheme.typography.labelSmall)
+                                movement?.let {
+                                    Text("Изменение с предыдущего сохранённого снимка: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены, не вероятности).",style=MaterialTheme.typography.bodySmall)
+                                }
+                                if(quote.matchId==null) {
+                                    Text("Нет уникального точного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
+                                } else {
+                                    Text("Локальный матч ID ${quote.matchId} · сопоставление команд, порядка хозяев и времени строгое.",style=MaterialTheme.typography.labelSmall)
+                                    if(model==null) {
+                                        Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
+                                    } else {
+                                        val p=model.probabilities
+                                        Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус bet365 без маржи: ${"%+.1f".format((p.home-internationalFair.home)*100)} / ${"%+.1f".format((p.draw-internationalFair.draw)*100)} / ${"%+.1f".format((p.away-internationalFair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                                    }
+                                    listOf("Misli" to localMisli,"TOPAZ" to localTopaz).forEach { (name,local) ->
+                                        if(local==null) Text("$name: нет свежей локальной линии по этому матчу.",style=MaterialTheme.typography.bodySmall)
+                                        else {
+                                            val localFair=ProbabilityEngine.removeMargin(local.home,local.draw,local.away,MarginMethod.BASIC)
+                                            val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(local.capturedAtMillis))
+                                            Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к bet365 ${"%+.1f".format((localFair.home-internationalFair.home)*100)}/${"%+.1f".format((localFair.draw-internationalFair.draw)*100)}/${"%+.1f".format((localFair.away-internationalFair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    item {
+                            TextButton(onClick={showInternationalHistory=!showInternationalHistory}) {
+                            Text(if(showInternationalHistory) "Скрыть историю изменений международных цен" else "Показать историю изменений международных цен (${internationalOddsHistory.size})")
+                        }
+                    }
+                    if(showInternationalHistory) {
+                        item { Text("Сохранённые изменения котировок · не являются текущими линиями; одинаковые повторные опросы не дублируются",fontWeight=FontWeight.SemiBold) }
+                        items(internationalOddsHistory.take(120),key={"history:${it.bookmakerId}:${it.eventId}:${it.capturedAtMillis}"}) { old ->
+                            Text("${old.league} · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+              }
               else -> Column(Modifier.verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
                   Text("Football Intelligence Lab",style=MaterialTheme.typography.titleLarge)
                   Text("Личная лаборатория исследования футбольных ставок, без оплаты и обязательных ключей.")
-                  Text("Автоматические источники: OpenFootball и OpenLigaDB. Коэффициенты Misli/TOPAZ пока не подтверждены как автоматический prematch-поток.")
+                  Text("Автоматические футбольные источники: OpenFootball и OpenLigaDB. Misli/TOPAZ читаются только из публичных видимых страниц при открытом приложении; bet365 доступен через MoviOdds при наличии подтверждённой свежей линии.")
                   Text("Дополнительные функции")
                   OutlinedTextField(value=fallbackCompetition,onValueChange={fallbackCompetition=it},label={Text("Необязательный код соревнования для CSV")},singleLine=true,modifier=Modifier.fillMaxWidth())
                   Button(onClick={csvLauncher.launch(arrayOf("text/*","application/csv"))},enabled=!importingCsv,modifier=Modifier.fillMaxWidth()) { Text(if(importingCsv) "Импорт…" else "Импорт CSV (дополнительно)") }

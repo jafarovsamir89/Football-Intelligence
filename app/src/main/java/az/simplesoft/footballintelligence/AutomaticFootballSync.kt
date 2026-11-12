@@ -25,8 +25,15 @@ import az.simplesoft.footballintelligence.data.TIPSAUDIT_API_URL
 import az.simplesoft.footballintelligence.data.MarketReferenceStatus
 import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_APP_OPEN_STALE_MINUTES
 import az.simplesoft.footballintelligence.data.MARKET_REFERENCE_REFRESH_INTERVAL_MINUTES
+import az.simplesoft.footballintelligence.data.Bet365ViaMoviOddsProvider
+import az.simplesoft.footballintelligence.data.InternationalOddsStatus
+import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_APP_OPEN_STALE_MINUTES
+import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_REFRESH_INTERVAL_MINUTES
+import az.simplesoft.footballintelligence.data.MOVIODDS_API_URL
+import az.simplesoft.footballintelligence.data.MOVIODDS_PROVIDER_ID
 import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.util.zip.GZIPInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
@@ -40,6 +47,8 @@ private const val PERIODIC_SYNC_NAME = "football-intelligence-daily-sync"
 private const val ONCE_SYNC_NAME = "football-intelligence-sync-now"
 private const val TIPSAUDIT_PERIODIC_SYNC_NAME = "football-intelligence-tipsaudit-market-reference"
 private const val TIPSAUDIT_ONCE_SYNC_NAME = "football-intelligence-tipsaudit-market-reference-now"
+internal const val MOVIODDS_AGE_CONSENT_PREFS = "football_intelligence_consent"
+internal const val MOVIODDS_AGE_CONSENT_KEY = "moviodds_user_is_18_or_older"
 private const val MIN_OPENLIGA_REQUEST_GAP_MS = 1_250L // 48 requests/minute, below the provider's 60/minute cap.
 private const val SYNC_CONTINUATION_MESSAGE = "sync continues in the next queued WorkManager segment"
 private const val FIRST_PROVIDER_SYNC_BUDGET_MILLIS = 3L * 60 * 1000
@@ -106,6 +115,7 @@ object FootballSyncScheduler {
         val mostRecentSuccess = summaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull() ?: 0L
         enqueueForFreshness(appContext, mostRecentSuccess, System.currentTimeMillis())
         TipsAuditMarketReferenceScheduler.scheduleOnAppOpen(appContext)
+        InternationalOddsMarketScheduler.scheduleOnAppOpen(appContext)
     }
 
     /**
@@ -212,6 +222,112 @@ class TipsAuditMarketReferenceWorker(context:Context,params:WorkerParameters):Co
             Result.success()
         } catch(error:Exception) {
             store.saveMarketReferenceCapture(checkedAt,MarketReferenceStatus.ERROR,emptyList(),null,safeError(error))
+            Result.retry()
+        } finally {
+            store.close()
+        }
+    }
+}
+
+private const val INTERNATIONAL_ODDS_PERIODIC_WORK_NAME="football-intelligence-international-odds"
+private const val INTERNATIONAL_ODDS_ONCE_WORK_NAME="football-intelligence-international-odds-now"
+
+internal fun isInternationalOddsReferenceSyncStale(lastCheckedAtMillis:Long?,nowMillis:Long):Boolean =
+    lastCheckedAtMillis==null||lastCheckedAtMillis<=0L||
+        nowMillis-lastCheckedAtMillis>=TimeUnit.MINUTES.toMillis(INTERNATIONAL_ODDS_APP_OPEN_STALE_MINUTES)
+
+/** The documented public feed is refreshed independently of local bookmaker WebViews and football history. */
+object InternationalOddsMarketScheduler {
+    fun scheduleOnAppOpen(context:Context) {
+        val appContext=context.applicationContext
+        if(!isMoviOddsAgeConfirmed(appContext)) {
+            cancelPendingWork(appContext)
+            return
+        }
+        val lastChecked=runCatching {
+            Store(appContext).let { store -> try { store.internationalOddsSyncState()?.lastCheckedAtMillis } finally { store.close() } }
+        }.getOrNull()
+        enqueueForFreshness(appContext,lastChecked,System.currentTimeMillis())
+    }
+
+    internal fun enqueueForFreshness(
+        context:Context,
+        lastCheckedAtMillis:Long?,
+        nowMillis:Long,
+        immediateInitialDelayMillis:Long=0L,
+    ) {
+        require(immediateInitialDelayMillis>=0L)
+        if(!isMoviOddsAgeConfirmed(context.applicationContext)) {
+            cancelPendingWork(context.applicationContext)
+            return
+        }
+        val manager=WorkManager.getInstance(context.applicationContext)
+        val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val periodic=withAutomaticSyncRetryBackoff(
+            PeriodicWorkRequestBuilder<InternationalOddsMarketWorker>(INTERNATIONAL_ODDS_REFRESH_INTERVAL_MINUTES,TimeUnit.MINUTES)
+                .setInitialDelay(INTERNATIONAL_ODDS_REFRESH_INTERVAL_MINUTES,TimeUnit.MINUTES)
+                .setConstraints(constraints),
+        ).build()
+        manager.enqueueUniquePeriodicWork(INTERNATIONAL_ODDS_PERIODIC_WORK_NAME,ExistingPeriodicWorkPolicy.KEEP,periodic)
+        if(isInternationalOddsReferenceSyncStale(lastCheckedAtMillis,nowMillis)) {
+            val onceBuilder=withAutomaticSyncRetryBackoff(
+                OneTimeWorkRequestBuilder<InternationalOddsMarketWorker>().setConstraints(constraints),
+            )
+            if(immediateInitialDelayMillis>0L) onceBuilder.setInitialDelay(immediateInitialDelayMillis,TimeUnit.MILLISECONDS)
+            manager.enqueueUniqueWork(INTERNATIONAL_ODDS_ONCE_WORK_NAME,ExistingWorkPolicy.KEEP,onceBuilder.build())
+        }
+    }
+
+    private fun cancelPendingWork(context:Context) {
+        val manager=WorkManager.getInstance(context)
+        manager.cancelUniqueWork(UNIQUE_ONCE_NAME)
+        manager.cancelUniqueWork(UNIQUE_PERIODIC_NAME)
+    }
+
+    const val UNIQUE_ONCE_NAME=INTERNATIONAL_ODDS_ONCE_WORK_NAME
+    const val UNIQUE_PERIODIC_NAME=INTERNATIONAL_ODDS_PERIODIC_WORK_NAME
+}
+
+internal fun isMoviOddsAgeConfirmed(context:Context):Boolean =
+    context.getSharedPreferences(MOVIODDS_AGE_CONSENT_PREFS,Context.MODE_PRIVATE)
+        .getBoolean(MOVIODDS_AGE_CONSENT_KEY,false)
+
+class InternationalOddsMarketWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params) {
+    internal var providerHttpClient:ProviderHttpClient=PublicJsonClient()
+
+    override suspend fun doWork():Result=withContext(Dispatchers.IO) {
+        val store=Store(applicationContext)
+        val checkedAt=System.currentTimeMillis()
+        try {
+            if(!isMoviOddsAgeConfirmed(applicationContext)) {
+                store.saveInternationalOddsCapture(
+                    checkedAt,InternationalOddsStatus.UNVERIFIED,emptyList(),
+                    "Автоматическое обновление приостановлено: условия MoviOdds требуют подтверждения возраста 18+.",
+                    replaceCurrentBoard=true,
+                )
+                return@withContext Result.success()
+            }
+            val response=providerHttpClient.get(MOVIODDS_API_URL)
+            if(response.statusCode in setOf(401,403,451)) {
+                store.saveInternationalOddsCapture(checkedAt,InternationalOddsStatus.BLOCKED,emptyList(),"Источник отказал в публичном доступе (HTTP ${response.statusCode}); повторные запросы не выполняются с обходом защиты.",replaceCurrentBoard=true)
+                return@withContext Result.success()
+            }
+            if(response.statusCode==429||response.statusCode==503) {
+                store.saveInternationalOddsCapture(checkedAt,InternationalOddsStatus.ERROR,emptyList(),"Источник временно ограничил запрос (HTTP ${response.statusCode}); WorkManager повторит позже.")
+                return@withContext Result.retry()
+            }
+            if(response.statusCode !in 200..299) throw IOException("Unexpected HTTP ${response.statusCode} from MoviOdds.")
+            val parsed=Bet365ViaMoviOddsProvider().parse(response.body,checkedAt,store.matchIdentities())
+            store.saveInternationalOddsCapture(checkedAt,parsed.status,parsed.snapshots,parsed.detail,replaceCurrentBoard=true)
+            store.relinkUnmatchedInternationalOdds(checkedAt)
+            Result.success()
+        } catch(error:ProviderHttpException) {
+            val blocked=error.statusCode in setOf(401,403,451)
+            val status=if(blocked) InternationalOddsStatus.BLOCKED else InternationalOddsStatus.ERROR
+            store.saveInternationalOddsCapture(checkedAt,status,emptyList(),safeError(error),replaceCurrentBoard=blocked)
+            if(blocked) Result.success() else Result.retry()
+        } catch(error:Exception) {
+            store.saveInternationalOddsCapture(checkedAt,InternationalOddsStatus.ERROR,emptyList(),safeError(error))
             Result.retry()
         } finally {
             store.close()
@@ -342,6 +458,8 @@ internal data class ProviderHttpResult(
     val lastModified: String?,
 )
 
+internal class ProviderHttpException(val statusCode:Int):IOException("HTTP $statusCode from provider.")
+
 private fun safeError(error: Throwable): String = (error.message ?: error.javaClass.simpleName).take(400)
 
 internal interface ProviderHttpClient {
@@ -357,6 +475,7 @@ private class PublicJsonClient : ProviderHttpClient {
             connection.readTimeout = 12_000
             connection.instanceFollowRedirects = true
             connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("Accept-Encoding","gzip")
             connection.setRequestProperty("User-Agent", "Football-Intelligence-Android/0.1 (personal open-data client)")
             cache?.etag?.let { connection.setRequestProperty("If-None-Match", it) }
             cache?.lastModified?.let { connection.setRequestProperty("If-Modified-Since", it) }
@@ -367,15 +486,16 @@ private class PublicJsonClient : ProviderHttpClient {
             if (code == HttpURLConnection.HTTP_NOT_FOUND) {
                 return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
             }
-            if (code !in 200..299) throw IOException("HTTP $code for ${URL(url).host}")
-            val input = connection.inputStream
+            if (code !in 200..299) throw ProviderHttpException(code)
+            val rawInput = connection.inputStream
+            val input = if(connection.getHeaderField("Content-Encoding").orEmpty().contains("gzip",ignoreCase=true)) GZIPInputStream(rawInput) else rawInput
             val output = ByteArrayOutputStream()
             input.use { stream ->
                 val buffer = ByteArray(8_192)
                 while (true) {
                     val count = stream.read(buffer)
                     if (count < 0) break
-                    if (output.size() + count > 8 * 1024 * 1024) throw IOException("Response exceeds 8 MiB limit.")
+                    if (output.size() + count > 16 * 1024 * 1024) throw IOException("Response exceeds 16 MiB uncompressed limit.")
                     output.write(buffer, 0, count)
                 }
             }

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — add a gated international 1X2 market feed
+
+- Researched the requested public pages. Oddsbunch, BetExplorer, Oddspedia and OddsPortal terms do not permit automated reuse without consent; Oddschecker has regional limits and can block robotic access. No scraper, WebView collector or undocumented route was added for them.
+- Integrated the documented free/no-key MoviOdds soccer group-40 feed as `Bet365ViaMoviOddsProvider`; the bookmaker label and intermediary attribution remain distinct. The single-book no-vig reference is not called consensus and its prices never enter local Misli/TOPAZ coupons.
+- Added source market-poll and per-outcome price-change timestamps, complete prematch 1X2/suspension/duplicate/exact-fixture gates, a 15-minute freshness window, offline current state, 30-day price-change history, and app-open plus best-effort 30-minute WorkManager refresh.
+- Added a one-time 18+ confirmation gate required by MoviOdds terms, including a Worker-side guard so queued work cannot fetch before consent. The OpenFootball/OpenLigaDB football-data flow is unaffected. Azerbaijan device access and prospective price/model value remain unverified.
+- Direct POC at `2026-11-12T00:39:24Z` received 923 soccer rows; 904 passed the app-equivalent freshness and market-quality filter. These are historical POC observations, not current prices.
+- Local combined verification passed: 119 JVM tests, Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256 `1d20ace4ea5470ba77270608b024c18562a895407506544e7bbe44a6a3cfc0c9`. GitHub Actions and a signed device update-install are pending for this grouped milestone.
+
 ## Unreleased — add a chronological goals-based Poisson baseline
 
 - Estimate home/away goal rates from preceding same-competition scores using league-average smoothing and explicit league/team sample floors.

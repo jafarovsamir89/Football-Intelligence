@@ -25,6 +25,16 @@ The [penaltyblog model documentation](https://penaltyblog.readthedocs.io/en/late
 - A separate [OddsPortal crowd study](https://ueaeprints.uea.ac.uk/id/eprint/67529/) reports 1.317% average returns from a majority-prediction strategy across 68,339 events. It is a historical research result, not an independently reproduced estimate for this application.
 - Average crowd consensus may simply restate the market or share common information. Any crowd contribution must be compared to a timestamp-matched, de-vigged market baseline on future data.
 
+## International bookmaker odds (reviewed 2026-11-12)
+
+- Oddsbunch, BetExplorer and Oddspedia show public 1X2 odds, but their current terms do not authorize automated copying; BetExplorer also presents an age confirmation. OddsPortal prohibits automated requests/reproduction without express consent. Oddschecker terms and geography do not establish use from Azerbaijan and restrict automated traffic. No adapters, page scrapers or hidden routes were added for those sources.
+- MoviOdds documents a no-key soccer JSON endpoint filtered to prematch group 40 (Full Time Result). Its terms permit use in one's own app, prohibit attempts to bypass limits/security, and say the feed is independent and not affiliated with bet365. The app labels the origin “bet365 via MoviOdds,” not as a first-party API. This provider-level reuse permission is not a bet365 endorsement or guarantee. The terms require users to be 18+.
+- A local one-time age confirmation is required before scheduling this provider; the Android Worker independently checks the same flag before making a request. The football-data and TipsAudit workers are not gated.
+- A direct GET at 2026-11-12 00:39:24 UTC returned 923 fixture rows and 2,712 1X2 selections. The app-equivalent quality gate retained 904 future, prematch, fresh, complete and unsuspended lines. The example Club America (W)—Toluca (W) line was 1.20/7.00/8.50; its draw price last changed at 00:09:08 UTC, while group 40 was re-read at 00:39:24 UTC. Price `ts` and successful poll time are different facts.
+- Source-poll freshness is 15 minutes; device/server clock skew above 5 minutes is `UNVERIFIED`; `group_status["40"].stale=true` or old `polled_at` is `STALE`; blocked HTTP access is `BLOCKED`; request/parser failures are `ERROR`; no valid future rows is `UNAVAILABLE`. The app stores per-outcome source `ts`, provider `polled_at`, and app `captured_at` independently. Stable prices can have an old `ts` when the provider has recently reread the market, so freshness uses `polled_at` rather than rejecting solely on the price-change time.
+- Current quote state is updated each fetch; a 30-day history row is appended only when a price or its source change timestamp changes. This supports offline inspection and line movement without storing repeated unchanged boards. Market aggregation counts each underlying bookmaker once per exact normalized event. At present only one named bookmaker is verified, so its no-vig price is a single-book reference, not an independent consensus.
+- Proportional margin removal is descriptive. Differences from Elo, Misli or TOPAZ do not constitute EV or a value bet. No EV is emitted until there are verified local prices and the model has prospective evaluation; international prices cannot enter a local operator's virtual coupon. The feed has not been tested on a physical handset in Azerbaijan; regional availability and exact local fixture coverage remain unverified.
+
 ## Experimental policy
 
 Before any strategy is promoted:
@@ -35,6 +45,6 @@ Before any strategy is promoted:
 4. Report calibration, Brier, log loss, ROI, CLV, drawdown, sample count, uncertainty intervals, and stake assumptions.
 5. Keep tuning out of the final test window; publish failures and versions in the experiment log.
 
-The live reference ledger is not a historical odds archive: each saved fair-market snapshot expires from comparisons after 30 minutes, and the current API POC found no fresh row. A future market baseline evaluation needs timestamped coverage and a separate held-out interval; today's single-feed comparisons are descriptive only.
+The TipsAudit derived-reference ledger is not a historical odds archive: each saved fair-market snapshot expires from comparisons after 30 minutes, and its POC returned no fresh row. MoviOdds is now a separate named-bookmaker source, but its captured board is time-bound and does not create a prospective accuracy sample or deep market history. A market-baseline evaluation needs timestamped future coverage and a separate held-out interval; comparisons remain descriptive.
 
 The app now has a date-bucketed Elo walk-forward evaluator for user-imported score CSVs, but no real historical file has been run through it in this workspace. It emits Brier and Log Loss only and has no market baseline. The project still has no full-coverage timestamped odds or licensed tipster dataset.
