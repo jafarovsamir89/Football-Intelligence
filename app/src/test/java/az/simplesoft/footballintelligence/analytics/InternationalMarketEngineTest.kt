@@ -5,6 +5,7 @@ import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,6 +34,32 @@ class InternationalMarketEngineTest {
         assertEquals((p1.home+p2.home)/2,consensus.probabilities.home,1e-9)
         assertEquals((p1.draw+p2.draw)/2,consensus.probabilities.draw,1e-9)
         assertEquals((p1.away+p2.away)/2,consensus.probabilities.away,1e-9)
+    }
+
+    @Test fun consensusReportsBasicPowerAndShinOverTheSameBookmakerSet() {
+        val first=quote("source-a","alpha","https://example.org/a",captured=100_000)
+        val second=quote("source-b","beta","https://example.org/b",captured=100_500,home=2.0,draw=3.5,away=3.8)
+        val consensus=InternationalMarketEngine.consensus(listOf(first,second)).single()
+        val basic=listOf(first,second).map { ProbabilityEngine.removeMargin(it.home,it.draw,it.away,MarginMethod.BASIC) }
+        val power=listOf(first,second).map { ProbabilityEngine.removeMargin(it.home,it.draw,it.away,MarginMethod.POWER) }
+        val shin=listOf(first,second).map { ProbabilityEngine.removeMargin(it.home,it.draw,it.away,MarginMethod.SHIN) }
+
+        assertEquals(2,consensus.distinctBookmakerCount)
+        assertEquals((basic[0].home+basic[1].home)/2,consensus.probabilities.home,1e-9)
+        assertEquals((power[0].draw+power[1].draw)/2,consensus.powerProbabilities.draw,1e-9)
+        assertEquals((shin[0].away+shin[1].away)/2,consensus.shinProbabilities!!.away,1e-9)
+    }
+
+    @Test fun shinConsensusIsUnavailableRatherThanUsingASubsetWhenMarketIsUnderround() {
+        val overround=quote("source-a","alpha","https://example.org/a",captured=100_000)
+        val underround=quote("source-b","beta","https://example.org/b",captured=100_500,home=3.1,draw=3.6,away=3.9)
+        val consensus=InternationalMarketEngine.consensus(listOf(overround,underround)).single()
+        val expectedBasic=ProbabilityEngine.removeMargin(overround.home,overround.draw,overround.away,MarginMethod.BASIC)
+        val underroundBasic=ProbabilityEngine.removeMargin(underround.home,underround.draw,underround.away,MarginMethod.BASIC)
+
+        assertEquals(2,consensus.distinctBookmakerCount)
+        assertNull(consensus.shinProbabilities)
+        assertEquals((expectedBasic.home+underroundBasic.home)/2,consensus.probabilities.home,1e-9)
     }
 
     @Test fun layQuotesAreExcludedFromConsensusAndProspectiveBacktest() {

@@ -1,8 +1,13 @@
 # Changelog
 
-## Unreleased — добавить парные интервалы сравнения моделей (local checks passed; Actions pending)
+## Unreleased — добавить парные интервалы сравнения моделей (CI/API 26/API 34 passed)
 
-- Add deterministic 2,000-resample paired percentile-bootstrap 95% intervals for Elo-minus-Poisson and Elo-minus-Home/Away Brier/Log Loss differences on shared chronological holdout fixtures. Require at least 30 paired fixtures, label negative loss differences as favoring Elo, and document the independence limitation from recurring teams/rounds. Intervals are descriptive and never tune the holdout or live model. Local grouped verification passed 175 JVM tests, Android-test Kotlin compilation and both APK builds; Actions remains pending.
+- Add deterministic 2,000-resample paired percentile-bootstrap 95% intervals for Elo-minus-Poisson and Elo-minus-Home/Away Brier/Log Loss differences on shared chronological holdout fixtures. Require at least 30 paired fixtures, label negative loss differences as favoring Elo, and document the independence limitation from recurring teams/rounds. Intervals are descriptive and never tune the holdout or live model. Local grouped verification passed 175 JVM tests, Android-test Kotlin compilation and both APK builds. Actions [43274830661](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43274830661) passed the unit task, 56 API 34 tests, API 26 with one offline-only skip, keyless builds, signing and upload `13969583772`.
+
+## Unreleased — compare international market de-vig methods (local checks passed; CI pending)
+
+- Expose Basic, Power and Shin equal-weight cross-book probability averages for the same deduplicated bookmaker set on an exactly linked fixture. Keep Shin unavailable for the whole event when any included quote is underround, rather than silently changing the sample. Label equal weights as descriptive and source independence as unproven.
+- Add unit coverage for all methods and the underround gate, plus Compose coverage for visible international method comparison. Grouped local verification passed 177 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug/personal APK assembly. Debug SHA-256 `e4a2e89627a87e5096ab421e7984dec2b62d3a59a68d099e6e23f9a178bf6c2a`; personal SHA-256 `0ba5fbac99662349bf64669a05885c1ea5cebcd76d8f9b8e069c4fa99c8d0614`; DEX audit confirms the personal key is absent from debug. GitHub Actions/API 26/34 verification remains pending.
 
 ## Unreleased — добавить venue-split Home/Away baseline (CI/API 26/API 34 passed)
 

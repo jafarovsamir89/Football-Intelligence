@@ -284,7 +284,25 @@ internal fun InternationalMarketTabContent(
                     }
                     Text("Источник: $sourceName · рынок $sourceMarket · $updateDescription · сохранено приложением $captureTime",style=MaterialTheme.typography.bodySmall)
                     if(internationalFair!=null) {
-                        Text(if(distinctBooks>=2) "Межкнижный ориентир: среднее вероятностей без маржи по $distinctBooks разным букмекерам; это описательное сравнение, не подтверждённый edge." else "Международный консенсус не рассчитан: доступен один букмекерский ориентир.",style=MaterialTheme.typography.labelSmall)
+                        if(eventConsensus==null) {
+                            Text("Сводка методов недоступна без однозначной связи котировок с одним локальным матчем.",style=MaterialTheme.typography.labelSmall)
+                        } else {
+                            val summaryBasis = if(distinctBooks>=2) {
+                                "равное среднее по $distinctBooks уникальным ID букмекера; независимость источников не доказана"
+                            } else {
+                                "одна линия; это не межкнижный консенсус"
+                            }
+                            val basic=eventConsensus.probabilities
+                            val power=eventConsensus.powerProbabilities
+                            val shin=eventConsensus.shinProbabilities
+                            val shinText=shin?.let {
+                                "Shin ${"%.1f".format(it.home*100)}/${"%.1f".format(it.draw*100)}/${"%.1f".format(it.away*100)}%"
+                            } ?: "Shin недоступен: не все линии имеют положительную маржу"
+                            Text(
+                                "Сравнение снятия маржи · $summaryBasis: Basic ${"%.1f".format(basic.home*100)}/${"%.1f".format(basic.draw*100)}/${"%.1f".format(basic.away*100)}% · Power ${"%.1f".format(power.home*100)}/${"%.1f".format(power.draw*100)}/${"%.1f".format(power.away*100)}% · $shinText.",
+                                style=MaterialTheme.typography.labelSmall,
+                            )
+                        }
                     }
                     if(sourceLimits.isNotBlank()) {
                         Text("Лимит ставки, как передан источником (единица не указана): $sourceLimits. Это не оценка доступной ликвидности.",style=MaterialTheme.typography.bodySmall)

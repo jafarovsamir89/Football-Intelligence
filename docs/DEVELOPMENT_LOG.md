@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — expose method-sensitive international market comparison (local checks passed; Actions pending)
+
+- The 3.0 audit found that Basic, Power and Shin calculators existed, but international market summaries averaged only Basic and did not expose method sensitivity. Consensus now calculates equal-weight Basic and Power averages across the same deduplicated bookmaker IDs; Shin is available only if every included 1X2 line has an overround, so it never uses a hidden smaller sample.
+- The World Market cards display these linked-fixture probabilities and state that equal weights are descriptive and source independence is unproven. Unlinked quotes do not receive this comparison. Added unit coverage for all three methods and underround handling, plus a Compose display regression.
+- Grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 177 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug SHA-256 `e4a2e89627a87e5096ab421e7984dec2b62d3a59a68d099e6e23f9a178bf6c2a`; personal APK SHA-256 `0ba5fbac99662349bf64669a05885c1ea5cebcd76d8f9b8e069c4fa99c8d0614`; both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirmed the personal credential is absent from debug and present only in the private personal APK. `git diff --check` passed. No APK was installed and no API request/quota was used.
+- Next: commit/push this grouped feature and run one CI cycle for API 34/API 26 instrumentation and the keyless artifact. Do not install an APK or touch emulator `5558`.
+
 ## 2026-11-12 — add paired holdout uncertainty for goal-model comparisons (CI passed)
 
 - Extended the automatic model comparison with paired Elo-minus-Poisson and Elo-minus-Home/Away bootstrap intervals for Brier and Log Loss. Each resample uses the exact shared chronological holdout fixtures; parameters remain selected on validation only.

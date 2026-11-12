@@ -14,6 +14,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.InternationalBookmakerEvaluationReport
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationEngine
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
@@ -25,6 +26,7 @@ import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.HomeAwayPerformanceConfig
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
+import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
@@ -286,7 +288,7 @@ class FootballTabUiInstrumentedTest {
 
     @Test
     fun worldMarketShowsTheOddsApiProviderAndFreshNamedBookLines() {
-        showWorldMarket(marketEvaluation(30))
+        showWorldMarket(marketEvaluation(30), includeSecondBook = true)
 
         composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
         val marketList = composeRule.onNodeWithTag("internationalMarketList")
@@ -303,6 +305,10 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
         composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Сравнение снятия маржи · равное среднее по 2", substring = true))
+        composeRule.onNodeWithText("Сравнение снятия маржи · равное среднее по 2", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Power", substring = true).assertExists()
+        composeRule.onNodeWithText("Shin", substring = true).assertExists()
     }
 
     @Test
@@ -350,6 +356,7 @@ class FootballTabUiInstrumentedTest {
         evaluation: InternationalMarketEvaluationReport,
         analyticsUpdating: Boolean = false,
         includeExchangePair: Boolean = false,
+        includeSecondBook: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
         val quote = InternationalOddsSnapshot(
@@ -371,35 +378,44 @@ class FootballTabUiInstrumentedTest {
             homePriceChangedAtMillis = now,
             drawPriceChangedAtMillis = now,
             awayPriceChangedAtMillis = now,
+            matchId = 42,
+            matchLinkBasis = InternationalMatchLinkBasis.EXACT_KICKOFF,
         )
-        val quotes = if(includeExchangePair) {
-            val back = quote.copy(
-                bookmakerId = "betfair_ex_eu",
-                eventId = "betfair-event-1",
-                home = 2.10,
-                draw = 3.40,
-                away = 3.80,
-                sourceMarketKey = "h2h",
-                quoteSide = InternationalOddsQuoteSide.BACK,
-                homeBetLimit = 250.0,
-                drawBetLimit = 125.0,
-                awayBetLimit = 200.0,
-            )
-            listOf(
+        val quotes = when {
+            includeExchangePair -> {
+                val back = quote.copy(
+                    bookmakerId = "betfair_ex_eu",
+                    eventId = "betfair-event-1",
+                    home = 2.10,
+                    draw = 3.40,
+                    away = 3.80,
+                    sourceMarketKey = "h2h",
+                    quoteSide = InternationalOddsQuoteSide.BACK,
+                    homeBetLimit = 250.0,
+                    drawBetLimit = 125.0,
+                    awayBetLimit = 200.0,
+                )
+                listOf(
+                    quote,
+                    back,
+                    back.copy(
+                        home = 2.14,
+                        draw = 3.50,
+                        away = 3.90,
+                        sourceMarketKey = "h2h_lay",
+                        quoteSide = InternationalOddsQuoteSide.LAY,
+                        homeBetLimit = 30.0,
+                        drawBetLimit = 25.0,
+                        awayBetLimit = 35.0,
+                    ),
+                )
+            }
+            includeSecondBook -> listOf(
                 quote,
-                back,
-                back.copy(
-                    home = 2.14,
-                    draw = 3.50,
-                    away = 3.90,
-                    sourceMarketKey = "h2h_lay",
-                    quoteSide = InternationalOddsQuoteSide.LAY,
-                    homeBetLimit = 30.0,
-                    drawBetLimit = 25.0,
-                    awayBetLimit = 35.0,
-                ),
+                quote.copy(bookmakerId = "pinnacle_eu", eventId = "pinnacle-event", home = 2.05, draw = 3.55, away = 3.85),
             )
-        } else listOf(quote)
+            else -> listOf(quote)
+        }
         composeRule.setContent {
             MaterialTheme {
                 InternationalMarketTabContent(
@@ -414,7 +430,7 @@ class FootballTabUiInstrumentedTest {
                     internationalOdds = quotes,
                     internationalOddsHistory = emptyList(),
                     internationalMarketEvaluation = evaluation,
-                    internationalConsensus = emptyList(),
+                    internationalConsensus = InternationalMarketEngine.consensus(quotes),
                     forecastedMatches = emptyList(),
                     misliOdds = emptyList(),
                     topazOdds = emptyList(),

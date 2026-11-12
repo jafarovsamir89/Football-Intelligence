@@ -11,6 +11,8 @@ data class InternationalMarketConsensus(
     val awayTeam: String,
     val kickoffMillis: Long,
     val probabilities: OutcomeProbabilities,
+    val powerProbabilities: OutcomeProbabilities,
+    val shinProbabilities: OutcomeProbabilities?,
     val distinctBookmakerCount: Int,
     val latestProviderPollAtMillis: Long,
 )
@@ -73,15 +75,13 @@ object InternationalMarketEngine {
                 .values.mapNotNull { rows -> rows.maxWithOrNull(compareBy<InternationalOddsSnapshot> { it.providerPolledAtMillis }
                     .thenBy { it.capturedAtMillis }) }
             if (uniqueBookmakerRows.isEmpty()) return@mapNotNull null
-            val fair = uniqueBookmakerRows.map {
-                ProbabilityEngine.removeMargin(it.home, it.draw, it.away, MarginMethod.BASIC)
-            }
-            val count = fair.size.toDouble()
-            val probabilities = OutcomeProbabilities(
-                fair.sumOf { it.home } / count,
-                fair.sumOf { it.draw } / count,
-                fair.sumOf { it.away } / count,
-            )
+            val probabilities = averageNoVigProbabilities(uniqueBookmakerRows, MarginMethod.BASIC)
+                ?: return@mapNotNull null
+            val powerProbabilities = averageNoVigProbabilities(uniqueBookmakerRows, MarginMethod.POWER)
+                ?: return@mapNotNull null
+            // Keep the comparison on the same bookmaker set. If even one line is underround,
+            // report Shin as unavailable instead of silently averaging a smaller subset.
+            val shinProbabilities = averageNoVigProbabilities(uniqueBookmakerRows, MarginMethod.SHIN)
             val representative = uniqueBookmakerRows.maxBy { it.providerPolledAtMillis }
             InternationalMarketConsensus(
                 representative.matchId,
@@ -89,6 +89,8 @@ object InternationalMarketEngine {
                 representative.awayTeam,
                 representative.kickoffMillis,
                 probabilities,
+                powerProbabilities,
+                shinProbabilities,
                 uniqueBookmakerRows.size,
                 uniqueBookmakerRows.maxOf { it.providerPolledAtMillis },
             )
@@ -105,6 +107,28 @@ object InternationalMarketEngine {
                 it.sourceMarketKey == current.sourceMarketKey && it.capturedAtMillis < current.capturedAtMillis }
             .maxByOrNull { it.capturedAtMillis } ?: return null
         return InternationalLineMovement(previous, current)
+    }
+
+    private fun averageNoVigProbabilities(
+        rows: List<InternationalOddsSnapshot>,
+        method: MarginMethod,
+    ): OutcomeProbabilities? {
+        if (rows.isEmpty()) return null
+        val values = mutableListOf<OutcomeProbabilities>()
+        for (row in rows) {
+            val result = try {
+                ProbabilityEngine.removeMargin(row.home, row.draw, row.away, method)
+            } catch (_: IllegalArgumentException) {
+                return null
+            }
+            values += result
+        }
+        val count = values.size.toDouble()
+        return OutcomeProbabilities(
+            values.sumOf { it.home } / count,
+            values.sumOf { it.draw } / count,
+            values.sumOf { it.away } / count,
+        )
     }
 
     private data class EventNameKey(val market: String, val home: String, val away: String)
