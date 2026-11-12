@@ -19,6 +19,7 @@ import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluatio
 import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
@@ -213,6 +214,23 @@ class FootballTabUiInstrumentedTest {
     }
 
     @Test
+    fun worldMarketSeparatesExchangeBackAndLayAndShowsOnlySourceData() {
+        showWorldMarket(marketEvaluation(30), includeExchangePair = true)
+
+        val marketList = composeRule.onNodeWithTag("internationalMarketList")
+        marketList.performScrollToNode(hasText("Betfair Exchange · Back (h2h)", substring = true))
+        composeRule.onNodeWithText("Betfair Exchange · Back (h2h)", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Betfair Exchange · Lay (h2h_lay)", substring = true))
+        composeRule.onNodeWithText("Betfair Exchange · Lay (h2h_lay)", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Спред котировок Lay − Back: 1 0.04", substring = true))
+        composeRule.onNodeWithText("Спред котировок Lay − Back: 1 0.04 · X 0.10 · 2 0.10", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Лимит ставки, как передан источником", substring = true))
+        composeRule.onNodeWithText("Лимит ставки, как передан источником (единица не указана): 1 250.00 / X 125.00 / 2 200.00. Это не оценка доступной ликвидности.").assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Комиссия Betfair не передана источником", substring = true))
+        composeRule.onNodeWithText("Комиссия Betfair не передана источником и не вычтена; чистая биржевая доходность не рассчитывается.").assertIsDisplayed()
+    }
+
+    @Test
     fun worldMarketExplainsWhyIntervalsAreUnavailableBelowThirtySettlements() {
         showWorldMarket(marketEvaluation(29))
 
@@ -238,6 +256,7 @@ class FootballTabUiInstrumentedTest {
     private fun showWorldMarket(
         evaluation: InternationalMarketEvaluationReport,
         analyticsUpdating: Boolean = false,
+        includeExchangePair: Boolean = false,
     ) {
         val now = System.currentTimeMillis()
         val quote = InternationalOddsSnapshot(
@@ -260,6 +279,34 @@ class FootballTabUiInstrumentedTest {
             drawPriceChangedAtMillis = now,
             awayPriceChangedAtMillis = now,
         )
+        val quotes = if(includeExchangePair) {
+            val back = quote.copy(
+                bookmakerId = "betfair_ex_eu",
+                eventId = "betfair-event-1",
+                home = 2.10,
+                draw = 3.40,
+                away = 3.80,
+                sourceMarketKey = "h2h",
+                quoteSide = InternationalOddsQuoteSide.BACK,
+                homeBetLimit = 250.0,
+                drawBetLimit = 125.0,
+                awayBetLimit = 200.0,
+            )
+            listOf(
+                quote,
+                back,
+                back.copy(
+                    home = 2.14,
+                    draw = 3.50,
+                    away = 3.90,
+                    sourceMarketKey = "h2h_lay",
+                    quoteSide = InternationalOddsQuoteSide.LAY,
+                    homeBetLimit = 30.0,
+                    drawBetLimit = 25.0,
+                    awayBetLimit = 35.0,
+                ),
+            )
+        } else listOf(quote)
         composeRule.setContent {
             MaterialTheme {
                 InternationalMarketTabContent(
@@ -268,10 +315,10 @@ class FootballTabUiInstrumentedTest {
                     internationalOddsSyncState = null,
                     internationalOddsSyncHistory = emptyList(),
                     theOddsApiSyncState = InternationalOddsSyncState(
-                        THE_ODDS_API_PROVIDER_ID, InternationalOddsStatus.LIVE, now, now, 1, "Квота проверена",
+                        THE_ODDS_API_PROVIDER_ID, InternationalOddsStatus.LIVE, now, now, quotes.size, "Квота проверена",
                     ),
                     theOddsApiSyncHistory = emptyList(),
-                    internationalOdds = listOf(quote),
+                    internationalOdds = quotes,
                     internationalOddsHistory = emptyList(),
                     internationalMarketEvaluation = evaluation,
                     internationalConsensus = emptyList(),

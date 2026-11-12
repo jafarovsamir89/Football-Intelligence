@@ -13,6 +13,7 @@ const val INTERNATIONAL_ODDS_APP_OPEN_STALE_MINUTES = 10L
 const val INTERNATIONAL_ODDS_REFRESH_INTERVAL_MINUTES = 30L
 
 enum class InternationalOddsStatus { LIVE, STALE, UNAVAILABLE, BLOCKED, ERROR, UNVERIFIED }
+enum class InternationalOddsQuoteSide { BACK, LAY }
 
 data class InternationalOddsQualityCounts(
     val receivedMatches: Int,
@@ -71,6 +72,11 @@ data class InternationalOddsSnapshot(
     val awayPriceChangedAtMillis: Long,
     val matchId: Int? = null,
     val matchLinkBasis: InternationalMatchLinkBasis? = null,
+    val sourceMarketKey: String = "unknown",
+    val quoteSide: InternationalOddsQuoteSide = InternationalOddsQuoteSide.BACK,
+    val homeBetLimit: Double? = null,
+    val drawBetLimit: Double? = null,
+    val awayBetLimit: Double? = null,
 ) {
     init {
         require(providerId.isNotBlank() && bookmakerId.isNotBlank() && eventId.isNotBlank())
@@ -80,7 +86,31 @@ data class InternationalOddsSnapshot(
         require(listOf(home, draw, away).all { it.isFinite() && it > 1.0 && it <= 1000.0 })
         require(capturedAtMillis > 0L && providerPolledAtMillis > 0L && kickoffMillis > 0L)
         require(listOf(homePriceChangedAtMillis, drawPriceChangedAtMillis, awayPriceChangedAtMillis).all { it > 0L })
+        require(sourceMarketKey.isNotBlank())
+        require(listOf(homeBetLimit, drawBetLimit, awayBetLimit).filterNotNull().all { it.isFinite() && it > 0.0 })
     }
+}
+
+data class InternationalExchangeSpread(val home: Double, val draw: Double, val away: Double)
+
+/** Returns Lay minus Back only for the same source snapshot, event, bookmaker, and 1X2 market. */
+fun internationalExchangeSpread(
+    back: InternationalOddsSnapshot,
+    lay: InternationalOddsSnapshot,
+): InternationalExchangeSpread? {
+    if (back.quoteSide != InternationalOddsQuoteSide.BACK || lay.quoteSide != InternationalOddsQuoteSide.LAY) return null
+    if (back.sourceMarketKey != "h2h" || lay.sourceMarketKey != "h2h_lay") return null
+    if (back.providerId != lay.providerId || back.bookmakerId != lay.bookmakerId || back.eventId != lay.eventId) return null
+    if (back.market != "1X2" || lay.market != "1X2" || back.kickoffMillis != lay.kickoffMillis) return null
+    if (back.capturedAtMillis != lay.capturedAtMillis || back.providerPolledAtMillis != lay.providerPolledAtMillis) return null
+    if (TeamNameIdentity.canonical(back.homeTeam) != TeamNameIdentity.canonical(lay.homeTeam) ||
+        TeamNameIdentity.canonical(back.awayTeam) != TeamNameIdentity.canonical(lay.awayTeam)
+    ) return null
+    val home = lay.home - back.home
+    val draw = lay.draw - back.draw
+    val away = lay.away - back.away
+    if (listOf(home, draw, away).any { !it.isFinite() || it < 0.0 }) return null
+    return InternationalExchangeSpread(home, draw, away)
 }
 
 data class InternationalOddsParseResult(
@@ -263,6 +293,7 @@ class Bet365ViaMoviOddsProvider {
                 awayPriceChangedAtMillis = a.changedAt,
                 matchId = fixtureLink?.matchId,
                 matchLinkBasis = fixtureLink?.basis,
+                sourceMarketKey = "group=40;market=40",
             )
             if(parsed.any { existing ->
                     OddsQualityGate.sameUnderlyingEvent(

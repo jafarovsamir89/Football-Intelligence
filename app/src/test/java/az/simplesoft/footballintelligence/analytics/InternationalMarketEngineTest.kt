@@ -1,6 +1,8 @@
 package az.simplesoft.footballintelligence.analytics
 
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
+import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -31,6 +33,29 @@ class InternationalMarketEngineTest {
         assertEquals((p1.home+p2.home)/2,consensus.probabilities.home,1e-9)
         assertEquals((p1.draw+p2.draw)/2,consensus.probabilities.draw,1e-9)
         assertEquals((p1.away+p2.away)/2,consensus.probabilities.away,1e-9)
+    }
+
+    @Test fun layQuotesAreExcludedFromConsensusAndProspectiveBacktest() {
+        val back = quote("the_odds_api", "betfair_ex_eu", "https://example.org/odds", captured = 100_000)
+            .copy(sourceMarketKey = "h2h", matchLinkBasis = InternationalMatchLinkBasis.EXACT_KICKOFF)
+        val lay = back.copy(
+            home = 2.20,
+            draw = 3.30,
+            away = 3.50,
+            sourceMarketKey = "h2h_lay",
+            quoteSide = InternationalOddsQuoteSide.LAY,
+        )
+        val otherBack = quote("other_feed", "pinnacle", "https://example.net/odds", captured = 101_000)
+            .copy(sourceMarketKey = "h2h")
+
+        val withLay = InternationalMarketEngine.consensus(listOf(back, lay, otherBack)).single()
+        val withoutLay = InternationalMarketEngine.consensus(listOf(back, otherBack)).single()
+        val evaluation = InternationalMarketEvaluationEngine.evaluate(listOf(back, lay), emptyList())
+
+        assertEquals(2, withLay.distinctBookmakerCount)
+        assertEquals(withoutLay.probabilities, withLay.probabilities)
+        assertEquals(1, evaluation.quoteFixtureCount)
+        assertEquals(listOf("betfair_ex_eu"), evaluation.bookmakerReports.map { it.bookmakerId })
     }
 
     @Test fun separateOrientationAndKickoffAreNeverMerged() {

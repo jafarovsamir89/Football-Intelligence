@@ -9,6 +9,7 @@ const val THE_ODDS_API_PROVIDER_ID = "the_odds_api"
 const val THE_ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 const val THE_ODDS_API_REGION = "eu"
 const val THE_ODDS_API_MARKET = "h2h"
+const val THE_ODDS_API_LAY_MARKET = "h2h_lay"
 const val THE_ODDS_API_DAILY_LEAGUE_LIMIT = 12
 const val THE_ODDS_API_LEAGUES_PER_BATCH = 1
 const val THE_ODDS_API_MINIMUM_CREDIT_RESERVE = 20
@@ -96,7 +97,8 @@ class TheOddsApiProvider {
                 if (markets == null) continue
                 for (marketIndex in 0 until markets.length()) {
                     val market = markets.optJSONObject(marketIndex) ?: continue
-                    if (market.optString("key") != THE_ODDS_API_MARKET) continue
+                    val sourceMarketKey = market.optString("key")
+                    if (sourceMarketKey !in setOf(THE_ODDS_API_MARKET, THE_ODDS_API_LAY_MARKET)) continue
                     hasMarket = true
                     if (bookmakerId.isBlank() || bookmakerTitle.isBlank()) {
                         rejected++
@@ -124,7 +126,7 @@ class TheOddsApiProvider {
                         rejected++
                         continue
                     }
-                    val selections = mutableMapOf<String, Double>()
+                    val selections = mutableMapOf<String, ApiSelection>()
                     var invalid = false
                     for (outcomeIndex in 0 until outcomes.length()) {
                         val outcome = outcomes.optJSONObject(outcomeIndex) ?: continue
@@ -136,7 +138,10 @@ class TheOddsApiProvider {
                             else -> continue
                         }
                         val price = outcome.optDouble("price", Double.NaN)
-                        if (!price.isFinite() || price <= 1.0 || price > 1_000.0 || selections.put(key, price) != null) {
+                        val betLimit = outcome.optDouble("bet_limit", Double.NaN).takeIf { it.isFinite() && it > 0.0 }
+                        if (!price.isFinite() || price <= 1.0 || price > 1_000.0 ||
+                            selections.put(key, ApiSelection(price, betLimit)) != null
+                        ) {
                             invalid = true
                         }
                     }
@@ -160,18 +165,28 @@ class TheOddsApiProvider {
                         market = "1X2",
                         homeTeam = home,
                         awayTeam = away,
-                        home = selections.getValue("home"),
-                        draw = selections.getValue("draw"),
-                        away = selections.getValue("away"),
+                        home = selections.getValue("home").price,
+                        draw = selections.getValue("draw").price,
+                        away = selections.getValue("away").price,
                         // V4 exposes the update time for the full h2h market, not each outcome.
                         homePriceChangedAtMillis = updatedAt,
                         drawPriceChangedAtMillis = updatedAt,
                         awayPriceChangedAtMillis = updatedAt,
                         matchId = fixtureLink?.matchId,
                         matchLinkBasis = fixtureLink?.basis,
+                        sourceMarketKey = sourceMarketKey,
+                        quoteSide = if (sourceMarketKey == THE_ODDS_API_LAY_MARKET) {
+                            InternationalOddsQuoteSide.LAY
+                        } else {
+                            InternationalOddsQuoteSide.BACK
+                        },
+                        homeBetLimit = selections.getValue("home").betLimit,
+                        drawBetLimit = selections.getValue("draw").betLimit,
+                        awayBetLimit = selections.getValue("away").betLimit,
                     )
                     val duplicateIndex = parsed.indexOfFirst { existing ->
-                        existing.bookmakerId == bookmakerId && OddsQualityGate.sameUnderlyingEvent(
+                        existing.bookmakerId == bookmakerId && existing.quoteSide == candidate.quoteSide &&
+                            existing.sourceMarketKey == candidate.sourceMarketKey && OddsQualityGate.sameUnderlyingEvent(
                             existing.homeTeam, existing.awayTeam, existing.kickoffMillis,
                             candidate.homeTeam, candidate.awayTeam, candidate.kickoffMillis,
                         )
@@ -251,7 +266,8 @@ class TheOddsApiProvider {
         for (bookmakerIndex in 0 until bookmakers.length()) {
             val markets = bookmakers.optJSONObject(bookmakerIndex)?.optJSONArray("markets") ?: continue
             for (marketIndex in 0 until markets.length()) {
-                if (markets.optJSONObject(marketIndex)?.optString("key") == THE_ODDS_API_MARKET) count++
+                val key = markets.optJSONObject(marketIndex)?.optString("key")
+                if (key == THE_ODDS_API_MARKET || key == THE_ODDS_API_LAY_MARKET) count++
             }
         }
         return count.coerceAtLeast(1)
@@ -266,12 +282,14 @@ class TheOddsApiProvider {
     }
 }
 
+private data class ApiSelection(val price: Double, val betLimit: Double?)
+
 fun theOddsApiSportsUrl(): String = "$THE_ODDS_API_BASE_URL/sports/"
 
 fun theOddsApiOddsUrl(sportKey: String, region: String = THE_ODDS_API_REGION): String {
     require(sportKey.startsWith("soccer_"))
     require(region.matches(Regex("^[a-z0-9,]+$")))
-    return "$THE_ODDS_API_BASE_URL/sports/$sportKey/odds/?regions=$region&markets=$THE_ODDS_API_MARKET&oddsFormat=decimal&dateFormat=iso"
+    return "$THE_ODDS_API_BASE_URL/sports/$sportKey/odds/?regions=$region&markets=$THE_ODDS_API_MARKET&oddsFormat=decimal&dateFormat=iso&includeBetLimits=true"
 }
 
 fun theOddsApiAuthHeaders(apiKey:String):Map<String,String> {

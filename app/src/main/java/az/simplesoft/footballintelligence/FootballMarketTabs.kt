@@ -23,6 +23,7 @@ import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncAttempt
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
@@ -30,6 +31,7 @@ import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
 import az.simplesoft.footballintelligence.data.MOVIODDS_PROVIDER_ID
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
+import az.simplesoft.footballintelligence.data.internationalExchangeSpread
 import az.simplesoft.footballintelligence.data.visibleInternationalOddsStatus
 import java.time.Instant
 import java.time.ZoneId
@@ -235,34 +237,70 @@ internal fun InternationalMarketTabContent(
                 }
             }
         }
-        items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}"}) { quote ->
-            val eventConsensus=if(analyticsUpdating) null else internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
-            val model=quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
-            val localMisli=quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
-            val localTopaz=quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
-            val internationalFair=ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
+        items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.market}:${it.sourceMarketKey}:${it.quoteSide}"}) { quote ->
+            val isLay=quote.quoteSide==InternationalOddsQuoteSide.LAY
+            val isBetfairExchange=quote.providerId==THE_ODDS_API_PROVIDER_ID&&quote.bookmakerId.startsWith("betfair_ex_")
+            val eventConsensus=if(analyticsUpdating||isLay) null else internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
+            val model=if(isLay) null else quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
+            val localMisli=if(isLay) null else quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
+            val localTopaz=if(isLay) null else quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
+            val internationalFair=if(isLay) null else ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
             val movement=InternationalMarketEngine.latestMovement(quote,internationalOddsHistory)
             val distinctBooks=eventConsensus?.distinctBookmakerCount ?: 1
+            val peer=internationalOdds.firstOrNull { candidate ->
+                candidate.providerId==quote.providerId&&candidate.bookmakerId==quote.bookmakerId&&candidate.eventId==quote.eventId&&
+                    candidate.quoteSide!=quote.quoteSide&&candidate.market==quote.market
+            }
+            val exchangeSpread=peer?.let { paired ->
+                if(isLay) internationalExchangeSpread(paired,quote) else internationalExchangeSpread(quote,paired)
+            }
             val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
             val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
             val priceTimes=listOf(quote.homePriceChangedAtMillis,quote.drawPriceChangedAtMillis,quote.awayPriceChangedAtMillis).joinToString(" / ") {
                 DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
             }
             val updateDescription=if(quote.providerId==THE_ODDS_API_PROVIDER_ID) "рынок обновлён $pollTime" else "времена цен 1/X/2: $priceTimes"
+            val sideLabel=if(isLay) "Lay" else "Back"
+            val sourceMarket=when(quote.sourceMarketKey) {
+                "h2h" -> "h2h"
+                "h2h_lay" -> "h2h_lay"
+                "group=40;market=40" -> "group 40 / market 40"
+                else -> "не сохранён в старой записи"
+            }
+            val sourceLimits=listOf("1" to quote.homeBetLimit,"X" to quote.drawBetLimit,"2" to quote.awayBetLimit)
+                .mapNotNull { (label,value) -> value?.let { "$label ${"%.2f".format(it)}" } }.joinToString(" / ")
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
                     Text("${quote.league} · ${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary)
                     Text("${quote.homeTeam} — ${quote.awayTeam}",fontWeight=FontWeight.SemiBold)
                     val bookmakerName=internationalBookmakerName(quote.providerId,quote.bookmakerId)
                     val sourceName=internationalProviderName(quote.providerId)
-                    Text("$bookmakerName · 1 ${"%.2f".format(quote.home)} / X ${"%.2f".format(quote.draw)} / 2 ${"%.2f".format(quote.away)}",fontWeight=FontWeight.Bold)
-                    Text("Рыночные вероятности без маржи: ${"%.1f".format(internationalFair.home*100)} / ${"%.1f".format(internationalFair.draw*100)} / ${"%.1f".format(internationalFair.away*100)}%${if(distinctBooks>=2) " · линии ${distinctBooks} разных БК" else " · ориентир одной БК"}${quote.region?.let { " · регион источника $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
-                    Text("Источник: $sourceName · $updateDescription · сохранено приложением $captureTime",style=MaterialTheme.typography.bodySmall)
-                    Text(if(distinctBooks>=2) "Межкнижный ориентир: среднее вероятностей без маржи по $distinctBooks разным букмекерам; это описательное сравнение, не подтверждённый edge." else "Международный консенсус не рассчитан: доступен один букмекерский ориентир.",style=MaterialTheme.typography.labelSmall)
-                    movement?.let {
-                        Text("Изменение с предыдущего сохранённого снимка: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены, не вероятности).",style=MaterialTheme.typography.bodySmall)
+                    Text("$bookmakerName · $sideLabel ($sourceMarket) · 1 ${"%.2f".format(quote.home)} / X ${"%.2f".format(quote.draw)} / 2 ${"%.2f".format(quote.away)}",fontWeight=FontWeight.Bold)
+                    if(internationalFair==null) {
+                        Text("Lay — цена против выбранного исхода; она не трактуется как back-коэффициент и не входит в рыночный консенсус или сравнение Elo.",style=MaterialTheme.typography.bodySmall)
+                    } else {
+                        val probabilityLabel=if(isBetfairExchange) "Нормированные implied вероятности Back (без поправки на спред/комиссию)" else "Рыночные вероятности без маржи"
+                        Text("$probabilityLabel: ${"%.1f".format(internationalFair.home*100)} / ${"%.1f".format(internationalFair.draw*100)} / ${"%.1f".format(internationalFair.away*100)}%${if(distinctBooks>=2) " · линии ${distinctBooks} разных БК" else " · ориентир одной БК"}${quote.region?.let { " · регион источника $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
                     }
-                    if(quote.matchId==null) {
+                    Text("Источник: $sourceName · рынок $sourceMarket · $updateDescription · сохранено приложением $captureTime",style=MaterialTheme.typography.bodySmall)
+                    if(internationalFair!=null) {
+                        Text(if(distinctBooks>=2) "Межкнижный ориентир: среднее вероятностей без маржи по $distinctBooks разным букмекерам; это описательное сравнение, не подтверждённый edge." else "Международный консенсус не рассчитан: доступен один букмекерский ориентир.",style=MaterialTheme.typography.labelSmall)
+                    }
+                    if(sourceLimits.isNotBlank()) {
+                        Text("Лимит ставки, как передан источником (единица не указана): $sourceLimits. Это не оценка доступной ликвидности.",style=MaterialTheme.typography.bodySmall)
+                    }
+                    if(isBetfairExchange) {
+                        exchangeSpread?.let {
+                            Text("Спред котировок Lay − Back: 1 ${"%.2f".format(it.home)} · X ${"%.2f".format(it.draw)} · 2 ${"%.2f".format(it.away)} (разница цен, не доходность).",style=MaterialTheme.typography.bodySmall)
+                        } ?: Text("Спред Back/Lay не рассчитан: нет обеих сторон из одного подтверждённого снимка.",style=MaterialTheme.typography.bodySmall)
+                        Text("Комиссия Betfair не передана источником и не вычтена; чистая биржевая доходность не рассчитывается.",style=MaterialTheme.typography.bodySmall)
+                    }
+                    movement?.let {
+                        Text("Изменение с предыдущим снимком той же стороны: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены).",style=MaterialTheme.typography.bodySmall)
+                    }
+                    if(isLay) {
+                        Text(if(quote.matchId==null) "Нет единственного безопасного совпадения с локальным матчем." else "Сопоставлено с локальным матчем ID ${quote.matchId}; Lay-цены не используются для Elo-сравнения.",style=MaterialTheme.typography.bodySmall)
+                    } else if(quote.matchId==null) {
                         Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
                     } else {
                         val linkDescription=when(quote.matchLinkBasis) {
@@ -275,14 +313,17 @@ internal fun InternationalMarketTabContent(
                             Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
                         } else {
                             val p=model.probabilities
-                            Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус $bookmakerName без маржи: ${"%+.1f".format((p.home-internationalFair.home)*100)} / ${"%+.1f".format((p.draw-internationalFair.draw)*100)} / ${"%+.1f".format((p.away-internationalFair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                            val fair=requireNotNull(internationalFair)
+                            val comparisonBasis=if(isBetfairExchange) "нормированным Back до комиссии" else "вероятностями без маржи"
+                            Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус $bookmakerName $comparisonBasis: ${"%+.1f".format((p.home-fair.home)*100)} / ${"%+.1f".format((p.draw-fair.draw)*100)} / ${"%+.1f".format((p.away-fair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
                         }
                         listOf("Misli" to localMisli,"TOPAZ" to localTopaz).forEach { (name,local) ->
                             if(local==null) Text("$name: нет свежей локальной линии по этому матчу.",style=MaterialTheme.typography.bodySmall)
                             else {
                                 val localFair=ProbabilityEngine.removeMargin(local.home,local.draw,local.away,MarginMethod.BASIC)
+                                val fair=requireNotNull(internationalFair)
                                 val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(local.capturedAtMillis))
-                                Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к $bookmakerName ${"%+.1f".format((localFair.home-internationalFair.home)*100)}/${"%+.1f".format((localFair.draw-internationalFair.draw)*100)}/${"%+.1f".format((localFair.away-internationalFair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
+                                Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к $bookmakerName ${"%+.1f".format((localFair.home-fair.home)*100)}/${"%+.1f".format((localFair.draw-fair.draw)*100)}/${"%+.1f".format((localFair.away-fair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
@@ -296,8 +337,12 @@ internal fun InternationalMarketTabContent(
         }
         if(showInternationalHistory) {
             item { Text("Сохранённые изменения котировок · не являются текущими линиями; одинаковые повторные опросы не дублируются",fontWeight=FontWeight.SemiBold) }
-            items(internationalOddsHistory.take(120),key={"history:${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.capturedAtMillis}"}) { old ->
-                Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} (${internationalProviderName(old.providerId)}) · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
+            items(internationalOddsHistory.take(120),key={"history:${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.market}:${it.sourceMarketKey}:${it.quoteSide}:${it.capturedAtMillis}"}) { old ->
+                val side=if(old.quoteSide==InternationalOddsQuoteSide.LAY) "Lay" else "Back"
+                val sourceLimits=listOf(old.homeBetLimit,old.drawBetLimit,old.awayBetLimit)
+                    .mapNotNull { it?.let { limit -> "%.2f".format(limit) } }.takeIf { it.isNotEmpty() }
+                    ?.joinToString("/") ?: "нет"
+                Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} · $side (${old.sourceMarketKey}) · ${internationalProviderName(old.providerId)} · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · лимиты источника $sourceLimits (единица неизвестна) · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
             }
         }
     }
@@ -311,7 +356,13 @@ private fun internationalProviderName(providerId:String):String = when(providerI
 
 private fun internationalBookmakerName(providerId:String,bookmakerId:String):String = when(providerId) {
     MOVIODDS_PROVIDER_ID -> "bet365"
-    THE_ODDS_API_PROVIDER_ID -> bookmakerId.split('_').joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+    THE_ODDS_API_PROVIDER_ID -> when(bookmakerId) {
+        "betfair_ex_eu", "betfair_ex_uk", "betfair_ex_au" -> "Betfair Exchange"
+        "betfair_sb_uk" -> "Betfair Sportsbook"
+        "pinnacle" -> "Pinnacle"
+        "bet365_au" -> "Bet365 (AU)"
+        else -> bookmakerId.split('_').joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
+    }
     else -> bookmakerId
 }
 

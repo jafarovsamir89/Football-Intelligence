@@ -2,6 +2,7 @@ package az.simplesoft.footballintelligence.analytics
 
 import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import java.util.Locale
 import java.util.Random
 import kotlin.math.abs
@@ -163,7 +164,9 @@ object InternationalMarketEvaluationEngine {
 
     private fun isEligibleQuote(quote: InternationalOddsSnapshot): Boolean {
         val matchId = quote.matchId ?: return false
-        if (matchId <= 0 || quote.matchLinkBasis == null || quote.market != "1X2") return false
+        if (matchId <= 0 || quote.matchLinkBasis == null || quote.market != "1X2" ||
+            quote.quoteSide != InternationalOddsQuoteSide.BACK
+        ) return false
         if (quote.capturedAtMillis <= 0L || quote.capturedAtMillis >= quote.kickoffMillis) return false
         if (quote.providerPolledAtMillis <= 0L ||
             quote.providerPolledAtMillis > quote.capturedAtMillis + FUTURE_PROVIDER_TIME_TOLERANCE_MILLIS ||

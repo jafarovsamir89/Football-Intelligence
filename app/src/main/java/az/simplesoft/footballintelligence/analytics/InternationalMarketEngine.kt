@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence.analytics
 
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.TeamNameIdentity
 import kotlin.math.abs
 
@@ -34,7 +35,8 @@ object InternationalMarketEngine {
      * kept separate because the available identity fields cannot distinguish its events safely.
      */
     fun consensus(snapshots: List<InternationalOddsSnapshot>): List<InternationalMarketConsensus> {
-        val eventGroups = snapshots.groupBy(::eventNameKey).values.flatMap { identityCandidates ->
+        val backQuotes = snapshots.filter { it.market == "1X2" && it.quoteSide == InternationalOddsQuoteSide.BACK }
+        val eventGroups = backQuotes.groupBy(::eventNameKey).values.flatMap { identityCandidates ->
             val ordered = identityCandidates.sortedWith(compareBy<InternationalOddsSnapshot> { it.kickoffMillis }
                 .thenBy { it.bookmakerId.lowercase() }.thenBy { it.providerId }
                 .thenBy { it.providerPolledAtMillis }.thenBy { it.capturedAtMillis })
@@ -99,7 +101,8 @@ object InternationalMarketEngine {
     ): InternationalLineMovement? {
         val previous = history.asSequence()
             .filter { it.providerId == current.providerId && it.bookmakerId == current.bookmakerId &&
-                it.eventId == current.eventId && it.capturedAtMillis < current.capturedAtMillis }
+                it.eventId == current.eventId && it.market == current.market && it.quoteSide == current.quoteSide &&
+                it.sourceMarketKey == current.sourceMarketKey && it.capturedAtMillis < current.capturedAtMillis }
             .maxByOrNull { it.capturedAtMillis } ?: return null
         return InternationalLineMovement(previous, current)
     }

@@ -184,7 +184,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val db = store.writableDatabase
-                assertEquals(17, db.version)
+                assertEquals(18, db.version)
                 assertTrue(tableExists(db, "historical_results"))
                 assertTrue(tableExists(db, "provider_sync_state"))
                 assertTrue(tableExists(db, "bookmaker_odds_snapshots"))
@@ -263,7 +263,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(17, upgraded.version)
+                assertEquals(18, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulators", "selection_basis"))
                 upgraded.rawQuery(
                     "SELECT provider_id,leg_count,snapshot_key,selection_basis FROM virtual_accumulators",
@@ -306,7 +306,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(17, upgraded.version)
+                assertEquals(18, upgraded.version)
                 assertTrue(tableExists(upgraded, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(upgraded, "prospective_forecast_settlements"))
                 upgraded.rawQuery(
@@ -339,7 +339,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val upgraded=store.writableDatabase
-                assertEquals(17,upgraded.version)
+                assertEquals(18,upgraded.version)
                 assertTrue(tableExists(upgraded,"market_reference_snapshots"))
                 assertTrue(tableExists(upgraded,"market_reference_sync_state"))
                 val match=store.matches().single()
@@ -376,7 +376,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(17, upgraded.version)
+                assertEquals(18, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "market_fair_probability"))
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "model_minus_market"))
                 upgraded.rawQuery(
@@ -422,7 +422,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val db=store.writableDatabase
-                assertEquals(17,db.version)
+                assertEquals(18,db.version)
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_received"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_accepted"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_rejected"))
@@ -473,7 +473,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val db=store.writableDatabase
-                assertEquals(17,db.version)
+                assertEquals(18,db.version)
                 val preserved=store.internationalOddsSyncState()!!
                 assertEquals(InternationalOddsStatus.LIVE,preserved.status)
                 assertEquals(firstCheck,preserved.lastCheckedAtMillis)

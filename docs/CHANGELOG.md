@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — retain The Odds API exchange Back/Lay markets (Actions pending)
+
+- Parse both documented V4 exchange sides returned with `h2h`, request available `bet_limit` fields, and retain source market, Back/Lay side, capture timestamps and per-outcome limits in SQLite v18. Migrate v17 odds rows without dropping their identifiers or link precision.
+- Keep Back and Lay separate in the World Market UI and history. Count only Back when forming independent-book consensus or prospective Elo comparison. Show a Lay−Back spread only for a fully matched same-response pair; label source limits as non-liquidity and state that Betfair commission is unavailable/not deducted.
+- Add parser, spread, market-engine, Compose and v17→v18 migration regressions. The grouped local cycle passed 163 JVM tests, Android-test Kotlin compilation and both local APK assemblies. The debug and owner-only personal signatures verify; the configured key was absent from debug and present only in the private personal APK. API 26/API 34 instrumentation and keyless CI artifact are pending Actions.
+
 ## Unreleased — move full-screen market and forecast diagnostics off the UI thread
 
 - Calculate international consensus, paired market evaluation, and prospective forecast metrics together from one immutable screen snapshot on `Dispatchers.Default`.

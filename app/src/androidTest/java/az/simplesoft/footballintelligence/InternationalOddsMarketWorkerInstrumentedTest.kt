@@ -14,6 +14,7 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.MOVIODDS_API_URL
 import az.simplesoft.footballintelligence.data.KickoffPrecision
@@ -30,6 +31,7 @@ import java.time.ZoneOffset
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,7 +52,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=12
             }
             Store(isolated,name).use { store ->
-                assertEquals(17,store.writableDatabase.version)
+                assertEquals(18,store.writableDatabase.version)
                 store.saveInternationalOddsCapture(now,InternationalOddsStatus.LIVE,listOf(
                     InternationalOddsSnapshot("moviodds_bet365","bet365","migration-event",MOVIODDS_API_URL,"Serie A",null,now,now,now+60*60*1000L,"1X2","Roma","Napoli",2.1,3.2,3.5,now,now,now),
                 ),"migration test")
@@ -60,7 +62,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 }
             }
             Store(base,name).use { store ->
-                assertEquals(17,store.writableDatabase.version)
+                assertEquals(18,store.writableDatabase.version)
                 assertEquals("migration-event",store.internationalOddsHistory().single().eventId)
             }
         } finally { base.deleteDatabase(name) }
@@ -84,13 +86,86 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=16
             }
             Store(base,name).use { store ->
-                assertEquals(17,store.writableDatabase.version)
+                assertEquals(18,store.writableDatabase.version)
                 val history=store.internationalOddsHistory().single()
                 assertEquals(42,history.matchId)
                 assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,history.matchLinkBasis)
                 assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,store.freshInternationalOdds(captured).single().matchLinkBasis)
             }
         } finally { base.deleteDatabase(name) }
+    }
+
+    @Test fun v17UpgradePreservesOddsAndAllowsBackAndLayForOneBookEvent() {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "fi-v17-back-lay-${UUID.randomUUID()}.db"
+        base.deleteDatabase(name)
+        val captured = System.currentTimeMillis()
+        val kickoff = captured + TimeUnit.HOURS.toMillis(2)
+        try {
+            base.openOrCreateDatabase(name, Context.MODE_PRIVATE, null).use { db ->
+                val common = "id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, " +
+                    "event_id TEXT NOT NULL, match_id INTEGER, match_link_basis TEXT, source_url TEXT NOT NULL, " +
+                    "league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, " +
+                    "kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, " +
+                    "home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, " +
+                    "home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL"
+                db.execSQL("CREATE TABLE international_odds_snapshots ($common, UNIQUE(provider_id,bookmaker_id,event_id,captured_at))")
+                db.execSQL("CREATE TABLE international_odds_current ($common, UNIQUE(provider_id,bookmaker_id,event_id))")
+                db.execSQL("CREATE TABLE international_odds_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, detail TEXT, quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, quality_duplicates INTEGER, quality_unverified INTEGER)")
+                db.execSQL("CREATE TABLE international_odds_sync_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, checked_at INTEGER NOT NULL, status TEXT NOT NULL, quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, quality_duplicates INTEGER, quality_unverified INTEGER, detail TEXT)")
+                val columns = "provider_id,bookmaker_id,event_id,match_id,match_link_basis,source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at"
+                val values = "'the_odds_api','betfair_ex_eu','exchange-event',42,'EXACT_KICKOFF','https://api.the-odds-api.com/v4/sports/soccer_epl/odds','EPL','eu',$captured,$captured,$kickoff,'1X2','Manchester City','Fulham',2.1,3.4,3.8,$captured,$captured,$captured"
+                db.execSQL("INSERT INTO international_odds_snapshots($columns) VALUES($values)")
+                db.execSQL("INSERT INTO international_odds_current($columns) VALUES($values)")
+                db.version = 17
+            }
+
+            Store(base, name).use { store ->
+                assertEquals(18, store.writableDatabase.version)
+                val migrated = store.internationalOddsHistory().single()
+                assertEquals("h2h", migrated.sourceMarketKey)
+                assertEquals(InternationalOddsQuoteSide.BACK, migrated.quoteSide)
+                assertNull(migrated.homeBetLimit)
+                assertEquals(42, migrated.matchId)
+                assertEquals(1, store.freshInternationalOdds(captured).size)
+
+                val nextCapture = captured + 1_000L
+                val back = migrated.copy(
+                    capturedAtMillis = nextCapture,
+                    providerPolledAtMillis = nextCapture,
+                    home = 2.12,
+                    homePriceChangedAtMillis = nextCapture,
+                    drawPriceChangedAtMillis = nextCapture,
+                    awayPriceChangedAtMillis = nextCapture,
+                )
+                val lay = back.copy(
+                    home = 2.16,
+                    draw = 3.48,
+                    away = 3.88,
+                    sourceMarketKey = "h2h_lay",
+                    quoteSide = InternationalOddsQuoteSide.LAY,
+                    homeBetLimit = 30.0,
+                    drawBetLimit = 25.0,
+                    awayBetLimit = 35.0,
+                )
+                store.saveInternationalOddsCapture(
+                    nextCapture,
+                    InternationalOddsStatus.LIVE,
+                    listOf(back, lay),
+                    "back and lay saved",
+                    providerId = "the_odds_api",
+                )
+                val current = store.freshInternationalOdds(nextCapture)
+                assertEquals(2, current.size)
+                assertEquals(setOf(InternationalOddsQuoteSide.BACK, InternationalOddsQuoteSide.LAY), current.map { it.quoteSide }.toSet())
+                assertEquals(3, store.internationalOddsHistory().size)
+                val savedLay = current.single { it.quoteSide == InternationalOddsQuoteSide.LAY }
+                assertEquals("h2h_lay", savedLay.sourceMarketKey)
+                assertEquals(30.0, savedLay.homeBetLimit!!, 0.0)
+            }
+        } finally {
+            base.deleteDatabase(name)
+        }
     }
 
     @Test fun dateOnlyLinkIsLabeledAndUpgradedWhenExactKickoffArrives() {

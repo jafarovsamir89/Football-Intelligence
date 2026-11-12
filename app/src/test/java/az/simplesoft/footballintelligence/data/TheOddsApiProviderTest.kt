@@ -30,6 +30,8 @@ class TheOddsApiProviderTest {
         assertEquals(1.27, quote.home, 0.0)
         assertEquals(4.5, quote.draw, 0.0)
         assertEquals(5.8, quote.away, 0.0)
+        assertEquals("h2h", quote.sourceMarketKey)
+        assertEquals(InternationalOddsQuoteSide.BACK, quote.quoteSide)
         assertEquals(42, quote.matchId)
         assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF, quote.matchLinkBasis)
         assertEquals(captured, quote.capturedAtMillis)
@@ -37,6 +39,42 @@ class TheOddsApiProviderTest {
         assertEquals(quote.providerPolledAtMillis, quote.homePriceChangedAtMillis)
         assertFalse(quote.sourceUrl.contains("apiKey"))
         assertFalse(quote.sourceUrl.contains("secret"))
+    }
+
+    @Test fun acceptsBackAndLayFromTheSameExchangeEventAndPreservesSourceLimits() {
+        val updated = captured - 5_000L
+        val exchange = """{"key":"betfair_ex_eu","title":"Betfair Exchange","markets":[
+          {"key":"h2h","last_update":"${Instant.ofEpochMilli(updated)}","outcomes":[
+            {"name":"Manchester City","price":2.10,"bet_limit":250},
+            {"name":"Draw","price":3.40,"bet_limit":125},
+            {"name":"Fulham","price":3.80,"bet_limit":200}]},
+          {"key":"h2h_lay","last_update":"${Instant.ofEpochMilli(updated)}","outcomes":[
+            {"name":"Manchester City","price":2.14,"bet_limit":30},
+            {"name":"Draw","price":3.50,"bet_limit":25},
+            {"name":"Fulham","price":3.90,"bet_limit":35}]}
+        ]}"""
+
+        val parsed = provider.parseOdds(response(event(exchange)), captured, captured, "soccer_epl")
+
+        assertEquals(InternationalOddsQualityCounts(2, 2, 0, 0, 0, 0), parsed.qualityCounts)
+        val back = parsed.snapshots.single { it.quoteSide == InternationalOddsQuoteSide.BACK }
+        val lay = parsed.snapshots.single { it.quoteSide == InternationalOddsQuoteSide.LAY }
+        assertEquals("h2h", back.sourceMarketKey)
+        assertEquals("h2h_lay", lay.sourceMarketKey)
+        assertEquals("betfair_ex_eu", back.bookmakerId)
+        assertEquals("betfair_ex_eu", lay.bookmakerId)
+        assertEquals(250.0, back.homeBetLimit!!, 0.0)
+        assertEquals(125.0, back.drawBetLimit!!, 0.0)
+        assertEquals(200.0, back.awayBetLimit!!, 0.0)
+        assertEquals(30.0, lay.homeBetLimit!!, 0.0)
+        assertEquals(25.0, lay.drawBetLimit!!, 0.0)
+        assertEquals(35.0, lay.awayBetLimit!!, 0.0)
+        val spread = internationalExchangeSpread(back, lay)!!
+        assertEquals(.04, spread.home, 1e-12)
+        assertEquals(.10, spread.draw, 1e-12)
+        assertEquals(.10, spread.away, 1e-12)
+        assertNull(internationalExchangeSpread(back, lay.copy(capturedAtMillis = captured + 1)))
+        assertNull(internationalExchangeSpread(back, lay.copy(eventId = "different-event")))
     }
 
     @Test fun linksUniqueDateOnlyFixtureAndKeepsItsLowerTimePrecisionExplicit() {
@@ -165,7 +203,7 @@ class TheOddsApiProviderTest {
 
     @Test fun apiKeyIsSentInPrivateHeaderAndNeverInRequestOrPersistedSourceUrl() {
         assertEquals("$THE_ODDS_API_BASE_URL/sports/", theOddsApiSportsUrl())
-        assertEquals("$THE_ODDS_API_BASE_URL/sports/soccer_epl/odds/?regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso", theOddsApiOddsUrl("soccer_epl"))
+        assertEquals("$THE_ODDS_API_BASE_URL/sports/soccer_epl/odds/?regions=eu&markets=h2h&oddsFormat=decimal&dateFormat=iso&includeBetLimits=true", theOddsApiOddsUrl("soccer_epl"))
         assertEquals(mapOf("x-api-key" to "private-key"), theOddsApiAuthHeaders("private-key"))
         assertFalse(theOddsApiSportsUrl().contains("apiKey"))
         assertFalse(theOddsApiOddsUrl("soccer_epl").contains("apiKey"))
