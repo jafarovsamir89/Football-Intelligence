@@ -5,7 +5,7 @@
 - Evaluate a conservative five-value rho grid on the chronological validation window and use the selected rho only for the untouched final holdout. Selection requires at least 100 validation forecasts; otherwise the comparison retains rho=0.
 - Keep rho selection diagnostic-only: it does not alter production Elo or immutable prospective forecasts. Show validation sample count, selection status and the selected value in the analysis screen.
 - Add regression coverage proving that changing only holdout labels cannot change the selected rho, plus insufficient-validation fallback coverage.
-- Local verification passed: 124 JVM tests, Android-test Kotlin compilation and APK assembly; Actions verification is pending.
+- Local verification passed: 124 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43143303224](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43143303224) passed all 26 API 34 instrumentation tests, APK build, stable signing and upload `13910697179`. Downloaded APK SHA-256 `60e9a877f62f5674f228188d4031d8acd6b12804222bb2dbeb91d4323636cbf0`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Unreleased — respect source `Retry-After` limits
 

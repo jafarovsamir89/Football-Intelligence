@@ -1,11 +1,12 @@
 # Development log
 
-## 2026-11-12 — validation-only Dixon–Coles rho selection (local verification passed; CI pending)
+## 2026-11-12 — validation-only Dixon–Coles rho selection (local and CI verification passed)
 
 - Extended the chronological goal-model comparison to select rho from `{-0.15, -0.10, -0.05, 0, 0.02}` by validation Log Loss, with a 100-forecast floor. Under the floor it retains rho=0. The chosen value is then applied to the later holdout; the holdout is never used to select a value.
 - Added tests for selection, low-sample fallback and invariance of the selected rho when only holdout labels change. Updated the Backtest screen to distinguish the rho=0 validation baseline, selection sample and untouched holdout.
 - Updated research, architecture, limitations, roadmap, README, testing and changelog. The combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 124 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. `git diff --check` passed. Local debug APK SHA-256: `dfb78d8d24cf1a7231becd4c8c59e25e945c32b5c7d0025c8b123a84c1718291`.
-- Next: commit/push the milestone and verify the CI instrumentation suite and signed artifact. ADB shows only emulator `5558`; no APK was installed and its local database was not modified.
+- Commit `02abebf` passed Actions [43143303224](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43143303224): unit job, all 26 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and artifact upload `13910697179` (16,863,071 bytes). Downloaded APK SHA-256: `60e9a877f62f5674f228188d4031d8acd6b12804222bb2dbeb91d4323636cbf0`; signer SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The emulator runner recovered from transient ADB initialization errors before executing all 26 tests.
+- No APK was installed locally. ADB shows only emulator `5558`, and its database was not modified. Next: add an explicitly research-only market-disagreement accumulator selection basis requiring fresh same-book odds; keep it separate from model-ranked drafts and avoid presenting it as EV.
 
 ## 2026-11-11 — public odds source review and respectful Retry-After handling (local and CI verification passed)
 

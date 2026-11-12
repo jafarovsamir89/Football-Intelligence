@@ -1,11 +1,12 @@
 # Testing
 
-## Completed Dixon–Coles validation-selection batch (local verification passed; CI pending)
+## Completed Dixon–Coles validation-selection batch (local and CI verification passed)
 
 - Added deterministic selection from five safe rho values using validation Log Loss, with a 100-forecast default floor and rho=0 fallback below the floor.
 - Added tests for successful selection, fallback when validation is too small, and invariance of the selected rho when only holdout labels change.
 - The screen reports the validation selection and keeps the final holdout separate. This is diagnostic model research; it does not change live Elo forecasts.
 - The combined local cycle passed 124 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly; `git diff --check` passed. Local APK SHA-256: `dfb78d8d24cf1a7231becd4c8c59e25e945c32b5c7d0025c8b123a84c1718291`.
+- Actions [43143303224](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43143303224) passed the unit job, all 26 API 34 instrumentation tests (0 skipped/failed), APK build and stable signing. Artifact `13910697179` downloaded with SHA-256 `60e9a877f62f5674f228188d4031d8acd6b12804222bb2dbeb91d4323636cbf0`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Completed grouped Retry-After milestone (local and Actions verification passed)
 
