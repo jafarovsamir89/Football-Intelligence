@@ -11,6 +11,7 @@ import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
+import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -32,6 +33,8 @@ data class FootballScreenStoreSnapshot(
     val topazOdds: List<BookmakerOddsSnapshot>,
     val internationalOddsSyncState: InternationalOddsSyncState?,
     val internationalOddsSyncHistory: List<InternationalOddsSyncAttempt>,
+    val theOddsApiSyncState: InternationalOddsSyncState?,
+    val theOddsApiSyncHistory: List<InternationalOddsSyncAttempt>,
     val internationalOdds: List<InternationalOddsSnapshot>,
     val internationalOddsHistory: List<InternationalOddsSnapshot>,
     val marketReferenceSyncState: MarketReferenceSyncState?,
@@ -57,6 +60,8 @@ data class FootballScreenStoreSnapshot(
             topazOdds = emptyList(),
             internationalOddsSyncState = null,
             internationalOddsSyncHistory = emptyList(),
+            theOddsApiSyncState = null,
+            theOddsApiSyncHistory = emptyList(),
             internationalOdds = emptyList(),
             internationalOddsHistory = emptyList(),
             marketReferenceSyncState = null,
@@ -107,6 +112,10 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         checkActive()
         val internationalAttempts = internationalOddsSyncHistory(50)
         checkActive()
+        val theOddsApiState = internationalOddsSyncState(THE_ODDS_API_PROVIDER_ID)
+        checkActive()
+        val theOddsApiAttempts = internationalOddsSyncHistory(50, THE_ODDS_API_PROVIDER_ID)
+        checkActive()
         val internationalLines = freshInternationalOdds()
         checkActive()
         val internationalHistory = internationalOddsHistory(700)
@@ -138,6 +147,8 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
             topazOdds = topazLines,
             internationalOddsSyncState = internationalState,
             internationalOddsSyncHistory = internationalAttempts,
+            theOddsApiSyncState = theOddsApiState,
+            theOddsApiSyncHistory = theOddsApiAttempts,
             internationalOdds = internationalLines,
             internationalOddsHistory = internationalHistory,
             marketReferenceSyncState = referenceState,

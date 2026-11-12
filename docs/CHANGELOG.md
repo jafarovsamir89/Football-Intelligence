@@ -1,5 +1,11 @@
 # Changelog
 
+## Add The Odds API V4 personal provider (local checks passed; CI pending)
+
+- Add an independent EU h2h odds provider with fresh complete 1X2 validation, server/device clock checks, exact unique fixture links, event/book deduplication, quota-header display, a seven-day soccer-catalog cache, and a bounded rotating 12-league daily Worker. The key is read from ignored `local.properties` and sent in the documented `x-api-key` header. Only the local personal APK embeds it; standard/CI debug APKs stay keyless, and CI uploads only the keyless APK. The private APK must not be published.
+- Show per-provider sync/history state, named lines, source and capture times, no-vig references and exact-link model/local comparisons in World Market. International odds do not enter Misli/TOPAZ coupons, and no price/EV is fabricated. No SQLite migration was required.
+- Add parser, URL/header, Worker, quota-gate, provider-isolation, scheduler and UI regression tests. The grouped local cycle passed 147 JVM tests, Android-test Kotlin compilation, and debug/personal APK assemblies. Local SHA-256 values and direct POC evidence are recorded in `docs/DEVELOPMENT_LOG.md`; GitHub Actions is pending.
+
 ## Extract market-analysis panels (CI verified)
 
 - Move the selected-match Analysis and World Market panels into `FootballMarketTabs.kt` with explicit snapshot, forecast, worker-state, and action inputs. Keep age-consent persistence and scheduling at the screen host. No provider, pricing, model, coupon, or database behavior changes.

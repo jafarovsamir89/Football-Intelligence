@@ -157,6 +157,7 @@ object FootballSyncScheduler {
         enqueueForFreshness(appContext, mostRecentSuccess, System.currentTimeMillis())
         TipsAuditMarketReferenceScheduler.scheduleOnAppOpen(appContext)
         InternationalOddsMarketScheduler.scheduleOnAppOpen(appContext)
+        TheOddsApiScheduler.scheduleOnAppOpen(appContext)
     }
 
     /**
@@ -341,8 +342,9 @@ object InternationalOddsMarketScheduler {
 }
 
 internal fun isMoviOddsAgeConfirmed(context:Context):Boolean =
-    context.getSharedPreferences(MOVIODDS_AGE_CONSENT_PREFS,Context.MODE_PRIVATE)
-        .getBoolean(MOVIODDS_AGE_CONSENT_KEY,false)
+    BuildConfig.MOVIODDS_AGE_CONFIRMED_LOCALLY ||
+        context.getSharedPreferences(MOVIODDS_AGE_CONSENT_PREFS,Context.MODE_PRIVATE)
+            .getBoolean(MOVIODDS_AGE_CONSENT_KEY,false)
 
 class InternationalOddsMarketWorker(context:Context,params:WorkerParameters):CoroutineWorker(context,params) {
     internal var providerHttpClient:ProviderHttpClient=PublicJsonClient()
@@ -528,6 +530,10 @@ internal data class ProviderHttpResult(
     val etag: String?,
     val lastModified: String?,
     val retryAfterDelayMillis: Long? = null,
+    val serverDateMillis: Long? = null,
+    val oddsApiRequestsRemaining: Int? = null,
+    val oddsApiRequestsUsed: Int? = null,
+    val oddsApiRequestCost: Int? = null,
 )
 
 internal class ProviderHttpException(
@@ -537,12 +543,27 @@ internal class ProviderHttpException(
 
 private fun safeError(error: Throwable): String = (error.message ?: error.javaClass.simpleName).take(400)
 
+internal fun parseHttpDateMillis(value:String?):Long? {
+    val header=value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return runCatching {
+        ZonedDateTime.parse(header,DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
+    }.getOrNull()
+}
+
 internal interface ProviderHttpClient {
     fun get(url: String, cache: ProviderFileCache? = null): ProviderHttpResult
+    fun getWithHeaders(url:String,headers:Map<String,String>):ProviderHttpResult {
+        require(headers.isEmpty()) { "This provider client does not support additional request headers." }
+        return get(url)
+    }
 }
 
 internal class PublicJsonClient : ProviderHttpClient {
-    override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
+    override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult = execute(url,cache,emptyMap())
+
+    override fun getWithHeaders(url:String,headers:Map<String,String>):ProviderHttpResult = execute(url,null,headers)
+
+    private fun execute(url:String,cache:ProviderFileCache?,headers:Map<String,String>):ProviderHttpResult {
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "GET"
@@ -552,14 +573,21 @@ internal class PublicJsonClient : ProviderHttpClient {
             connection.setRequestProperty("Accept", "application/json")
             connection.setRequestProperty("Accept-Encoding","gzip")
             connection.setRequestProperty("User-Agent", "Football-Intelligence-Android/0.1 (personal open-data client)")
+            headers.forEach { (name,value) -> connection.setRequestProperty(name,value) }
             cache?.etag?.let { connection.setRequestProperty("If-None-Match", it) }
             cache?.lastModified?.let { connection.setRequestProperty("If-Modified-Since", it) }
             val code = connection.responseCode
             if (code == HttpURLConnection.HTTP_NOT_MODIFIED) {
-                return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
+                return ProviderHttpResult(
+                    code,"",connection.getHeaderField("ETag"),connection.getHeaderField("Last-Modified"),
+                    serverDateMillis=parseHttpDateMillis(connection.getHeaderField("Date")),
+                )
             }
             if (code == HttpURLConnection.HTTP_NOT_FOUND) {
-                return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
+                return ProviderHttpResult(
+                    code,"",connection.getHeaderField("ETag"),connection.getHeaderField("Last-Modified"),
+                    serverDateMillis=parseHttpDateMillis(connection.getHeaderField("Date")),
+                )
             }
             if (code !in 200..299) {
                 throw ProviderHttpException(
@@ -584,6 +612,10 @@ internal class PublicJsonClient : ProviderHttpClient {
                 output.toString(StandardCharsets.UTF_8.name()),
                 connection.getHeaderField("ETag"),
                 connection.getHeaderField("Last-Modified"),
+                serverDateMillis=parseHttpDateMillis(connection.getHeaderField("Date")),
+                oddsApiRequestsRemaining=connection.getHeaderField("x-requests-remaining")?.toIntOrNull(),
+                oddsApiRequestsUsed=connection.getHeaderField("x-requests-used")?.toIntOrNull(),
+                oddsApiRequestCost=connection.getHeaderField("x-requests-last")?.toIntOrNull(),
             )
         } finally {
             connection.disconnect()

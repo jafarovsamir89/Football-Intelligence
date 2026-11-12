@@ -10,6 +10,10 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalOddsStatus
+import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
+import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -150,6 +154,60 @@ class FootballTabUiInstrumentedTest {
 
         assertEquals("EPL", enteredCompetition.value)
         assertTrue(launchedImport)
+    }
+
+    @Test
+    fun worldMarketShowsTheOddsApiProviderAndFreshNamedBookLines() {
+        val now = System.currentTimeMillis()
+        val quote = InternationalOddsSnapshot(
+            providerId = THE_ODDS_API_PROVIDER_ID,
+            bookmakerId = "unibet_fr",
+            eventId = "api-event-1",
+            sourceUrl = "https://api.the-odds-api.com/v4/sports/soccer_epl/odds",
+            league = "Premier League",
+            region = "eu",
+            capturedAtMillis = now,
+            providerPolledAtMillis = now,
+            kickoffMillis = now + 86_400_000L,
+            market = "1X2",
+            homeTeam = "Manchester City",
+            awayTeam = "Fulham",
+            home = 1.27,
+            draw = 4.5,
+            away = 5.8,
+            homePriceChangedAtMillis = now,
+            drawPriceChangedAtMillis = now,
+            awayPriceChangedAtMillis = now,
+        )
+        composeRule.setContent {
+            MaterialTheme {
+                InternationalMarketTabContent(
+                    internationalAgeConfirmed = true,
+                    theOddsApiConfigured = true,
+                    internationalOddsSyncState = null,
+                    internationalOddsSyncHistory = emptyList(),
+                    theOddsApiSyncState = InternationalOddsSyncState(
+                        THE_ODDS_API_PROVIDER_ID, InternationalOddsStatus.LIVE, now, now, 1, "Квота проверена",
+                    ),
+                    theOddsApiSyncHistory = emptyList(),
+                    internationalOdds = listOf(quote),
+                    internationalOddsHistory = emptyList(),
+                    internationalConsensus = emptyList(),
+                    forecastedMatches = emptyList(),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    workerBusy = false,
+                    showInternationalHistory = false,
+                    onToggleInternationalHistory = {},
+                    onOpenMoviOddsTerms = {},
+                    onConfirmMoviOddsAge = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
     }
 
     private companion object {

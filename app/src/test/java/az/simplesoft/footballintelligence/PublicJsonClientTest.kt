@@ -19,6 +19,15 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PublicJsonClientTest {
+    @Test fun parsesHttpDateHeaderForProviderClockValidation() {
+        assertEquals(
+            Instant.parse("2026-11-12T00:00:00Z").toEpochMilli(),
+            parseHttpDateMillis("Thu, 12 Nov 2026 00:00:00 GMT"),
+        )
+        assertNull(parseHttpDateMillis("not an HTTP date"))
+        assertNull(parseHttpDateMillis(null))
+    }
+
     @Test fun retryAfterAcceptsSecondsAndHttpDateAndRejectsMalformedValues() {
         val nowMillis = Instant.parse("2026-11-11T12:00:00Z").toEpochMilli()
         val retryAt = ZonedDateTime.ofInstant(Instant.ofEpochMilli(nowMillis + 45_000L), ZoneOffset.UTC)
@@ -61,6 +70,7 @@ class PublicJsonClientTest {
                                 "HTTP/1.1 304 Not Modified\r\n" +
                                     "ETag: \"catalog-v2\"\r\n" +
                                     "Last-Modified: Thu, 12 Nov 2026 00:00:00 GMT\r\n" +
+                                    "Date: Thu, 12 Nov 2026 00:00:00 GMT\r\n" +
                                     "Content-Length: 0\r\n" +
                                     "Connection: close\r\n\r\n"
                                 ).toByteArray(StandardCharsets.ISO_8859_1),
@@ -93,6 +103,70 @@ class PublicJsonClientTest {
             assertEquals("", response.body)
             assertEquals("\"catalog-v2\"", response.etag)
             assertEquals("Thu, 12 Nov 2026 00:00:00 GMT", response.lastModified)
+            assertEquals(Instant.parse("2026-11-12T00:00:00Z").toEpochMilli(), response.serverDateMillis)
+        } finally {
+            server.close()
+            serverThread.join(5_000)
+        }
+    }
+
+    @Test fun recordsOddsApiQuotaHeadersAndServerDateWithoutLoggingRequestUrl() {
+        val server = ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))
+        val serverFailure = AtomicReference<Throwable?>(null)
+        val requestLine = AtomicReference<String?>(null)
+        val receivedApiKey = AtomicReference<String?>(null)
+        val serverThread = thread(name = "odds-quota-http-test", isDaemon = true) {
+            try {
+                server.accept().use { socket ->
+                    socket.soTimeout = 5_000
+                    val reader = BufferedReader(InputStreamReader(socket.getInputStream(), StandardCharsets.ISO_8859_1))
+                    requestLine.set(reader.readLine() ?: error("HTTP request line was missing."))
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        if (line.isEmpty()) break
+                        val separator = line.indexOf(':')
+                        if (separator > 0 && line.substring(0, separator).equals("x-api-key", ignoreCase = true)) {
+                            receivedApiKey.set(line.substring(separator + 1).trim())
+                        }
+                    }
+                    socket.getOutputStream().apply {
+                        write(
+                            (
+                                "HTTP/1.1 200 OK\r\n" +
+                                    "Date: Thu, 12 Nov 2026 00:00:00 GMT\r\n" +
+                                    "x-requests-remaining: 499\r\n" +
+                                    "x-requests-used: 1\r\n" +
+                                    "x-requests-last: 1\r\n" +
+                                    "Content-Type: application/json\r\n" +
+                                    "Content-Length: 2\r\n" +
+                                    "Connection: close\r\n\r\n[]"
+                                ).toByteArray(StandardCharsets.ISO_8859_1),
+                        )
+                        flush()
+                    }
+                }
+            } catch (error: Throwable) {
+                serverFailure.set(error)
+            }
+        }
+
+        try {
+            val response = PublicJsonClient().getWithHeaders(
+                "http://127.0.0.1:${server.localPort}/odds",
+                mapOf("x-api-key" to "private-test-key"),
+            )
+
+            serverThread.join(5_000)
+            assertFalse("Local HTTP response thread did not finish.", serverThread.isAlive)
+            assertNull("Local HTTP response failed: ${serverFailure.get()}", serverFailure.get())
+            assertEquals(200, response.statusCode)
+            assertFalse(requestLine.get().orEmpty().contains("private-test-key"))
+            assertEquals("private-test-key", receivedApiKey.get())
+            assertEquals("[]", response.body)
+            assertEquals(499, response.oddsApiRequestsRemaining)
+            assertEquals(1, response.oddsApiRequestsUsed)
+            assertEquals(1, response.oddsApiRequestCost)
+            assertEquals(Instant.parse("2026-11-12T00:00:00Z").toEpochMilli(), response.serverDateMillis)
         } finally {
             server.close()
             serverThread.join(5_000)

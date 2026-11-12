@@ -330,7 +330,7 @@ class MisliOddsProvider : BookmakerOddsProvider {
     }
 }
 
-/** Small reviewed alias set plus Unicode normalization; no fuzzy similarity is used. */
+/** Reviewed aliases plus club-form normalization and Unicode cleanup; no fuzzy similarity is used. */
 object TeamNameIdentity {
     private val aliases = mapOf(
         "haken" to "hacken",
@@ -341,6 +341,10 @@ object TeamNameIdentity {
         "paris fc" to "paris fc",
         "manchester city" to "manchester city",
         "manchester siti" to "manchester city",
+        "man city" to "manchester city",
+        "man utd" to "manchester united",
+        "manchester utd" to "manchester united",
+        "manchester united" to "manchester united",
         "psj" to "paris saint germain",
         "paris saint germain" to "paris saint germain",
         "bavariya" to "bayern munich",
@@ -495,7 +499,12 @@ object TeamNameIdentity {
             .replace('ı','i')
             .replace(Regex("[^a-z0-9]+"), " ")
             .trim()
-        return aliases[ascii] ?: ascii
+        aliases[ascii]?.let { return it }
+        val withoutClubMarker = ascii
+            .replace(Regex("^(afc|fc|cf|sc|cd|ud)\\s+"), "")
+            .replace(Regex("\\s+(association football club|football club|futbol club|afc|fc|cf|sc|cd|ud|calcio)$"), "")
+            .trim()
+        return aliases[withoutClubMarker] ?: withoutClubMarker
     }
 }
 

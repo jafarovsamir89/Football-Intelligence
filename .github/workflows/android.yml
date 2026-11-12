@@ -58,8 +58,8 @@ jobs:
           profile: pixel_2
           disable-animations: true
           script: ./gradlew --no-daemon :app:connectedDebugAndroidTest
-      - name: Build APK
-        run: ./gradlew --no-daemon :app:assembleDebug
+      - name: Build keyless CI and personal variants
+        run: ./gradlew --no-daemon :app:assembleDebug :app:assemblePersonal
       - name: Sign APK with stable personal test key
         env:
           FI_DEBUG_SIGNING_KEYSTORE_B64: ${{ secrets.FI_DEBUG_SIGNING_KEYSTORE_B64 }}

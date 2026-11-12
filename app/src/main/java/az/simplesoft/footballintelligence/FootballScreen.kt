@@ -79,6 +79,8 @@ import androidx.work.WorkManager
     val marketReferencePeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TipsAuditMarketReferenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val internationalOddsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val internationalOddsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(InternationalOddsMarketScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
+    val theOddsApiOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TheOddsApiScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
+    val theOddsApiPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TheOddsApiScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     LaunchedEffect(repository,revision,selected) {
         try {
             val snapshot=repository.readScreenSnapshot(selected.takeIf { it>=0 })
@@ -113,7 +115,7 @@ import androidx.work.WorkManager
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
     ) { revision++ }
     LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
-    LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state }) { revision++ }
+    LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state },theOddsApiOnceSync.map { it.state },theOddsApiPeriodicSync.map { it.state }) { revision++ }
     val matches=storeSnapshot.matches
     val recentResults=storeSnapshot.recentResults
     val importedCompetitionCodes=storeSnapshot.importedCompetitionCodes
@@ -144,6 +146,8 @@ import androidx.work.WorkManager
     val topazOdds=storeSnapshot.topazOdds
     val internationalOddsSyncState=storeSnapshot.internationalOddsSyncState
     val internationalOddsSyncHistory=storeSnapshot.internationalOddsSyncHistory
+    val theOddsApiSyncState=storeSnapshot.theOddsApiSyncState
+    val theOddsApiSyncHistory=storeSnapshot.theOddsApiSyncHistory
     val internationalOdds=storeSnapshot.internationalOdds
     val internationalOddsHistory=storeSnapshot.internationalOddsHistory
     val marketReferenceSyncState=storeSnapshot.marketReferenceSyncState
@@ -420,15 +424,18 @@ import androidx.work.WorkManager
               )
               6 -> InternationalMarketTabContent(
                 internationalAgeConfirmed=internationalAgeConfirmed,
+                theOddsApiConfigured=BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
                 internationalOddsSyncState=internationalOddsSyncState,
                 internationalOddsSyncHistory=internationalOddsSyncHistory,
+                theOddsApiSyncState=theOddsApiSyncState,
+                theOddsApiSyncHistory=theOddsApiSyncHistory,
                 internationalOdds=internationalOdds,
                 internationalOddsHistory=internationalOddsHistory,
                 internationalConsensus=internationalConsensus,
                 forecastedMatches=forecastedMatches,
                 misliOdds=misliOdds,
                 topazOdds=topazOdds,
-                workerBusy=(internationalOddsOnceSync+internationalOddsPeriodicSync).any { it.state==WorkInfo.State.RUNNING },
+                workerBusy=(internationalOddsOnceSync+internationalOddsPeriodicSync+theOddsApiOnceSync+theOddsApiPeriodicSync).any { it.state==WorkInfo.State.RUNNING },
                 showInternationalHistory=showInternationalHistory,
                 onToggleInternationalHistory={showInternationalHistory=!showInternationalHistory},
                 onOpenMoviOddsTerms={runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://moviodds.com/terms/"))) }},

@@ -1,8 +1,20 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
 }
+
+val privateLocalProperties = Properties().apply {
+    val privateConfig = rootProject.file("local.properties")
+    if (privateConfig.isFile) privateConfig.inputStream().use { load(it) }
+}
+val personalOddsKey = privateLocalProperties.getProperty("THE_ODDS_API_KEY").orEmpty().trim()
+val moviOddsAgeConfirmedLocally = privateLocalProperties.getProperty("MOVIODDS_AGE_CONFIRMED").toBoolean()
+val escapedPersonalOddsKey = personalOddsKey
+    .replace("\\", "\\\\")
+    .replace("\"", "\\\"")
 
 android {
     namespace = "az.simplesoft.footballintelligence"
@@ -14,14 +26,31 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        manifestPlaceholders["appLabel"] = "Football Intelligence"
+        buildConfigField("String", "THE_ODDS_API_KEY", "\"\"")
+        buildConfigField("boolean", "MOVIODDS_AGE_CONFIRMED_LOCALLY", "false")
     }
-    buildTypes { release { isMinifyEnabled = false } }
+    buildTypes {
+        debug { }
+        release { isMinifyEnabled = false }
+        create("personal") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".personal"
+            versionNameSuffix = "-personal"
+            manifestPlaceholders["appLabel"] = "Football Intelligence Personal"
+            buildConfigField("String", "THE_ODDS_API_KEY", "\"$escapedPersonalOddsKey\"")
+            buildConfigField("boolean", "MOVIODDS_AGE_CONFIRMED_LOCALLY", moviOddsAgeConfirmedLocally.toString())
+        }
+    }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
-    buildFeatures { compose = true }
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
     packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 

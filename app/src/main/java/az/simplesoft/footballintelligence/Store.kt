@@ -904,9 +904,9 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.setTransactionSuccessful()
         } finally { endWriteTransaction(db) }
     }
-    fun internationalOddsSyncState():InternationalOddsSyncState? = readableDatabase.rawQuery(
+    fun internationalOddsSyncState(providerId:String=MOVIODDS_PROVIDER_ID):InternationalOddsSyncState? = readableDatabase.rawQuery(
         "SELECT status,last_checked,last_success,fresh_records_stored,detail,quality_received,quality_accepted,quality_rejected,quality_stale,quality_duplicates,quality_unverified FROM international_odds_sync_state WHERE provider_id=?",
-        arrayOf(MOVIODDS_PROVIDER_ID),
+        arrayOf(providerId),
     ).use { c ->
         if(!c.moveToFirst()) null else {
             val qualityCounts=if((5..10).all { !c.isNull(it) }) runCatching {
@@ -916,16 +916,16 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 )
             }.getOrNull() else null
             InternationalOddsSyncState(
-                MOVIODDS_PROVIDER_ID,
+                providerId,
                 runCatching { InternationalOddsStatus.valueOf(c.getString(0)) }.getOrDefault(InternationalOddsStatus.ERROR),
                 c.getLong(1),if(c.isNull(2)) null else c.getLong(2),c.getInt(3),if(c.isNull(4)) null else c.getString(4),
                 qualityCounts,
             )
         }
     }
-    fun internationalOddsSyncHistory(limit:Int=50):List<InternationalOddsSyncAttempt> = readableDatabase.rawQuery(
+    fun internationalOddsSyncHistory(limit:Int=50,providerId:String=MOVIODDS_PROVIDER_ID):List<InternationalOddsSyncAttempt> = readableDatabase.rawQuery(
         "SELECT checked_at,status,quality_received,quality_accepted,quality_rejected,quality_stale,quality_duplicates,quality_unverified,detail FROM international_odds_sync_attempts WHERE provider_id=? ORDER BY checked_at DESC,id DESC LIMIT ?",
-        arrayOf(MOVIODDS_PROVIDER_ID,limit.coerceIn(1,500).toString()),
+        arrayOf(providerId,limit.coerceIn(1,500).toString()),
     ).use { c ->
         buildList {
             while(c.moveToNext()) {
@@ -953,16 +953,18 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         detail:String?,
         replaceCurrentBoard:Boolean=false,
         qualityCounts:InternationalOddsQualityCounts?=null,
+        providerId:String=MOVIODDS_PROVIDER_ID,
     ) {
         require(qualityCounts==null||qualityCounts.acceptedMatches==snapshots.size)
+        require(snapshots.all { it.providerId==providerId })
         val db=writableDatabase
         beginWriteTransaction(db)
         try {
             val previousCurrent=if(replaceCurrentBoard) {
-                readInternationalOdds("international_odds_current","WHERE provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID),5_000)
+                readInternationalOdds("international_odds_current","WHERE provider_id=?",arrayOf(providerId),5_000)
                     .associateBy { Triple(it.providerId,it.bookmakerId,it.eventId) }
             } else null
-            if(replaceCurrentBoard) db.delete("international_odds_current","provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID))
+            if(replaceCurrentBoard) db.delete("international_odds_current","provider_id=?",arrayOf(providerId))
             snapshots.forEach { snapshot ->
                 val values=ContentValues().apply {
                     put("provider_id",snapshot.providerId);put("bookmaker_id",snapshot.bookmakerId);put("event_id",snapshot.eventId)
@@ -993,10 +995,10 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 }
                 db.insertWithOnConflict("international_odds_current",null,values,SQLiteDatabase.CONFLICT_REPLACE)
             }
-            val previous=internationalOddsSyncState()
+            val previous=internationalOddsSyncState(providerId)
             val lastSuccess=if(status in setOf(InternationalOddsStatus.LIVE,InternationalOddsStatus.STALE,InternationalOddsStatus.UNAVAILABLE)) checkedAtMillis else previous?.lastSuccessAtMillis
             val state=ContentValues().apply {
-                put("provider_id",MOVIODDS_PROVIDER_ID);put("status",status.name);put("last_checked",checkedAtMillis)
+                put("provider_id",providerId);put("status",status.name);put("last_checked",checkedAtMillis)
                 if(lastSuccess==null) putNull("last_success") else put("last_success",lastSuccess)
                 put("fresh_records_stored",snapshots.size)
                 if(detail==null) putNull("detail") else put("detail",detail.take(500))
@@ -1011,7 +1013,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             }
             db.insertWithOnConflict("international_odds_sync_state",null,state,SQLiteDatabase.CONFLICT_REPLACE)
             val attempt=ContentValues().apply {
-                put("provider_id",MOVIODDS_PROVIDER_ID);put("checked_at",checkedAtMillis);put("status",status.name)
+                put("provider_id",providerId);put("checked_at",checkedAtMillis);put("status",status.name)
                 if(qualityCounts==null) {
                     listOf("quality_received","quality_accepted","quality_rejected","quality_stale","quality_duplicates","quality_unverified")
                         .forEach { putNull(it) }
@@ -1029,15 +1031,29 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             db.setTransactionSuccessful()
         } finally { endWriteTransaction(db) }
     }
-    fun freshInternationalOdds(nowMillis:Long=System.currentTimeMillis()):List<InternationalOddsSnapshot> =
-        readInternationalOdds(
+    fun freshInternationalOdds(nowMillis:Long=System.currentTimeMillis(),providerId:String?=null):List<InternationalOddsSnapshot> {
+        val providerClause=if(providerId==null) "" else "provider_id=? AND "
+        val args=buildList {
+            if(providerId!=null) add(providerId)
+            add((nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString())
+            add(nowMillis.toString())
+            add((nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString())
+            add((nowMillis+60_000L).toString())
+            add(nowMillis.toString())
+        }.toTypedArray()
+        return readInternationalOdds(
             "international_odds_current",
-            "WHERE provider_id=? AND captured_at>=? AND captured_at<=? AND provider_polled_at>=? AND provider_polled_at<=? AND kickoff>?",
-            arrayOf(MOVIODDS_PROVIDER_ID,(nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString(),nowMillis.toString(),(nowMillis-INTERNATIONAL_ODDS_FRESHNESS_MILLIS).toString(),(nowMillis+60_000L).toString(),nowMillis.toString()),
-            5_000,
+            "WHERE ${providerClause}captured_at>=? AND captured_at<=? AND provider_polled_at>=? AND provider_polled_at<=? AND kickoff>?",
+            args,5_000,
         ).sortedBy { it.kickoffMillis }
-    fun internationalOddsHistory(limit:Int=500):List<InternationalOddsSnapshot> =
-        readInternationalOdds("international_odds_snapshots","WHERE provider_id=?",arrayOf(MOVIODDS_PROVIDER_ID),limit.coerceIn(1,5_000))
+    }
+    fun internationalOddsHistory(limit:Int=500,providerId:String?=null):List<InternationalOddsSnapshot> =
+        readInternationalOdds(
+            "international_odds_snapshots",
+            if(providerId==null) "" else "WHERE provider_id=?",
+            if(providerId==null) emptyArray() else arrayOf(providerId),
+            limit.coerceIn(1,5_000),
+        )
     private fun readInternationalOdds(table:String,where:String,args:Array<String>,limit:Int):List<InternationalOddsSnapshot> {
         val result=mutableListOf<InternationalOddsSnapshot>()
         readableDatabase.rawQuery(
@@ -1057,8 +1073,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(fixtures.isEmpty()) return 0
         val rows=listOf("international_odds_current","international_odds_snapshots").flatMap { table ->
             readInternationalOdds(
-                table,"WHERE provider_id=? AND match_id IS NULL AND captured_at>=? AND kickoff>?",
-                arrayOf(MOVIODDS_PROVIDER_ID,(nowMillis-30L*24*60*60*1000).toString(),nowMillis.toString()),5_000,
+                table,"WHERE match_id IS NULL AND captured_at>=? AND kickoff>?",
+                arrayOf((nowMillis-30L*24*60*60*1000).toString(),nowMillis.toString()),5_000,
             )
         }
         data class Link(val providerId:String,val bookmakerId:String,val eventId:String,val matchId:Int)
