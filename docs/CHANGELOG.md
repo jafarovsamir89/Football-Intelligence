@@ -6,6 +6,14 @@
 - Run both public bookmaker-page collectors in lifecycle-bound Compose coroutines, with visible-text parsing on `Dispatchers.Default`, cancellation handling and repository persistence for success and failure states.
 - Extend isolated SQLite instrumentation coverage through the repository. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; APK SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`. Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268) passed all 32 API 34 tests and API 26 instrumentation (one emulator-radio test skipped), then built, stable-signed and uploaded artifact `13919403768`. API 26 printed 33 finished after 32 declared tests; Gradle succeeded. Downloaded APK SHA-256 `349987dcfbdf5cb02ad459a25d327e51a83440160ac4a0b235bb2c1334fb6358`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
+## Defer Room until a concrete migration need exists
+
+- Keep the version-16 SQLite helper behind the repository seam. The observed UI-thread database access is addressed by IO dispatch; migrating the active, migration-tested user database to Room would add conversion and data-loss risk without a measured benefit. Revisit only with a concrete DAO/invalidation need and a tested backup/copy/rollback plan across API 26 and API 34.
+
+## Unreleased — move SQLite ownership out of the activity
+
+- Move the existing `StoreWriteCoordinator` and `Store` implementation into `Store.kt` without changing the v16 schema, SQL, transaction behavior, or migrations. Add an isolated repository test that closes/reopens the database and checks the v16 version and saved fixture. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`); CI verification is pending.
+
 ## Load the Compose screen read model asynchronously (CI verified)
 
 - Group the screen's match, provider, odds, coupon and forecast-history queries in an immutable read model fetched on `Dispatchers.IO`. Compose keeps the last successful snapshot when a later read fails and shows the database error; bookmaker WebViews wait for the first stored freshness state so launch does not bypass the 30-minute capture gate.

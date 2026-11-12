@@ -11,7 +11,7 @@ MainActivity / Compose
   │     └── TipsAuditMarketReferenceWorker → public fair-odds JSON, strict freshness parser
   │     └── InternationalOddsMarketWorker → documented MoviOdds group-40 soccer 1X2 feed, source-poll quality gate
   ├── Misli and TOPAZ public-page WebViews (foreground, visible DOM only, gated capture/reload at 30-minute freshness)
-  ├── Store / SQLite v16 with WAL (matches, separate local/international bookmaker and derived-market ledgers, forecasts/history)
+  ├── Store.kt / SQLite v16 with WAL (matches, separate local/international bookmaker and derived-market ledgers, forecasts/history)
   ├── EloEngine → exact-kickoff forecasts with safe-availability cutoff
   └── VirtualCouponBuilder → separate model-ranked and same-bookmaker fresh-price accumulator drafts
 ```
@@ -23,6 +23,10 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 `FootballScreenStoreSnapshot.kt` groups the Compose screen's SQLite reads into an immutable read model fetched on `Dispatchers.IO`. `FootballScreenRepository` is the screen-facing persistence boundary for that read model, fixture history, bookmaker captures, forecast/coupon writes, CSV import, and backtest data. Its SQLite adapter confines operations to `Dispatchers.IO`; WorkManager and migration tests may still use `Store` directly. Both public bookmaker WebViews parse and persist within the Compose lifecycle coroutine scope, so destroying the screen cancels pending work. Parsing remains on `Dispatchers.Default`. The screen retains its last successful data if a later read fails and surfaces that failure in the source-status area. The first bookmaker WebView capture waits for the stored last-check time so asynchronous screen loading preserves the existing freshness gate. This boundary does not change SQLite schema or migration behavior.
 
 The v16 screen-read model and repository adapter are covered by an isolated SQLite instrumentation test. The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Commit `ef9d158` passed Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268): 32 API 34 tests and API 26 instrumentation (one offline-radio skip), APK build, stable signing, and artifact upload. The API 26 runner printed 33 completed after starting 32; Gradle succeeded. No schema change or emulator install was made. Room remains a separate decision: preserve the existing SQLite v16 database until a measured need and non-destructive migration plan justify replacing the helper.
+
+### Persistence technology decision
+
+Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-16 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v16 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
 
 ## Provider and persistence rules
 
@@ -59,6 +63,6 @@ The v16 screen-read model and repository adapter are covered by an isolated SQLi
 
 1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
 2. Verify the international market and local bookmaker collectors on a physical Android phone in Azerbaijan. The latest CI APK has not been installed there; app access, source availability and fresh current prices remain unverified. Preserve local data and require the user's explicit 18+ confirmation before MoviOdds access.
-3. Continue extracting provider and domain boundaries from `MainActivity.kt`; assess Room + Flow only when migration and backup tests justify the added migration surface.
+3. Continue extracting provider, persistence, and domain boundaries from `MainActivity.kt`; keep Room + Flow deferred until a measured requirement and tested v16 backup/copy/rollback plan justify the migration surface.
 4. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.
 5. Continue collecting prospective forecast outcomes; do not report forward accuracy until saved snapshots have settled.

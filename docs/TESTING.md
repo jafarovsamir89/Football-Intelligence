@@ -13,6 +13,12 @@
 - Replace TOPAZ's raw thread/UI-thread callback with the same cancellable Compose coroutine flow as Misli. Parse visible page text on `Dispatchers.Default`, obtain fixture identities and persist snapshots through the repository, and record parse/read failures without fabricating odds.
 - Extend the isolated-database instrumentation test to read the dashboard and fixture identities through the repository. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `064f2dee85b3262b00e7c36853faa9a396fb42b1ebfb7fae44b0428820784816`). Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268) passed all 32 API 34 tests and the API 26 suite (one offline-radio skip), then built, stable-signed and uploaded artifact `13919403768`. The API 26 emulator printed 33 finished after 32 declared tests had completed; Gradle succeeded. Downloaded APK SHA-256 `349987dcfbdf5cb02ad459a25d327e51a83440160ac4a0b235bb2c1334fb6358`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The persistent emulator was not used.
 
+## Extract SQLite persistence implementation (Actions pending)
+
+- Move `StoreWriteCoordinator` and the unchanged v16 `Store` implementation from the 2,599-line activity file into `Store.kt` in the same package. Keep method signatures, schema SQL, transaction coordination, and every migration byte-for-byte unchanged.
+- The existing API 26/API 34 migration and Worker instrumentation suites are the regression coverage. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly; local APK SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`. CI must run the isolated database suite before this move is called verified.
+- Room is deferred: this refactor addresses ownership/readability while retaining the existing repository seam; no Room dependency or schema migration is justified by a demonstrated defect.
+
 ## Structured CSV/backtest background execution (CI passed)
 
 - The CSV picker, imported walk-forward, and automatic walk-forward now run in the screen's Compose coroutine scope; blocking file/SQLite work and CPU-heavy parsing or model evaluation are kept off the main thread. Cancellation is not reported as a processing failure.

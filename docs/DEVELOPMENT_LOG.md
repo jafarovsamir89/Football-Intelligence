@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-12 — separate SQLite ownership from the activity (local checks passed; Actions pending)
+
+- Extracted `StoreWriteCoordinator` and `Store` from `MainActivity.kt` to same-package `Store.kt`. A source comparison confirms the 1,274-line coordinator/Store body is byte-identical; v16 schema SQL, transaction locking, public method signatures, and migrations did not change.
+- Added an API 26/API 34 isolated-database check through `FootballScreenRepository`: it asserts schema version 16, closes the adapter, reopens the same test database, and confirms the saved fixture remains. It only deletes its unique per-test database afterward.
+- Room decision: defer the dependency and migration. The issue that motivated this review (screen database calls on the main thread) is addressed by the repository's IO adapter. Room would add DAO/entity mapping and a second versioned migration surface without addressing a demonstrated defect. Revisit only for a measurable invalidation/query need or recurring SQLite defect, with tested copy/backup/rollback from a v16 database on API 26 and 34.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`; `git diff --check` passed. API instrumentation execution awaits Actions.
+- No persistent user/emulator database is touched. Next update this log and `AGENTS.md` with the Actions result, then continue extracting the remaining presentation/data boundaries.
+
 ## 2026-11-12 — extract the screen repository and scope bookmaker capture work (local and Actions checks passed)
 
 - Added `FootballScreenRepository` and a SQLite adapter for Compose screen reads, fixture history, prospective forecast settlement, coupon drafts, CSV history/import, backtest reports, and bookmaker capture persistence. All adapter database methods run on `Dispatchers.IO`; WorkManager retains its direct `Store` use. No SQLite schema or migration changed.
