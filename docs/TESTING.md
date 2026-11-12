@@ -19,6 +19,11 @@
 - The existing API 26/API 34 migration and Worker instrumentation suites are the regression coverage. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly; local APK SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`. Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311) passed unit tests, all 32 API 34 tests, and API 26 instrumentation (one network-radio test skipped), then built/stable-signed and uploaded artifact `13921076146`. API 26 printed 33 finished after 32 declared tests had completed; Gradle succeeded with no failures. Downloaded APK SHA-256 `f10d3899668032b84e9870fd8fa0102fd449aaf126f9a8d8c80ec1837e889bbb`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 - Room is deferred: this refactor addresses ownership/readability while retaining the existing repository seam; no Room dependency or schema migration is justified by a demonstrated defect.
 
+## Split the activity host from Compose screen and page collectors (Actions pending)
+
+- Keep `MainActivity.kt` responsible only for lifecycle, repository creation/closure, sync scheduling and `setContent`. Move the Compose screen to `FootballScreen.kt`, visible public-page WebViews to `BookmakerPageCollectors.kt`, and shared match/quote/pick/ticket view models to `FootballModels.kt`.
+- Preserve same-package APIs and all UI/collector behavior. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly; APK SHA-256 `c3e355f713ef5ec132afa4b6813630d058557082049f36c22dc6a0c40df5c4b3`. The API 26/API 34 Actions matrix is pending.
+
 ## Structured CSV/backtest background execution (CI passed)
 
 - The CSV picker, imported walk-forward, and automatic walk-forward now run in the screen's Compose coroutine scope; blocking file/SQLite work and CPU-heavy parsing or model evaluation are kept off the main thread. Cancellation is not reported as a processing failure.

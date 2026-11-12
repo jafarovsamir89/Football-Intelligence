@@ -3,7 +3,7 @@
 ## Current implementation (native Android, local-first)
 
 ```text
-MainActivity / Compose
+MainActivity host → FootballScreen / Compose
   ├── WorkManager schedulers (football first-open/24h + fair-reference and international-odds first-open/periodic, network constrained; MoviOdds waits for 18+ confirmation)
   │     └── AutomaticFootballSyncWorker (network constraint, unique lock, retry/backoff)
   │            ├── OpenFootballSync → GitHub directory discovery + public raw CC0 JSON
@@ -25,6 +25,8 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 The v16 screen-read model and repository adapter are covered by an isolated SQLite instrumentation test. The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Commit `ef9d158` passed Actions [43164713268](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43164713268): 32 API 34 tests and API 26 instrumentation (one offline-radio skip), APK build, stable signing, and artifact upload. The API 26 runner printed 33 completed after starting 32; Gradle succeeded. No schema change or emulator install was made. Room remains a separate decision: preserve the existing SQLite v16 database until a measured need and non-destructive migration plan justify replacing the helper.
 
 The follow-up `6bcb3c5` moved the byte-identical v16 store implementation to `Store.kt`; Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311) passed the added isolated close/reopen persistence check on both API levels, the existing migration/Worker suites, APK build and stable signing. API 26 again printed 33 after 32 declared tests, with one radio-dependent test skipped and zero failures. No database schema change or emulator install was made.
+
+The current source split keeps the Android lifecycle host in `MainActivity.kt`, the native interface and analysis effects in `FootballScreen.kt`, foreground public-page capture in `BookmakerPageCollectors.kt`, and shared app data models in `FootballModels.kt`. This is a same-package source organization change; UI behavior, collectors, and SQLite APIs remain unchanged.
 
 ### Persistence technology decision
 

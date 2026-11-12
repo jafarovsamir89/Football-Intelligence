@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — split the activity, Compose screen, and bookmaker collectors (local checks passed; Actions pending)
+
+- Reduced `MainActivity.kt` to the Activity lifecycle host and moved `FootballScreen`/supporting composables to `FootballScreen.kt`, ordinary public WebView collectors to `BookmakerPageCollectors.kt`, and shared match/quote/pick/ticket models to `FootballModels.kt`.
+- Retained the existing package and declarations used by the repository, Store, workers, tests, and manifest. This source organization batch does not change queries, model calculations, page routes, visible DOM policy, or refresh timing.
+- The single grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `c3e355f713ef5ec132afa4b6813630d058557082049f36c22dc6a0c40df5c4b3`; `git diff --check` passed. Actions must pass API 34 and API 26 before the split is verified. No persistent emulator or phone data is touched.
+
 ## 2026-11-12 — separate SQLite ownership from the activity (local and Actions checks passed)
 
 - Extracted `StoreWriteCoordinator` and `Store` from `MainActivity.kt` to same-package `Store.kt`. A source comparison confirms the 1,274-line coordinator/Store body is byte-identical; v16 schema SQL, transaction locking, public method signatures, and migrations did not change.

@@ -14,6 +14,10 @@
 
 - Move the existing `StoreWriteCoordinator` and `Store` implementation into `Store.kt` without changing the v16 schema, SQL, transaction behavior, or migrations. Add an isolated repository test that closes/reopens the database and checks the v16 version and saved fixture. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`). Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311) passed 32 API 34 tests and API 26 instrumentation (one network-radio skip), APK build, stable signing, and artifact upload `13921076146`; downloaded APK SHA-256 `f10d3899668032b84e9870fd8fa0102fd449aaf126f9a8d8c80ec1837e889bbb`, stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The API 26 runner printed 33 finished after the 32 declared tests completed, while Gradle succeeded.
 
+## Unreleased — split the activity, screen, and bookmaker collectors (Actions pending)
+
+- Move `FootballScreen`, its supporting Compose UI and model types out of `MainActivity.kt`, and isolate the two visible-page collectors in their own file. The Android Activity becomes a thin lifecycle host; no user-facing behavior or source access changes. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `c3e355f713ef5ec132afa4b6813630d058557082049f36c22dc6a0c40df5c4b3`); Actions is pending.
+
 ## Load the Compose screen read model asynchronously (CI verified)
 
 - Group the screen's match, provider, odds, coupon and forecast-history queries in an immutable read model fetched on `Dispatchers.IO`. Compose keeps the last successful snapshot when a later read fails and shows the database error; bookmaker WebViews wait for the first stored freshness state so launch does not bypass the 30-minute capture gate.
