@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — extract the remaining Compose panels (grouped verification pending)
+
+- Extracted Matches, Results and Settings into `FootballBrowseTabs.kt`, Coupons into `FootballCouponTab.kt`, and walk-forward/CSV diagnostics into `FootballBacktestTab.kt`. The screen host continues to own app state, local persistence, forecast and coupon calculations, and user actions; child panels receive read models and callbacks explicitly.
+- Compared normalized source bodies against the preceding `FootballScreen.kt` revision for all five tabs. Existing copy, UI branches and calculations are retained; only captured host state and actions became parameters/callbacks. The existing coupon and forecast/model logic, bookmaker freshness and provenance, MoviOdds consent, and SQLite schema v16 were not changed.
+- The first combined local cycle stopped at Kotlin compilation before unit tests or APK assembly because of missing date imports, one extra Settings brace and the coupon toggle still referring to host state. After correction, the single grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed all 131 JVM tests, Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `b6192bf10a26217223cc34cd6363229c0f0caffcecadcfe2ad9b7a9fa191801c`; `git diff --check` and the five normalized panel-body comparisons passed. Next inspect/commit/push this batch, then verify the single Actions run. Do not install the APK because no runtime acceptance check is required for this structural extraction.
+
 ## 2026-11-12 — extract market-analysis Compose panels (CI passed)
 
 - Moved the selected-match analysis and World Market content from `FootballScreen.kt` into `FootballMarketTabs.kt`. Both panels receive their snapshots, calculated forecasts, and state-changing actions through explicit parameters; consent persistence, external links, and WorkManager scheduling remain in the screen host.
