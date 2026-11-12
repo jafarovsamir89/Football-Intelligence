@@ -1,5 +1,10 @@
 # Testing
 
+## Extract selected-match and World Market panels (local verification passed; Actions pending)
+
+- Move the two market-analysis tab bodies into `FootballMarketTabs.kt`. Check that normalized source bodies remain identical after replacing host-owned actions with callbacks; keep all state transitions at `FootballScreen.kt`.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed. Actions verification is pending.
+
 ## Asynchronous Compose screen read model (CI passed)
 
 - Replace SQLite reads executed in Compose `remember` blocks with one immutable screen read model loaded on `Dispatchers.IO`; retain the previous successful data and expose read errors. Delay bookmaker WebView startup until the stored last-check timestamps have loaded so the 30-minute capture gate remains effective.

@@ -1,5 +1,10 @@
 # Changelog
 
+## Extract market-analysis panels (Actions pending)
+
+- Move the selected-match Analysis and World Market panels into `FootballMarketTabs.kt` with explicit snapshot, forecast, worker-state, and action inputs. Keep age-consent persistence and scheduling at the screen host. No provider, pricing, model, coupon, or database behavior changes.
+- The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, APK assembly, and `git diff --check`; local APK SHA-256 `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`. Actions verification is pending.
+
 ## Add the screen persistence boundary (CI verified)
 
 - Route screen reads and writes through `FootballScreenRepository`; its SQLite adapter confines operations to `Dispatchers.IO`. Keep background Worker and schema-migration access on the existing `Store`.

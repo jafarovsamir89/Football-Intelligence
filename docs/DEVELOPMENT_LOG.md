@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — extract market-analysis Compose panels (local verification passed; CI pending)
+
+- Moved the selected-match analysis and World Market content from `FootballScreen.kt` into `FootballMarketTabs.kt`. Both panels receive their snapshots, calculated forecasts, and state-changing actions through explicit parameters; consent persistence, external links, and WorkManager scheduling remain in the screen host.
+- A normalized source comparison confirmed the moved panel bodies retain the existing text and logic; the only changes are explicit callbacks/inputs and reading the same primary theme color inside the extracted panel. No odds source, parser, freshness rule, model, coupon, or database code changed.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed. GitHub Actions and the stable-signed artifact are pending.
+- Next: push this source milestone and verify both API instrumentation suites plus signed artifact in one Actions run. Then continue extracting remaining tab content without changing schema v16.
+
 ## 2026-11-12 — split the activity, Compose screen, and bookmaker collectors (local and Actions checks passed)
 
 - Reduced `MainActivity.kt` to the Activity lifecycle host and moved `FootballScreen`/supporting composables to `FootballScreen.kt`, ordinary public WebView collectors to `BookmakerPageCollectors.kt`, and shared match/quote/pick/ticket models to `FootballModels.kt`.
