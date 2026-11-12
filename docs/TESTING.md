@@ -4,7 +4,8 @@
 
 - Add a 30-day SQLite v15→v16 attempt ledger for every persisted MoviOdds result (including blocked/error responses) and show the five latest status/count observations on World Market. Failed or unparsed requests must retain null quality counts rather than synthetic zeroes.
 - Cover the v15 migration while preserving existing sync state, Worker write/readback, attempt ordering and counts-null-on-error. Keep persistent emulator `5558` untouched.
-- The first grouped run found a migration-test scope error; after fixing it, the combined local cycle passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed. CI runtime verification is pending.
+- The first grouped run found a migration-test scope error; after fixing it, the combined local cycle passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed.
+- Commit `50001a1` passed Actions [43150950747](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43150950747): all 30 API 34 instrumentation tests (including migration and Worker history persistence), APK build, stable signing and artifact upload `13913099796`. Downloaded APK SHA-256 `0474fd3bbb5945ec74c59c912272858f9df860c13d45e62466dc963510c73245`; signer SHA-256 `da1506fd2e896c67d3ceaf6c8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## International quality-gate counters (local and CI passed)
 

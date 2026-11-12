@@ -3,7 +3,7 @@
 ## Unreleased — retain international source-attempt history
 
 - Save MoviOdds request status, safe detail and available parser quality counts for 30 days. Show the five latest attempts on World Market; do not calculate an uptime/reliability percentage from this short, device-local sample.
-- Add SQLite v15→v16 migration and coverage for preserving existing sync state, status ordering and absent counts on request failure. The first grouped run found and fixed a migration-test scope error. The successful combined local cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`. CI runtime verification is pending.
+- Add SQLite v15→v16 migration and coverage for preserving existing sync state, status ordering and absent counts on request failure. The first grouped run found and fixed a migration-test scope error. The successful combined local cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`. Commit `50001a1` passed Actions [43150950747](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43150950747), including all 30 API 34 instrumentation tests, APK build, stable signing and artifact upload `13913099796`; downloaded APK SHA-256 `0474fd3bbb5945ec74c59c912272858f9df860c13d45e62466dc963510c73245`, signer SHA-256 `da1506fd2e896c67d3ceaf6c8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Unreleased — expose the latest international quality-gate counts
 

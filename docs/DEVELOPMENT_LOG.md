@@ -1,10 +1,11 @@
 # Development log
 
-## 2026-11-12 — retain international source-attempt history (local passed; CI pending)
+## 2026-11-12 — retain international source-attempt history (local and CI passed)
 
 - Extended the prior response-level quality counters into a 30-day local attempt ledger, covering parsed success/stale/unavailable responses and transport or access failures. The World Market shows five most recent statuses with real parse counts when present; no reliability percentage is inferred.
-- Added the SQLite v15→v16 migration and regression coverage for migration preservation, order, Worker persistence and counts remaining null on failed requests. The first grouped run found a test-scoping error in the migration fixture; after fixing it, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed. The CI runtime suite is pending. Do not touch emulator `5558` or phone data.
-- Next: commit/push this grouped code/docs milestone and verify the v15→v16 migration, Worker history persistence, all API 34 instrumentation tests and signed artifact in Actions.
+- Added the SQLite v15→v16 migration and regression coverage for migration preservation, order, Worker persistence and counts remaining null on failed requests. The first grouped run found a test-scoping error in the migration fixture; after fixing it, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed.
+- Commit `50001a1` passed Actions [43150950747](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43150950747): the unit job, all 30 API 34 instrumentation tests (including v15→v16 and Worker attempt-history coverage), APK build, stable signing and artifact upload `13913099796` (16,873,955 bytes). Downloaded APK SHA-256: `0474fd3bbb5945ec74c59c912272858f9df860c13d45e62466dc963510c73245`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; uploaded archive SHA-256 `a9cb27fe67c92c7d10cbb40b687265f8cbb97a75ea2490ec9789e714415c90c4`.
+- No local APK installation was performed. Do not touch emulator `5558` or phone data. Next: continue feasible work from the roadmap; physical Azerbaijan-device availability and prospective quote/result evidence remain external/time-dependent.
 
 ## 2026-11-12 — persist international quality-gate counts (local and CI verification passed)
 
