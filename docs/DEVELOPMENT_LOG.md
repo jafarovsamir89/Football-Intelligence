@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — complete API 26/API 34 verification matrix (CI passed)
+
+- Commit `eb4cb09` restores the known-working API 30+ `cmd connectivity` / `cmd wifi` controls while retaining legacy shell controls below API 30. Only the emulator-specific radio-off test is skipped on API 26 with an explicit assumption; all CONNECTED WorkManager constraint checks run on both API levels.
+- Actions [43158120648](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43158120648) passed unit tests, all 31 API 34 instrumentation tests (0 skipped/failed), and 30 API 26 tests with 1 radio-state test skipped and 0 failures. The same run then built and stable-signed the APK and uploaded artifact `13916409827` (16,877,708 bytes).
+- Downloaded APK SHA-256: `598b0d1036b4c29c06da91d6ca962de2668565a109e68a45dec396b97d1d8bc0`. `apksigner verify --verbose --print-certs` succeeded; signer certificate SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK was not installed; no emulator database was modified.
+- The API 26 radio-off behavior remains unverified because the GitHub emulator retained an active network despite shell radio controls. API 34's real offline-queue test passed. Next: continue feasible deterministic migration/provider regression work and architecture extraction; physical-device/regional access and prospective forecast outcomes remain external/time-dependent.
+
 ## 2026-11-12 — repair minimum-API instrumentation compatibility (CI rerun pending)
 
 - The first matrix run, Actions [43154571534](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43154571534), passed unit tests and all 30 API 34 instrumentation tests. API 26 ran 30 tests but 24 failed: Android 8's `SQLiteOpenHelper` is not `AutoCloseable`, while test code compiled against the newer SDK called Kotlin `use` on `Store`; the offline-queue test also relied on newer shell commands. APK assembly and upload were skipped.

@@ -1,13 +1,14 @@
 # Testing
 
-## Repair API 26 instrumentation compatibility (CI rerun pending)
+## Repair API 26 instrumentation compatibility (CI passed)
 
 - Run the existing complete instrumentation suite on both API 34 and the minimum supported API 26 before the single APK build/sign/upload stage.
 - Keep the persistent local API 34 emulator and its database untouched; the CI runner creates a disposable API 26 emulator.
 - First run [43154571534](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43154571534): unit tests and all 30 API 34 tests passed; API 26 had 24 failures among 30 tests. Failures exposed the missing API 26 `AutoCloseable` relationship for `Store` and unsupported offline-test shell commands; APK build/sign/upload were skipped.
 - Added an explicit `Closeable` implementation and min-API regression check, and switched radio controls to `settings` / `svc wifi`. Run [43156179616](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43156179616) passed all 31 API 34 tests and 30/31 API 26 tests; API 26 still reported airplane=1, wifi=1 and an active network after shell control.
 - The third run [43157374263](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43157374263) exposed that API 34's real offline test also requires its newer `cmd connectivity` / `cmd wifi` controls; the API 26-only commands left `activeNetwork` online on API 34.
-- Skip only the emulator-specific radio-off test on API 26 with an explicit assumption reason; retain CONNECTED-constraint assertions at both APIs and use modern shell controls on API 30+ for the actual offline test. Local verification passed 131 JVM tests and Android-test Kotlin compilation. The corrected CI matrix and APK build are pending; API 26 radio-off behavior is unverified.
+- Skip only the emulator-specific radio-off test on API 26 with an explicit assumption reason; retain CONNECTED-constraint assertions at both APIs and use modern shell controls on API 30+ for the actual offline test. Run [43158120648](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43158120648) passed the unit job, all 31 API 34 tests (0 skipped/failed), and API 26 with 30 passed, one skipped and 0 failed; APK build, stable signing and artifact upload `13916409827` also passed. Downloaded APK SHA-256 `598b0d1036b4c29c06da91d6ca962de2668565a109e68a45dec396b97d1d8bc0`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. API 26 radio-off behavior is still unverified; the skip is specific to the emulator shell's inability to establish offline state.
+- The failed intermediate run [43157374263](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43157374263) is retained in history: the old radio controls left the API 34 default network active. Commit `eb4cb09` restores modern commands for API 30+ and uses legacy controls only below API 30. No local APK was installed and the persistent API 34 emulator database remains untouched.
 
 ## International event-identity hardening (local and Actions passed)
 

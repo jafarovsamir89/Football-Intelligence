@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — repair minimum-API instrumentation compatibility (CI rerun pending)
+## API 26 instrumentation compatibility and CI matrix (verified)
 
 - Add API 26 instrumentation alongside API 34 with one APK build/sign/upload stage. The first run exposed `AutoCloseable`/`Store` test compatibility; the second passed 30/31 API 26 tests after adding `Closeable`, with the remaining failure caused by the API 26 emulator retaining Wi-Fi and an active network. A third run then showed the API 34 offline test also requires its modern shell radio controls.
-- Skip only the uncontrollable radio-dependent check on API 26, retain connected-constraint assertions at both APIs, and use `cmd connectivity` / `cmd wifi` on API 30+ where the offline check was verified. Local verification passed 131 JVM tests and Android-test compilation; the corrected CI matrix/build is pending.
+- Skip only the uncontrollable radio-dependent check on API 26, retain connected-constraint assertions at both APIs, and use `cmd connectivity` / `cmd wifi` on API 30+ where the offline check was verified. Actions [43158120648](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43158120648) passed all 31 API 34 tests, API 26 with 30 passed and 1 skipped, unit tests, APK build, stable signing and upload. APK SHA-256 `598b0d1036b4c29c06da91d6ca962de2668565a109e68a45dec396b97d1d8bc0`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. API 26 radio-off behavior is not verified.
 
 ## Unreleased — recheck free international odds pages
 
