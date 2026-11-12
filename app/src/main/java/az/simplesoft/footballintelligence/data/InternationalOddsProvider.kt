@@ -14,6 +14,21 @@ const val INTERNATIONAL_ODDS_REFRESH_INTERVAL_MINUTES = 30L
 
 enum class InternationalOddsStatus { LIVE, STALE, UNAVAILABLE, BLOCKED, ERROR, UNVERIFIED }
 
+data class InternationalOddsQualityCounts(
+    val receivedMatches: Int,
+    val acceptedMatches: Int,
+    val rejectedMatches: Int,
+    val staleMatches: Int,
+    val duplicateMatches: Int,
+    val unverifiedMatches: Int,
+) {
+    init {
+        val counts = listOf(receivedMatches, acceptedMatches, rejectedMatches, staleMatches, duplicateMatches, unverifiedMatches)
+        require(counts.all { it >= 0 })
+        require(receivedMatches == acceptedMatches + rejectedMatches + staleMatches + duplicateMatches + unverifiedMatches)
+    }
+}
+
 data class InternationalOddsSyncState(
     val providerId: String,
     val status: InternationalOddsStatus,
@@ -21,6 +36,7 @@ data class InternationalOddsSyncState(
     val lastSuccessAtMillis: Long?,
     val freshRecordsStored: Int,
     val detail: String?,
+    val qualityCounts: InternationalOddsQualityCounts? = null,
 )
 
 /**
@@ -66,9 +82,20 @@ data class InternationalOddsParseResult(
     val rejectedMatches: Int,
     val staleMatches: Int,
     val duplicateMatches: Int,
+    val unverifiedMatches: Int,
     val serverTimeMillis: Long?,
     val detail: String,
-)
+) {
+    val qualityCounts: InternationalOddsQualityCounts
+        get() = InternationalOddsQualityCounts(
+            receivedMatches = receivedMatches,
+            acceptedMatches = snapshots.size,
+            rejectedMatches = rejectedMatches,
+            staleMatches = staleMatches,
+            duplicateMatches = duplicateMatches,
+            unverifiedMatches = unverifiedMatches,
+        )
+}
 
 /** Shared price gate for provider time, complete outcomes, source identity, and duplicate events. */
 object OddsQualityGate {
@@ -119,7 +146,8 @@ class Bet365ViaMoviOddsProvider {
         if (!OddsQualityGate.deviceClockVerified(capturedAtMillis,serverTime)) {
             return InternationalOddsParseResult(
                 snapshots = emptyList(), status = InternationalOddsStatus.UNVERIFIED,
-                receivedMatches = received, rejectedMatches = received, staleMatches = 0, duplicateMatches = 0,
+                receivedMatches = received, rejectedMatches = 0, staleMatches = 0, duplicateMatches = 0,
+                unverifiedMatches = received,
                 serverTimeMillis = serverTime,
                 detail = "Часы устройства и источник расходятся более чем на 5 минут; котировки не подтверждены.",
             )
@@ -251,7 +279,7 @@ class Bet365ViaMoviOddsProvider {
             InternationalOddsStatus.UNVERIFIED -> "Время опроса рынка отсутствует или не прошло проверку; котировки исключены."
             else -> "Сейчас нет подтверждённых будущих prematch-линий 1X2."
         }
-        return InternationalOddsParseResult(parsed, status, received, rejected, stale, duplicates, serverTime, detail)
+        return InternationalOddsParseResult(parsed, status, received, rejected, stale, duplicates, unverified, serverTime, detail)
     }
 
     private enum class OutcomeKey { HOME, DRAW, AWAY }

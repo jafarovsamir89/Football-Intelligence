@@ -26,6 +26,7 @@ class InternationalOddsProviderTest {
         assertEquals(captured,quote.capturedAtMillis)
         assertEquals(captured-1_000L,quote.providerPolledAtMillis)
         assertEquals(captured-20*60_000L,quote.drawPriceChangedAtMillis)
+        assertEquals(InternationalOddsQualityCounts(1,1,0,0,0,0),result.qualityCounts)
     }
 
     @Test fun stalePollSuspensionIncompleteMarketAndInPlayAreRejected() {
@@ -39,15 +40,18 @@ class InternationalOddsProviderTest {
         assertEquals(InternationalOddsStatus.STALE,result.status)
         assertEquals(1,result.staleMatches)
         assertEquals(3,result.rejectedMatches)
+        assertEquals(InternationalOddsQualityCounts(4,0,3,1,0,0),result.qualityCounts)
     }
 
     @Test fun missingPollClockSkewAndFuturePollAreNotReportedAsLive() {
         val noPoll=match(id="1",includeGroupStatus=false)
         val noPollResult=provider.parse(response(noPoll),captured)
         assertEquals(InternationalOddsStatus.UNVERIFIED,noPollResult.status)
+        assertEquals(InternationalOddsQualityCounts(1,0,0,0,0,1),noPollResult.qualityCounts)
 
         val wrongClock=provider.parse(response(match()),captured+6*60_000L)
         assertEquals(InternationalOddsStatus.UNVERIFIED,wrongClock.status)
+        assertEquals(InternationalOddsQualityCounts(1,0,0,0,0,1),wrongClock.qualityCounts)
 
         val futurePoll=match(id="5",pollAt=iso(captured+3*60_000L))
         val futurePollResult=provider.parse(response(futurePoll),captured)
@@ -79,6 +83,7 @@ class InternationalOddsProviderTest {
 
         assertEquals(1,result.snapshots.size)
         assertEquals(1,result.duplicateMatches)
+        assertEquals(InternationalOddsQualityCounts(2,1,0,0,1,0),result.qualityCounts)
         assertEquals(2,beyondTolerance.snapshots.size)
         assertEquals(0,beyondTolerance.duplicateMatches)
     }

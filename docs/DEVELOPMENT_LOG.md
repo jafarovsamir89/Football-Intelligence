@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — persist international quality-gate counts (local verification passed; CI pending)
+
+- Researched additional free international odds candidates. The Odds Gap documents no-key board endpoints but explicitly forbids repackaging them as another product; UK Odds API and The Odds API free tiers require account/key setup. No second permitted no-account feed was found; no adapter was added.
+- Added mutually exclusive counters for accepted, rejected, stale, duplicate and unverified MoviOdds events, including clock-skew failures. The latest JSON response counters are persisted in SQLite v15 and shown on the World Market screen as counts, not a reliability score.
+- Added v14→v15 migration coverage, parser-accounting assertions and Worker-to-SQLite persistence coverage. The first grouped run exposed one missing instrumentation-test import; after fixing it, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. APK SHA-256: `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`; `git diff --check` passed. Instrumentation tests have only been compiled locally; CI runtime verification is pending. Keep emulator `5558` and the phone database untouched.
+- Next: commit/push this grouped code and documentation milestone, then verify all API 34 instrumentation tests, signed APK and artifact digest in Actions. Do not call it CI-verified before that run completes.
+
 ## 2026-11-12 — research-only market-disagreement coupon basis (local and CI verification passed)
 
 - Added a separate same-book virtual accumulator pool. For every exact-linked fixture with a complete fresh 1X2 line, it removes the book margin proportionally, selects only the largest positive Elo-minus-market probability gap, and ranks legs by that gap. Misli and TOPAZ stay separate. Numerical noise at or below `1e-12` is ignored.

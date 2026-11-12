@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — expose the latest international quality-gate counts
+
+- Persist received, accepted, rejected, stale, duplicate and unverified match counts from each parsed MoviOdds board and show them on the World Market screen. The counters describe only the latest JSON response; they are not a source reliability score.
+- Add mutually exclusive parser accounting, API 34 v14→v15 migration and Worker persistence coverage. Alternative-feed research found The Odds Gap's keyless endpoints may not be repackaged into another product, while UK Odds API and The Odds API free tiers require accounts/keys; no additional feed was added.
+- The first combined local cycle found and fixed a missing instrumentation-test import. The successful cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly. APK SHA-256 `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`. CI instrumentation/runtime verification is pending.
+
 ## Unreleased — add same-book market-disagreement accumulator drafts
 
 - Add a separate research-only accumulator basis that selects the largest positive difference between the current Elo marginal and proportional de-vigged probability from the same local bookmaker's full 1X2 line. It requires fresh prices and an exact linked local fixture; it never combines Misli and TOPAZ prices.

@@ -12,6 +12,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
+import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.MOVIODDS_API_URL
 import az.simplesoft.footballintelligence.MOVIODDS_AGE_CONSENT_KEY
@@ -43,7 +44,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=12
             }
             Store(isolated,name).use { store ->
-                assertEquals(14,store.writableDatabase.version)
+                assertEquals(15,store.writableDatabase.version)
                 store.saveInternationalOddsCapture(now,InternationalOddsStatus.LIVE,listOf(
                     InternationalOddsSnapshot("moviodds_bet365","bet365","migration-event",MOVIODDS_API_URL,"Serie A",null,now,now,now+60*60*1000L,"1X2","Roma","Napoli",2.1,3.2,3.5,now,now,now),
                 ),"migration test")
@@ -53,7 +54,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 }
             }
             Store(base,name).use { store ->
-                assertEquals(14,store.writableDatabase.version)
+                assertEquals(15,store.writableDatabase.version)
                 assertEquals("migration-event",store.internationalOddsHistory().single().eventId)
             }
         } finally { base.deleteDatabase(name) }
@@ -81,6 +82,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 val state=store.internationalOddsSyncState()!!
                 assertEquals(InternationalOddsStatus.LIVE,state.status)
                 assertEquals(1,state.freshRecordsStored)
+                assertEquals(InternationalOddsQualityCounts(1,1,0,0,0,0),state.qualityCounts)
                 val saved=store.freshInternationalOdds().single()
                 assertEquals("bet365",saved.bookmakerId)
                 assertEquals("9001",saved.eventId)

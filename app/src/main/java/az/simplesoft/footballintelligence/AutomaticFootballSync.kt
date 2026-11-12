@@ -373,7 +373,10 @@ class InternationalOddsMarketWorker(context:Context,params:WorkerParameters):Cor
             }
             if(response.statusCode !in 200..299) throw IOException("Unexpected HTTP ${response.statusCode} from MoviOdds.")
             val parsed=Bet365ViaMoviOddsProvider().parse(response.body,checkedAt,store.matchIdentities())
-            store.saveInternationalOddsCapture(checkedAt,parsed.status,parsed.snapshots,parsed.detail,replaceCurrentBoard=true)
+            store.saveInternationalOddsCapture(
+                checkedAt,parsed.status,parsed.snapshots,parsed.detail,
+                replaceCurrentBoard=true,qualityCounts=parsed.qualityCounts,
+            )
             store.relinkUnmatchedInternationalOdds(checkedAt)
             Result.success()
         } catch(error:ProviderHttpException) {
