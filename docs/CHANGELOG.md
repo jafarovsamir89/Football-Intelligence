@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — keep CSV import and backtests within the screen coroutine scope
+
+- Replace the CSV import, imported walk-forward, and automatic walk-forward raw threads with Compose-scoped coroutines. CSV file I/O and database operations run on `Dispatchers.IO`; parsing and imported walk-forward calculation run on `Dispatchers.Default`. UI state updates stay on the main coroutine, and cancellation is rethrown instead of being shown as an import/backtest error.
+- This changes execution/lifecycle handling only; SQLite schema, import validation, model cutoff rules, and stored results are unchanged. Local grouped verification passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly; API 26/API 34 CI verification is pending.
+
 ## API 26 instrumentation compatibility and CI matrix (verified)
 
 - Add API 26 instrumentation alongside API 34 with one APK build/sign/upload stage. The first run exposed `AutoCloseable`/`Store` test compatibility; the second passed 30/31 API 26 tests after adding `Closeable`, with the remaining failure caused by the API 26 emulator retaining Wi-Fi and an active network. A third run then showed the API 34 offline test also requires its modern shell radio controls.

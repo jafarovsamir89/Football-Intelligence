@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — use structured background work for CSV and backtests (local checks passed; CI pending)
+
+- Replaced the raw `Thread` + `runOnUiThread` pairs used by the advanced CSV import, imported-league walk-forward, and automatic-history backtest with the lifecycle-bound Compose coroutine scope. The CSV content resolver read and database import run on `Dispatchers.IO`; decoding/parsing and imported walk-forward evaluation use `Dispatchers.Default`; automatic report generation stays on `Dispatchers.IO` so its SQLite reads never run on the UI thread.
+- Cancellation exceptions are rethrown and normal failures update Compose state on the main dispatcher. The CSV byte limit, importer validation, historical cutoff, model evaluation, and database schema are unchanged.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and debug APK assembly. Local APK SHA-256: `8b32ae432d31828d0639bc9c6ee47b5e2f21e375805cdd207cc23fb656571244`; `git diff --check` passed.
+- Next: run the established CI matrix on API 34/API 26, inspect the signed artifact, then update the continuation point. No local install or emulator data modification was performed.
+
 ## 2026-11-12 — complete API 26/API 34 verification matrix (CI passed)
 
 - Commit `eb4cb09` restores the known-working API 30+ `cmd connectivity` / `cmd wifi` controls while retaining legacy shell controls below API 30. Only the emulator-specific radio-off test is skipped on API 26 with an explicit assumption; all CONNECTED WorkManager constraint checks run on both API levels.

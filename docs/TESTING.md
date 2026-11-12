@@ -1,5 +1,11 @@
 # Testing
 
+## Structured CSV/backtest background execution (CI pending)
+
+- The CSV picker, imported walk-forward, and automatic walk-forward now run in the screen's Compose coroutine scope; blocking file/SQLite work and CPU-heavy parsing or model evaluation are kept off the main thread. Cancellation is not reported as a processing failure.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), compiled Android tests, and assembled the debug APK. Local APK SHA-256: `8b32ae432d31828d0639bc9c6ee47b5e2f21e375805cdd207cc23fb656571244`. `git diff --check` passed.
+- API 26/API 34 instrumentation, stable CI signing and artifact upload are pending. No local APK install was performed.
+
 ## Repair API 26 instrumentation compatibility (CI passed)
 
 - Run the existing complete instrumentation suite on both API 34 and the minimum supported API 26 before the single APK build/sign/upload stage.

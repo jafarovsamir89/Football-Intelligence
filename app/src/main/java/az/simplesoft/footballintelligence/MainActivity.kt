@@ -41,7 +41,9 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
@@ -1672,6 +1674,7 @@ class MainActivity:ComponentActivity() {
 
 @Composable fun FootballScreen(store:Store) {
     val activity = LocalContext.current as ComponentActivity
+    val coroutineScope = rememberCoroutineScope()
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -1855,42 +1858,45 @@ class MainActivity:ComponentActivity() {
             importingCsv=true
             csvImportMessage="Импорт CSV…"
             val fallback=fallbackCompetition.trim().ifBlank { null }
-            Thread {
+            coroutineScope.launch {
                 try {
-                    val resolver=activity.contentResolver
-                    val fileName=resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { c ->
-                        if(c.moveToFirst()) c.getString(0) else null
-                    } ?: uri.lastPathSegment ?: "football-results.csv"
-                    val input=resolver.openInputStream(uri) ?: error("Файл недоступен для чтения.")
-                    val bytes=input.use { stream ->
-                        val output=ByteArrayOutputStream()
-                        val buffer=ByteArray(8192)
-                        while(true) {
-                            val count=stream.read(buffer)
-                            if(count<0) break
-                            require(output.size()+count<=20*1024*1024) { "CSV-файл больше 20 МБ." }
-                            output.write(buffer,0,count)
+                    val (fileName,bytes)=withContext(Dispatchers.IO) {
+                        val resolver=activity.contentResolver
+                        val name=resolver.query(uri,arrayOf(OpenableColumns.DISPLAY_NAME),null,null,null)?.use { c ->
+                            if(c.moveToFirst()) c.getString(0) else null
+                        } ?: uri.lastPathSegment ?: "football-results.csv"
+                        val input=resolver.openInputStream(uri) ?: error("Файл недоступен для чтения.")
+                        val contents=input.use { stream ->
+                            val output=ByteArrayOutputStream()
+                            val buffer=ByteArray(8192)
+                            while(true) {
+                                val count=stream.read(buffer)
+                                if(count<0) break
+                                require(output.size()+count<=20*1024*1024) { "CSV-файл больше 20 МБ." }
+                                output.write(buffer,0,count)
+                            }
+                            output.toByteArray()
                         }
-                        output.toByteArray()
+                        name to contents
                     }
-                    val report=FootballDataCsvImporter.parse(FootballDataCsvImporter.decode(bytes),fallback)
+                    val report=withContext(Dispatchers.Default) {
+                        FootballDataCsvImporter.parse(FootballDataCsvImporter.decode(bytes),fallback)
+                    }
                     require(report.results.isNotEmpty()) { "Не найдено корректных завершённых матчей. Проверь Date, HomeTeam, AwayTeam, FTHG/HG и FTAG/AG." }
-                    val stored=store.importHistoricalResults(fileName,report)
-                    activity.runOnUiThread {
-                        revision++
-                        importingCsv=false
-                        backtestReport=null
-                        backtestReportCode=""
-                        val examples=report.examples.take(2).joinToString("; ").let { if(it.isBlank()) "" else " Примеры: $it" }
-                        csvImportMessage="Импорт: добавлено ${stored.insertedRows}, дублей ${stored.duplicateRows}, пропущено строк ${report.rejectedRows} из ${report.rowsRead}.$examples"
-                    }
+                    val stored=withContext(Dispatchers.IO) { store.importHistoricalResults(fileName,report) }
+                    revision++
+                    importingCsv=false
+                    backtestReport=null
+                    backtestReportCode=""
+                    val examples=report.examples.take(2).joinToString("; ").let { if(it.isBlank()) "" else " Примеры: $it" }
+                    csvImportMessage="Импорт: добавлено ${stored.insertedRows}, дублей ${stored.duplicateRows}, пропущено строк ${report.rejectedRows} из ${report.rowsRead}.$examples"
+                } catch(e:CancellationException) {
+                    throw e
                 } catch(e:Exception) {
-                    activity.runOnUiThread {
-                        importingCsv=false
-                        csvImportMessage="Ошибка импорта: ${e.message ?: "неизвестная ошибка"}"
-                    }
+                    importingCsv=false
+                    csvImportMessage="Ошибка импорта: ${e.message ?: "неизвестная ошибка"}"
                 }
-            }.start()
+            }
         }
     }
 
@@ -1900,67 +1906,66 @@ class MainActivity:ComponentActivity() {
         backtestMessage="Расчёт по сохранённым результатам…"
         backtestReport=null
         backtestReportCode=""
-        Thread {
+        coroutineScope.launch {
             try {
-                val rows=store.importedHistory(competitionCode)
-                val history=rows.map { row ->
-                    HistoricalMatch(
-                        kickoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
-                        homeTeam=row.homeTeam,
-                        awayTeam=row.awayTeam,
-                        homeGoals=row.homeGoals,
-                        awayGoals=row.awayGoals,
-                        availableAtMillis=row.availableAtMillis,
-                    )
+                val (history,targets)=withContext(Dispatchers.IO) {
+                    val rows=store.importedHistory(competitionCode)
+                    val historicalMatches=rows.map { row ->
+                        HistoricalMatch(
+                            kickoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
+                            homeTeam=row.homeTeam,
+                            awayTeam=row.awayTeam,
+                            homeGoals=row.homeGoals,
+                            awayGoals=row.awayGoals,
+                            availableAtMillis=row.availableAtMillis,
+                        )
+                    }
+                    val walkForwardTargets=rows.map { row ->
+                        WalkForwardTarget(
+                            id=row.id.toString(),
+                            forecastCutoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
+                            homeTeam=row.homeTeam,
+                            awayTeam=row.awayTeam,
+                            homeGoals=row.homeGoals,
+                            awayGoals=row.awayGoals,
+                        )
+                    }
+                    historicalMatches to walkForwardTargets
                 }
-                val targets=rows.map { row ->
-                    WalkForwardTarget(
-                        id=row.id.toString(),
-                        forecastCutoffMillis=FootballDataCsvImporter.dateBucketForecastCutoffMillis(row.eventDate),
-                        homeTeam=row.homeTeam,
-                        awayTeam=row.awayTeam,
-                        homeGoals=row.homeGoals,
-                        awayGoals=row.awayGoals,
-                    )
-                }
-                val report=EloWalkForwardEngine.evaluate(history,targets)
-                activity.runOnUiThread {
-                    backtestReportCode=competitionCode
-                    backtestReport=report
-                    backtestRunning=false
-                    backtestMessage=""
-                }
+                val report=withContext(Dispatchers.Default) { EloWalkForwardEngine.evaluate(history,targets) }
+                backtestReportCode=competitionCode
+                backtestReport=report
+                backtestRunning=false
+                backtestMessage=""
+            } catch(e:CancellationException) {
+                throw e
             } catch(e:Exception) {
-                activity.runOnUiThread {
-                    backtestRunning=false
-                    backtestMessage="Ошибка исторического теста: ${e.message ?: "неизвестная ошибка"}"
-                }
+                backtestRunning=false
+                backtestMessage="Ошибка исторического теста: ${e.message ?: "неизвестная ошибка"}"
             }
-        }.start()
+        }
     }
 
     fun runAutomaticBacktest() {
         if(automaticBacktestRunning||automaticBacktestRevision==revision) return
         automaticBacktestRunning=true
         automaticBacktestMessage="Расчёт по локальной автоматической истории…"
-        Thread {
+        coroutineScope.launch {
             try {
-                val reports=store.automaticBacktestReports()
-                activity.runOnUiThread {
-                    automaticBacktestReport=reports.eloWalkForward
-                    automaticEloExperiment=reports.eloParameterExperiment
-                    automaticGoalComparison=reports.goalModelComparison
-                    automaticBacktestRevision=revision
-                    automaticBacktestRunning=false
-                    automaticBacktestMessage=""
-                }
+                val reports=withContext(Dispatchers.IO) { store.automaticBacktestReports() }
+                automaticBacktestReport=reports.eloWalkForward
+                automaticEloExperiment=reports.eloParameterExperiment
+                automaticGoalComparison=reports.goalModelComparison
+                automaticBacktestRevision=revision
+                automaticBacktestRunning=false
+                automaticBacktestMessage=""
+            } catch(error:CancellationException) {
+                throw error
             } catch(error:Exception) {
-                activity.runOnUiThread {
-                    automaticBacktestRunning=false
-                    automaticBacktestMessage="Ошибка проверки: ${error.message ?: "неизвестная ошибка"}"
-                }
+                automaticBacktestRunning=false
+                automaticBacktestMessage="Ошибка проверки: ${error.message ?: "неизвестная ошибка"}"
             }
-        }.start()
+        }
     }
 
     MaterialTheme {
