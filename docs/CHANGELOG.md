@@ -1,11 +1,11 @@
 # Changelog
 
-## Fix compact-screen World Market scrolling and add paired market scoring (local passed; Actions pending)
+## Fix compact-screen World Market scrolling and add paired market scoring (CI verified)
 
 - Compare the last retained fresh pre-kickoff international 1X2 quote per linked fixture and bookmaker with a saved current-Elo forecast available by quote capture. Keep bookmakers separate and show only Brier, log loss and top-outcome accuracy for a shared settled cohort.
 - Exclude unmatched, stale, post-kickoff, unpaired and result-time-inconsistent rows. Use the existing 30-day/5,000-row quote history; no schema migration, CLV or ROI calculation is added.
 - Put the full World Market header and quotes in one scrollable list so the header cannot consume the quote viewport on compact Android screens; instrumentation scrolls to the evaluation card, named bookmaker quote and provider attribution.
-- The grouped local command passed 155 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. `git diff --check` passed. Debug APK SHA-256 `9576237e823d7d7b15c9672ae2ac134613222c5a04d1254475ea26ead6ca29e0`; personal APK SHA-256 `3be1e7933eca13df69c063d74d7adf4c95f2a897fc18ee6195f26c22c96a232e`. Both signatures verified; payload audit found the private key absent from debug and present only in the owner-only personal APK. Actions run [43206307429](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43206307429) passed all 43 API 34 tests, but API 26 found the compact-screen quote-list issue; the scrolling fix is pending its next full CI run.
+- The grouped local command passed 155 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. `git diff --check` passed. Debug APK SHA-256 `9576237e823d7d7b15c9672ae2ac134613222c5a04d1254475ea26ead6ca29e0`; personal APK SHA-256 `3be1e7933eca13df69c063d74d7adf4c95f2a897fc18ee6195f26c22c96a232e`. Both signatures verified; payload audit found the private key absent from debug and present only in the owner-only personal APK. Commit `ea92f9a` passed Actions [43208538583](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43208538583): 43/43 API 34 tests, API 26 with 42 passed + one radio-dependent skip, build/signing and artifact upload. Downloaded keyless APK artifact `13940088159` has SHA-256 `87c675edc1fb6337967bb39ab3fc8b7b0ed0e0b7cf28dc83216083db176c1573`, stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; payload audit confirms it has no personal key.
 
 ## Track fixture-link precision for international odds (CI verified)
 

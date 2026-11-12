@@ -1,11 +1,11 @@
 # Testing
 
-## Paired prospective international-market baseline and compact-screen scrolling (local passed; Actions pending)
+## Paired prospective international-market baseline and compact-screen scrolling (CI verified)
 
 - Unit tests cover the last valid fresh quote selection per underlying bookmaker/fixture, duplicate intermediary reports, the latest Elo snapshot available by quote capture, post-kickoff result availability, and same-cohort market/Elo scores.
 - Reject unlinked, stale or post-kickoff quotes and forecasts made after the quote. Keep pending results out of the metrics and exclude contradictory result corrections with equal settlement times.
 - Compose UI coverage checks the paired evaluation card, scrolls the unified World Market list to a named bookmaker quote and attribution, and keeps source status visible. The World Market header and quote rows share one `LazyColumn`, so a long header cannot leave the market list with zero height on compact screens. The report uses at most 5,000 retained quote-change rows from the existing 30-day table and does not change SQLite schema.
-- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 155 JVM tests (0 failures, errors or skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Actions [43206307429](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43206307429) passed 43/43 API 34 instrumentation tests, but API 26 exposed that the old static header prevented offscreen quote composition; the unified-scroll fix is ready for a new CI run. No install or persistent database modification was done.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 155 JVM tests (0 failures, errors or skips), Android-test Kotlin compilation, and both APK assemblies. Actions [43208538583](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43208538583) passed all 43 API 34 tests and API 26 with 42 passed, one radio-dependent skip and zero failures. CI built both variants keyless, stable-signed and uploaded only debug artifact `13940088159`; downloaded APK SHA-256, signer, and key-absence verification are in `docs/DEVELOPMENT_LOG.md`. No install or persistent database modification was done.
 
 ## International odds link precision and v17 migration (Actions passed)
 
