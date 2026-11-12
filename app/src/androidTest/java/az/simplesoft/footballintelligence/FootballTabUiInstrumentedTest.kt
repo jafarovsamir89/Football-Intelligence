@@ -12,8 +12,11 @@ import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.InternationalBookmakerEvaluationReport
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationEngine
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
+import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
+import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
@@ -162,6 +165,36 @@ class FootballTabUiInstrumentedTest {
 
     @Test
     fun worldMarketShowsTheOddsApiProviderAndFreshNamedBookLines() {
+        showWorldMarket(marketEvaluation(30))
+
+        composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
+        val marketList = composeRule.onNodeWithTag("internationalMarketList")
+        marketList.performScrollToNode(hasText("Предварительная проверка рынка и Elo"))
+        composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
+        marketList.performScrollToNode(hasText("95% парный bootstrap", substring = true))
+        composeRule.onNodeWithText("95% парный bootstrap", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Brier [-0.200; -0.100]", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Знак Δ Elo−рынок", substring = true))
+        composeRule.onNodeWithText("Знак Δ Elo−рынок", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Интервалы — парная выборка", substring = true))
+        composeRule.onNodeWithText("Интервалы — парная выборка", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
+        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
+        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
+    }
+
+    @Test
+    fun worldMarketExplainsWhyIntervalsAreUnavailableBelowThirtySettlements() {
+        showWorldMarket(marketEvaluation(29))
+
+        val marketList = composeRule.onNodeWithTag("internationalMarketList")
+        marketList.performScrollToNode(hasText("95% интервалы пока недоступны", substring = true))
+        composeRule.onNodeWithText("95% интервалы пока недоступны", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("нужно ≥30 завершённых матчей, сейчас 29", substring = true).assertIsDisplayed()
+    }
+
+    private fun showWorldMarket(evaluation: InternationalMarketEvaluationReport) {
         val now = System.currentTimeMillis()
         val quote = InternationalOddsSnapshot(
             providerId = THE_ODDS_API_PROVIDER_ID,
@@ -196,7 +229,7 @@ class FootballTabUiInstrumentedTest {
                     theOddsApiSyncHistory = emptyList(),
                     internationalOdds = listOf(quote),
                     internationalOddsHistory = emptyList(),
-                    internationalMarketEvaluation = InternationalMarketEvaluationReport(0,0,0,0,emptyList()),
+                    internationalMarketEvaluation = evaluation,
                     internationalConsensus = emptyList(),
                     forecastedMatches = emptyList(),
                     misliOdds = emptyList(),
@@ -209,15 +242,35 @@ class FootballTabUiInstrumentedTest {
                 )
             }
         }
+    }
 
-        composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
-        val marketList = composeRule.onNodeWithTag("internationalMarketList")
-        marketList.performScrollToNode(hasText("Предварительная проверка рынка и Elo"))
-        composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
-        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
-        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
-        marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
-        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
+    private fun marketEvaluation(settledFixtures: Int): InternationalMarketEvaluationReport {
+        val enoughSettled = settledFixtures >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS
+        val bookmakerReport = InternationalBookmakerEvaluationReport(
+            bookmakerId = "unibet_fr",
+            sourceProviderIds = listOf(THE_ODDS_API_PROVIDER_ID),
+            quoteFixtureCount = settledFixtures,
+            medianHoursBeforeKickoff = 12.0,
+            pairedFixtureCount = settledFixtures,
+            settledFixtureCount = settledFixtures,
+            pendingFixtureCount = 0,
+            marketBrierScore = 0.5,
+            marketLogLoss = 1.0,
+            marketTopOutcomeAccuracy = 0.5,
+            modelBrierScore = 0.4,
+            modelLogLoss = 0.9,
+            modelTopOutcomeAccuracy = 0.6,
+            eloMinusMarketBrier95 = if (enoughSettled) MetricConfidenceInterval95(-0.2, -0.1) else null,
+            eloMinusMarketLogLoss95 = if (enoughSettled) MetricConfidenceInterval95(-0.2, -0.1) else null,
+            eloMinusMarketTopAccuracy95 = if (enoughSettled) MetricConfidenceInterval95(0.05, 0.15) else null,
+        )
+        return InternationalMarketEvaluationReport(
+            quoteFixtureCount = settledFixtures,
+            pairedFixtureCount = settledFixtures,
+            settledFixtureCount = settledFixtures,
+            pendingFixtureCount = 0,
+            bookmakerReports = listOf(bookmakerReport),
+        )
     }
 
     private companion object {

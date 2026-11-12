@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — explain market-delta direction and test interval display (local passed; Actions pending)
+
+- Added user-facing sign interpretation: negative Elo-minus-market Brier/Log Loss means smaller loss for Elo; positive top-1 delta means more correct outcomes. Kept the bootstrap's repeated-team/round independence caveat next to the report.
+- Extended Compose instrumentation to assert that interval bounds and sign explanation appear at 30 settled fixtures and that the explicit minimum-sample message appears at 29. These view-model values are synthetic UI test fixtures, not app observations.
+- No database or scoring logic changed. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 157 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies; `git diff --check` passed. Debug APK SHA-256 `b00b69c38dbc06a9663d9a0f585405890ada3ac18192e3334d713f155a1a8bf4`; private personal APK SHA-256 `209d41fd704816c184449cc665d275cf3ebbaa31099282b961cdec7464c18a36`. Both signatures verified. Local API instrumentation was not run because the only ADB target is an unrelated emulator; no APK was installed. Next: commit/push this UI/test/documentation group and let Actions verify Compose behavior on API 26 and 34.
+
 ## 2026-11-12 — add paired-bootstrap uncertainty to market/Elo comparison (CI/API 26/API 34 passed)
 
 - Added deterministic 95% percentile-bootstrap intervals for paired Elo-minus-market differences in Brier, Log Loss and top-1 accuracy. The same settled fixture pairs are resampled together for all metrics; 2,000 resamples are used per bookmaker. Intervals are withheld until at least 30 verified settled matches are present. There is no schema migration.

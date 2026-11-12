@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — clarify paired market delta direction in the Android UI
+
+- Explain which Elo-minus-market signs indicate lower Brier/Log Loss or higher top-1 accuracy, and keep the repeated-team/round independence limitation visible.
+- Add Compose instrumentation coverage for interval values at the 30-match gate and the explicit unavailable message at 29 settled fixtures.
+- The grouped local command passed 157 JVM tests, Android-test Kotlin compilation and both APK assemblies. GitHub Actions API 26/34 instrumentation and artifact checks are pending.
+
 ## Unreleased — add uncertainty intervals to paired international market comparison
 
 - Calculate paired Elo-minus-market differences for Brier score, Log Loss and top-1 accuracy on the exact same settled fixture cohort. Run 2,000 deterministic percentile-bootstrap resamples per bookmaker and show 95% intervals only after 30 verified settled fixtures.
