@@ -70,6 +70,7 @@ data class InternationalOddsSnapshot(
     val drawPriceChangedAtMillis: Long,
     val awayPriceChangedAtMillis: Long,
     val matchId: Int? = null,
+    val matchLinkBasis: InternationalMatchLinkBasis? = null,
 ) {
     init {
         require(providerId.isNotBlank() && bookmakerId.isNotBlank() && eventId.isNotBlank())
@@ -240,6 +241,7 @@ class Bet365ViaMoviOddsProvider {
             val h = selections.getValue(OutcomeKey.HOME)
             val d = selections.getValue(OutcomeKey.DRAW)
             val a = selections.getValue(OutcomeKey.AWAY)
+            val fixtureLink = uniqueInternationalFixtureLink(home, away, kickoff, fixtures)
             val candidate = InternationalOddsSnapshot(
                 providerId = MOVIODDS_PROVIDER_ID,
                 bookmakerId = "bet365",
@@ -259,7 +261,8 @@ class Bet365ViaMoviOddsProvider {
                 homePriceChangedAtMillis = h.changedAt,
                 drawPriceChangedAtMillis = d.changedAt,
                 awayPriceChangedAtMillis = a.changedAt,
-                matchId = uniqueExactInternationalFixtureMatchId(home, away, kickoff, fixtures),
+                matchId = fixtureLink?.matchId,
+                matchLinkBasis = fixtureLink?.basis,
             )
             if(parsed.any { existing ->
                     OddsQualityGate.sameUnderlyingEvent(
@@ -301,7 +304,54 @@ class Bet365ViaMoviOddsProvider {
     }
 }
 
-/** UTC calendar date, exact normalized team order, <=20 minute kickoff difference, one match only. */
+enum class InternationalMatchLinkBasis {
+    EXACT_KICKOFF,
+    UNIQUE_DATE_ONLY,
+    ;
+
+    companion object {
+        fun fromStorage(value: String?): InternationalMatchLinkBasis? =
+            entries.firstOrNull { it.name == value }
+    }
+}
+
+data class InternationalFixtureLink(
+    val matchId: Int,
+    val basis: InternationalMatchLinkBasis,
+)
+
+/**
+ * Prefers a unique exact-time match. Date-only local rows may link only when there is no exact-time
+ * candidate on that date and orientation, UTC date and normalized teams identify one local row.
+ */
+fun uniqueInternationalFixtureLink(
+    homeTeam: String,
+    awayTeam: String,
+    kickoffMillis: Long,
+    fixtures: List<FixtureIdentity>,
+    kickoffToleranceMillis: Long = 20L * 60_000L,
+): InternationalFixtureLink? {
+    if (kickoffToleranceMillis < 0L || homeTeam.isBlank() || awayTeam.isBlank()) return null
+    val eventDate = Instant.ofEpochMilli(kickoffMillis).atZone(ZoneOffset.UTC).toLocalDate()
+    val homeKey = TeamNameIdentity.canonical(homeTeam)
+    val awayKey = TeamNameIdentity.canonical(awayTeam)
+    val sameIdentity = fixtures.filter { fixture ->
+        Instant.ofEpochMilli(fixture.kickoffMillis).atZone(ZoneOffset.UTC).toLocalDate() == eventDate &&
+            TeamNameIdentity.canonical(fixture.homeTeam) == homeKey &&
+            TeamNameIdentity.canonical(fixture.awayTeam) == awayKey
+    }
+    val exactMatches = sameIdentity.filter { fixture ->
+        fixture.exactKickoff && abs(fixture.kickoffMillis - kickoffMillis) <= kickoffToleranceMillis
+    }
+    if (exactMatches.size == 1) {
+        return InternationalFixtureLink(exactMatches.single().matchId, InternationalMatchLinkBasis.EXACT_KICKOFF)
+    }
+    if (exactMatches.size > 1 || sameIdentity.any { it.exactKickoff }) return null
+    val dateOnly = sameIdentity.filterNot { it.exactKickoff }.singleOrNull() ?: return null
+    return InternationalFixtureLink(dateOnly.matchId, InternationalMatchLinkBasis.UNIQUE_DATE_ONLY)
+}
+
+/** UTC date, exact normalized team order, <=20 minute kickoff difference, one match only. */
 fun uniqueExactInternationalFixtureMatchId(
     homeTeam: String,
     awayTeam: String,
@@ -309,16 +359,9 @@ fun uniqueExactInternationalFixtureMatchId(
     fixtures: List<FixtureIdentity>,
     kickoffToleranceMillis: Long = 20L * 60_000L,
 ): Int? {
-    if (kickoffToleranceMillis < 0L || homeTeam.isBlank() || awayTeam.isBlank()) return null
-    val eventDate = Instant.ofEpochMilli(kickoffMillis).atZone(ZoneOffset.UTC).toLocalDate()
-    val homeKey = TeamNameIdentity.canonical(homeTeam)
-    val awayKey = TeamNameIdentity.canonical(awayTeam)
-    return fixtures.filter { fixture ->
-        Instant.ofEpochMilli(fixture.kickoffMillis).atZone(ZoneOffset.UTC).toLocalDate() == eventDate &&
-            TeamNameIdentity.canonical(fixture.homeTeam) == homeKey &&
-            TeamNameIdentity.canonical(fixture.awayTeam) == awayKey &&
-            abs(fixture.kickoffMillis - kickoffMillis) <= kickoffToleranceMillis
-    }.singleOrNull()?.matchId
+    return uniqueInternationalFixtureLink(homeTeam, awayTeam, kickoffMillis, fixtures, kickoffToleranceMillis)
+        ?.takeIf { it.basis == InternationalMatchLinkBasis.EXACT_KICKOFF }
+        ?.matchId
 }
 
 fun visibleInternationalOddsStatus(

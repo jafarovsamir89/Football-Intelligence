@@ -14,13 +14,19 @@ import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.MOVIODDS_API_URL
+import az.simplesoft.footballintelligence.data.KickoffPrecision
+import az.simplesoft.footballintelligence.data.ProviderMatch
+import az.simplesoft.footballintelligence.data.THE_ODDS_API_BASE_URL
 import az.simplesoft.footballintelligence.MOVIODDS_AGE_CONSENT_KEY
 import az.simplesoft.footballintelligence.MOVIODDS_AGE_CONSENT_PREFS
 import az.simplesoft.footballintelligence.data.ProviderFileCache
 import java.io.File
 import java.io.IOException
 import java.time.Instant
+import java.time.LocalDate
+import java.time.ZoneOffset
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -44,7 +50,7 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 db.version=12
             }
             Store(isolated,name).use { store ->
-                assertEquals(16,store.writableDatabase.version)
+                assertEquals(17,store.writableDatabase.version)
                 store.saveInternationalOddsCapture(now,InternationalOddsStatus.LIVE,listOf(
                     InternationalOddsSnapshot("moviodds_bet365","bet365","migration-event",MOVIODDS_API_URL,"Serie A",null,now,now,now+60*60*1000L,"1X2","Roma","Napoli",2.1,3.2,3.5,now,now,now),
                 ),"migration test")
@@ -54,8 +60,88 @@ class InternationalOddsMarketWorkerInstrumentedTest {
                 }
             }
             Store(base,name).use { store ->
-                assertEquals(16,store.writableDatabase.version)
+                assertEquals(17,store.writableDatabase.version)
                 assertEquals("migration-event",store.internationalOddsHistory().single().eventId)
+            }
+        } finally { base.deleteDatabase(name) }
+    }
+
+    @Test fun v16UpgradePreservesOddsAndLabelsPreviouslyLinkedRowsAsExact() {
+        val base=InstrumentationRegistry.getInstrumentation().targetContext
+        val name="fi-v16-link-basis-${UUID.randomUUID()}.db"
+        base.deleteDatabase(name)
+        val captured=System.currentTimeMillis()
+        val kickoff=captured+2*60*60*1000L
+        try {
+            base.openOrCreateDatabase(name,Context.MODE_PRIVATE,null).use { db ->
+                val columns="id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL"
+                db.execSQL("CREATE TABLE international_odds_snapshots ($columns, UNIQUE(provider_id,bookmaker_id,event_id,captured_at))")
+                db.execSQL("CREATE TABLE international_odds_current ($columns, UNIQUE(provider_id,bookmaker_id,event_id))")
+                val row="provider_id,bookmaker_id,event_id,match_id,source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at"
+                val values="'the_odds_api','unibet_fr','linked-event',42,'https://api.the-odds-api.com/v4/sports/soccer_epl/odds','EPL','eu',$captured,$captured,$kickoff,'1X2','Manchester City','Fulham',1.27,4.5,5.8,$captured,$captured,$captured"
+                db.execSQL("INSERT INTO international_odds_snapshots($row) VALUES($values)")
+                db.execSQL("INSERT INTO international_odds_current($row) VALUES($values)")
+                db.version=16
+            }
+            Store(base,name).use { store ->
+                assertEquals(17,store.writableDatabase.version)
+                val history=store.internationalOddsHistory().single()
+                assertEquals(42,history.matchId)
+                assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,history.matchLinkBasis)
+                assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,store.freshInternationalOdds(captured).single().matchLinkBasis)
+            }
+        } finally { base.deleteDatabase(name) }
+    }
+
+    @Test fun dateOnlyLinkIsLabeledAndUpgradedWhenExactKickoffArrives() {
+        val base=InstrumentationRegistry.getInstrumentation().targetContext
+        val name="fi-date-only-odds-link-${UUID.randomUUID()}.db"
+        base.deleteDatabase(name)
+        val isolated=IsolatedDatabaseContext(base,name)
+        val captured=System.currentTimeMillis()
+        val date=LocalDate.of(2026,11,21)
+        val dateOnlyKickoff=date.atStartOfDay(ZoneOffset.UTC).toInstant().toEpochMilli()
+        val exactKickoff=Instant.parse("2026-11-21T12:30:00Z").toEpochMilli()
+        try {
+            Store(isolated,name).use { store ->
+                store.upsertProviderMatches(listOf(
+                    ProviderMatch(
+                        providerId="openfootball",providerMatchId="epl-date-only",competitionCode="E0",
+                        competitionName="Premier League",season="2026-27",eventDate=date,
+                        kickoffMillis=dateOnlyKickoff,kickoffPrecision=KickoffPrecision.DATE_ONLY,
+                        homeTeam="Manchester City",awayTeam="Fulham",homeGoals=null,awayGoals=null,
+                        safeAvailableAtMillis=null,sourceUrl="https://github.com/openfootball/football.json",
+                        capturedAtMillis=captured,
+                    ),
+                ))
+                val fixture=store.matchIdentities().single()
+                assertEquals(false,fixture.exactKickoff)
+                val snapshot=InternationalOddsSnapshot(
+                    providerId="the_odds_api",bookmakerId="unibet_fr",eventId="epl-event",
+                    sourceUrl="$THE_ODDS_API_BASE_URL/sports/soccer_epl/odds",league="EPL",region="eu",
+                    capturedAtMillis=captured,providerPolledAtMillis=captured,kickoffMillis=exactKickoff,
+                    market="1X2",homeTeam="Manchester City",awayTeam="Fulham",home=1.27,draw=4.5,away=5.8,
+                    homePriceChangedAtMillis=captured,drawPriceChangedAtMillis=captured,awayPriceChangedAtMillis=captured,
+                    matchId=fixture.matchId,matchLinkBasis=InternationalMatchLinkBasis.UNIQUE_DATE_ONLY,
+                )
+                store.saveInternationalOddsCapture(captured,InternationalOddsStatus.LIVE,listOf(snapshot),"date-only link",providerId="the_odds_api")
+                assertEquals(InternationalMatchLinkBasis.UNIQUE_DATE_ONLY,store.internationalOddsHistory().single().matchLinkBasis)
+
+                store.upsertProviderMatches(listOf(
+                    ProviderMatch(
+                        providerId="openligadb",providerMatchId="990021",competitionCode="E0",
+                        competitionName="Premier League",season="2026-27",eventDate=date,
+                        kickoffMillis=exactKickoff,kickoffPrecision=KickoffPrecision.INSTANT,
+                        homeTeam="Manchester City",awayTeam="Fulham",homeGoals=null,awayGoals=null,
+                        safeAvailableAtMillis=null,sourceUrl="https://www.openligadb.de/api/getmatchdata",
+                        capturedAtMillis=captured+1,
+                    ),
+                ))
+                assertEquals(true,store.matchIdentities().single().exactKickoff)
+                assertTrue(store.relinkUnmatchedInternationalOdds(captured+2)>0)
+                val relinked=store.internationalOddsHistory().single()
+                assertEquals(fixture.matchId,relinked.matchId)
+                assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF,relinked.matchLinkBasis)
             }
         } finally { base.deleteDatabase(name) }
     }

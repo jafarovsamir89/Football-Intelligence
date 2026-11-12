@@ -48,13 +48,14 @@ import az.simplesoft.footballintelligence.data.latestBookmakerSnapshotsPerEvent
 import az.simplesoft.footballintelligence.data.FixtureIdentity
 import az.simplesoft.footballintelligence.data.uniqueExactFixtureMatchId
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncAttempt
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
 import az.simplesoft.footballintelligence.data.MOVIODDS_PROVIDER_ID
-import az.simplesoft.footballintelligence.data.uniqueExactInternationalFixtureMatchId
+import az.simplesoft.footballintelligence.data.uniqueInternationalFixtureLink
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
 import az.simplesoft.footballintelligence.data.MarketReferenceStatus
 import az.simplesoft.footballintelligence.data.MarketReferenceSyncState
@@ -96,7 +97,7 @@ internal object StoreWriteCoordinator {
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 16), Closeable {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 17), Closeable {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -159,6 +160,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<14) ensureAccumulatorComparisonColumns(db)
         if(oldVersion<15) ensureInternationalOddsQualityColumns(db)
         if(oldVersion<16) ensureInternationalOddsSyncAttemptsTable(db)
+        if(oldVersion<17) ensureInternationalOddsMatchLinkBasisColumns(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -229,14 +231,28 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     private fun createInternationalOddsTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, detail TEXT, quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, quality_duplicates INTEGER, quality_unverified INTEGER)")
-        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id,captured_at))")
-        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_current (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, match_link_basis TEXT, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id,captured_at))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_current (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, bookmaker_id TEXT NOT NULL, event_id TEXT NOT NULL, match_id INTEGER, match_link_basis TEXT, source_url TEXT NOT NULL, league TEXT NOT NULL, region TEXT, captured_at INTEGER NOT NULL, provider_polled_at INTEGER NOT NULL, kickoff INTEGER NOT NULL, market TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, home_odds REAL NOT NULL, draw_odds REAL NOT NULL, away_odds REAL NOT NULL, home_price_changed_at INTEGER NOT NULL, draw_price_changed_at INTEGER NOT NULL, away_price_changed_at INTEGER NOT NULL, UNIQUE(provider_id,bookmaker_id,event_id))")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_fresh_idx ON international_odds_snapshots(provider_id,provider_polled_at,kickoff)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_fresh_idx ON international_odds_current(provider_id,provider_polled_at,kickoff)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_match_idx ON international_odds_snapshots(match_id,bookmaker_id,provider_polled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_match_idx ON international_odds_current(match_id,bookmaker_id,provider_polled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_history_idx ON international_odds_snapshots(bookmaker_id,event_id,captured_at)")
         ensureInternationalOddsSyncAttemptsTable(db)
+    }
+    private fun ensureInternationalOddsMatchLinkBasisColumns(db:SQLiteDatabase) {
+        listOf("international_odds_snapshots", "international_odds_current").forEach { table ->
+            val exists=db.rawQuery("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",arrayOf(table)).use { it.moveToFirst() }
+            if(!exists) return@forEach
+            val columns=mutableSetOf<String>()
+            db.rawQuery("PRAGMA table_info($table)",null).use { cursor ->
+                while(cursor.moveToNext()) columns+=cursor.getString(cursor.getColumnIndexOrThrow("name"))
+            }
+            if("match_link_basis" !in columns) {
+                db.execSQL("ALTER TABLE $table ADD COLUMN match_link_basis TEXT")
+                db.execSQL("UPDATE $table SET match_link_basis='EXACT_KICKOFF' WHERE match_id IS NOT NULL")
+            }
+        }
     }
     private fun ensureInternationalOddsSyncAttemptsTable(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_sync_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, checked_at INTEGER NOT NULL, status TEXT NOT NULL, quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, quality_duplicates INTEGER, quality_unverified INTEGER, detail TEXT)")
@@ -865,10 +881,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     fun matchIdentities():List<FixtureIdentity> {
         val result=mutableListOf<FixtureIdentity>()
-        readableDatabase.rawQuery("SELECT id,home,away,kickoff FROM matches WHERE finished=0 AND exact_kickoff=1",null).use { c ->
+        readableDatabase.rawQuery("SELECT id,home,away,kickoff,exact_kickoff FROM matches WHERE finished=0",null).use { c ->
             while(c.moveToNext()) {
                 val kickoff=runCatching { Instant.parse(c.getString(3)).toEpochMilli() }.getOrNull() ?: continue
-                if(TeamDataQuality.isValidFixture(c.getString(1),c.getString(2))) result += FixtureIdentity(c.getInt(0),c.getString(1),c.getString(2),kickoff)
+                if(TeamDataQuality.isValidFixture(c.getString(1),c.getString(2))) {
+                    result += FixtureIdentity(c.getInt(0),c.getString(1),c.getString(2),kickoff,c.getInt(4)==1)
+                }
             }
         }
         return result
@@ -975,6 +993,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 val values=ContentValues().apply {
                     put("provider_id",snapshot.providerId);put("bookmaker_id",snapshot.bookmakerId);put("event_id",snapshot.eventId)
                     if(snapshot.matchId==null) putNull("match_id") else put("match_id",snapshot.matchId)
+                    if(snapshot.matchLinkBasis==null) putNull("match_link_basis") else put("match_link_basis",snapshot.matchLinkBasis.name)
                     put("source_url",snapshot.sourceUrl);put("league",snapshot.league)
                     if(snapshot.region==null) putNull("region") else put("region",snapshot.region)
                     put("captured_at",snapshot.capturedAtMillis);put("provider_polled_at",snapshot.providerPolledAtMillis)
@@ -1063,7 +1082,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     private fun readInternationalOdds(table:String,where:String,args:Array<String>,limit:Int):List<InternationalOddsSnapshot> {
         val result=mutableListOf<InternationalOddsSnapshot>()
         readableDatabase.rawQuery(
-            "SELECT provider_id,bookmaker_id,event_id,source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at,match_id FROM $table $where ORDER BY captured_at DESC LIMIT ?",
+            "SELECT provider_id,bookmaker_id,event_id,source_url,league,region,captured_at,provider_polled_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,home_price_changed_at,draw_price_changed_at,away_price_changed_at,match_id,match_link_basis FROM $table $where ORDER BY captured_at DESC LIMIT ?",
             args+limit.toString(),
         ).use { c -> while(c.moveToNext()) result+=c.toInternationalOddsSnapshot() }
         return result
@@ -1072,30 +1091,34 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         getString(0),getString(1),getString(2),getString(3),getString(4),if(isNull(5)) null else getString(5),
         getLong(6),getLong(7),getLong(8),getString(9),getString(10),getString(11),getDouble(12),getDouble(13),getDouble(14),
         getLong(15),getLong(16),getLong(17),if(isNull(18)) null else getInt(18),
+        InternationalMatchLinkBasis.fromStorage(if(isNull(19)) null else getString(19)),
     )
-    /** Relinks saved market rows after a later football-data sync using exact orientation and kickoff. */
+    /** Relinks saved market rows after football sync and records the precision used by the link. */
     fun relinkUnmatchedInternationalOdds(nowMillis:Long=System.currentTimeMillis()):Int {
         val fixtures=matchIdentities()
         if(fixtures.isEmpty()) return 0
         val rows=listOf("international_odds_current","international_odds_snapshots").flatMap { table ->
             readInternationalOdds(
-                table,"WHERE match_id IS NULL AND captured_at>=? AND kickoff>?",
+                table,"WHERE (match_id IS NULL OR match_link_basis='UNIQUE_DATE_ONLY') AND captured_at>=? AND kickoff>?",
                 arrayOf((nowMillis-30L*24*60*60*1000).toString(),nowMillis.toString()),5_000,
             )
         }
-        data class Link(val providerId:String,val bookmakerId:String,val eventId:String,val matchId:Int)
+        data class Link(val providerId:String,val bookmakerId:String,val eventId:String,val matchId:Int,val basis:InternationalMatchLinkBasis)
         val links=rows.mapNotNull { snapshot ->
-            uniqueExactInternationalFixtureMatchId(snapshot.homeTeam,snapshot.awayTeam,snapshot.kickoffMillis,fixtures)
-                ?.let { Link(snapshot.providerId,snapshot.bookmakerId,snapshot.eventId,it) }
+            uniqueInternationalFixtureLink(snapshot.homeTeam,snapshot.awayTeam,snapshot.kickoffMillis,fixtures)
+                ?.let { Link(snapshot.providerId,snapshot.bookmakerId,snapshot.eventId,it.matchId,it.basis) }
         }.distinctBy { Triple(it.providerId,it.bookmakerId,it.eventId) }
         if(links.isEmpty()) return 0
         val db=writableDatabase
         beginWriteTransaction(db)
         try {
             links.forEach { link ->
-                val values=ContentValues().apply { put("match_id",link.matchId) }
+                val values=ContentValues().apply {
+                    put("match_id",link.matchId)
+                    put("match_link_basis",link.basis.name)
+                }
                 arrayOf("international_odds_current","international_odds_snapshots").forEach { table ->
-                    db.update(table,values,"provider_id=? AND bookmaker_id=? AND event_id=? AND match_id IS NULL",arrayOf(link.providerId,link.bookmakerId,link.eventId))
+                    db.update(table,values,"provider_id=? AND bookmaker_id=? AND event_id=? AND (match_id IS NULL OR match_link_basis='UNIQUE_DATE_ONLY')",arrayOf(link.providerId,link.bookmakerId,link.eventId))
                 }
             }
             db.setTransactionSuccessful()

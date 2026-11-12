@@ -115,6 +115,7 @@ data class FixtureIdentity(
     val homeTeam: String,
     val awayTeam: String,
     val kickoffMillis: Long,
+    val exactKickoff: Boolean = true,
 )
 
 /** Strictly links one visible bookmaker event to one local fixture using reviewed team aliases. */
@@ -127,6 +128,7 @@ fun uniqueExactFixtureMatchId(
     val zone = runCatching { ZoneId.of(snapshot.timeZoneId) }.getOrNull() ?: return null
     val eventDate = Instant.ofEpochMilli(snapshot.kickoffMillis).atZone(zone).toLocalDate()
     val candidates = fixtures.filter { fixture ->
+        fixture.exactKickoff &&
         Instant.ofEpochMilli(fixture.kickoffMillis).atZone(zone).toLocalDate() == eventDate &&
             TeamNameIdentity.canonical(fixture.homeTeam) == TeamNameIdentity.canonical(snapshot.homeTeam) &&
             TeamNameIdentity.canonical(fixture.awayTeam) == TeamNameIdentity.canonical(snapshot.awayTeam) &&

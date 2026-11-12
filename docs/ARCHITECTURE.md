@@ -12,12 +12,14 @@ MainActivity host → FootballScreen / Compose
   │     └── InternationalOddsMarketWorker → documented MoviOdds group-40 soccer 1X2 feed, source-poll quality gate
   │     └── TheOddsApiOddsWorker → official V4 catalog + bounded EU h2h league batch, quota-aware rotation
   ├── Misli and TOPAZ public-page WebViews (foreground, visible DOM only, gated capture/reload at 30-minute freshness)
-  ├── Store.kt / SQLite v16 with WAL (matches, separate local/international bookmaker and derived-market ledgers, forecasts/history)
+  ├── Store.kt / SQLite v17 with WAL (matches, separate local/international bookmaker and derived-market ledgers, forecasts/history)
   ├── EloEngine → exact-kickoff forecasts with safe-availability cutoff
   └── VirtualCouponBuilder → separate model-ranked and same-bookmaker fresh-price accumulator drafts
 ```
 
 No backend, paid API, bookmaker action, or real wager exists. The football database remains keyless. The owner-only local personal build reads The Odds API key from ignored `local.properties`; public debug/CI builds are keyless and CI uploads only the keyless APK. The personal APK contains an extractable credential and must remain private. WorkManager runs best-effort; Android controls exact scheduling. Public source rows and HTTP metadata are persisted for offline use. CSV remains an optional Settings feature.
+
+International quote links retain their evidence basis. Exact local kickoffs require the existing 20-minute tolerance and unique same-orientation teams/date. A date-only local fixture can link only when that team pair and UTC date identify one local unfinished fixture; SQLite v17 stores `EXACT_KICKOFF` or `UNIQUE_DATE_ONLY`, and World Market labels the distinction. Ambiguous and wrong-date candidates remain unmatched. When an exact kickoff later arrives, the relinker upgrades the stored basis without discarding quote history. The v16→v17 migration adds nullable provenance columns and marks previously linked rows as exact, preserving quote IDs and prices.
 
 ### Compose and SQLite reads
 
@@ -37,7 +39,7 @@ Commit `0ef0539` adds direct Compose UI instrumentation for the five extracted t
 
 ### Persistence technology decision
 
-Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-16 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v16 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
+Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-17 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v17 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
 
 ## Provider and persistence rules
 
@@ -76,4 +78,4 @@ Do not migrate to Room in the current milestone. The demonstrated UI problem was
 
 1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
 2. Verify the local personal APK's international providers on the physical Android phone in Azerbaijan when it is available to ADB. Current ADB has no physical phone; app access, source availability and fresh quotes in Azerbaijan remain unverified. The user has already confirmed 18+ for MoviOdds. Keep the key-bearing personal APK private and preserve all installed app data.
-3. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths. Keep Room + Flow deferred until a measured requirement and tested v16 backup/copy/rollback plan justify the migration surface.
+3. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths. Keep Room + Flow deferred until a measured requirement and tested v17 backup/copy/rollback plan justify the migration surface.

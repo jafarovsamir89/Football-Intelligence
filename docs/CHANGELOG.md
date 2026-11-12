@@ -1,5 +1,11 @@
 # Changelog
 
+## Track fixture-link precision for international odds
+
+- Keep exact-kickoff matching, and allow a local date-only fixture only when normalized home/away teams and UTC date identify one unfinished local row. Reject same-day ambiguities, orientation changes, and wrong dates.
+- Store and display whether the link used exact kickoff or a unique date-only fixture. When a later source adds kickoff time, relink the saved international current/history rows and upgrade the basis. Local bookmaker matching remains exact-kickoff-only.
+- Migrate SQLite v16→v17 by adding nullable columns to both international odds tables; previously linked rows are labeled exact, and prices/history remain intact. Add parser, relink-upgrade, schema-migration and UI coverage.
+
 ## Correct prospective evaluation sampling (CI verified)
 
 - Score the full saved forecast ledger instead of only the latest 100 visible rows. Keep the recent screen list bounded at 100.

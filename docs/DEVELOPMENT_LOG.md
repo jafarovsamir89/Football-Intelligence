@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — retain international odds match-link precision (verification pending)
+
+- Extended international fixture linking to use exact kickoff when available or a unique same-orientation team pair on the same UTC date when the local feed is date-only. The linker considers all unfinished local fixtures for the day, refuses multiple candidates, and leaves Misli/TOPAZ's stricter exact-kickoff rule unchanged.
+- Added `EXACT_KICKOFF` / `UNIQUE_DATE_ONLY` provenance to international odds snapshots and current rows, with a v16→v17 additive SQLite migration. Previously linked rows are backfilled as exact; when an exact fixture later enriches a date-only row, saved current/history quotes upgrade their link basis.
+- World Market now labels the link precision. Added The Odds API parser ambiguity/precedence coverage, v16 migration coverage, and a store-level date-only→exact re-link regression. The grouped local command passed 150 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. Tightened exact-match precedence afterward and reran `:app:testDebugUnitTest`; all 150 tests passed. `git diff --check` passed. The final APK build and API 26/API 34 migration execution are pending the single CI cycle; no local APK install or persistent emulator database change was made.
+- The existing live feed proof returned 20 EPL events / 298 complete lines at a one-credit cost (498 remaining), but did not test this changed matching path; the acceptance check here is deterministic parser/SQLite coverage only.
+
 ## 2026-11-12 — validate the configured personal Odds API key against live EPL odds
 
 - Made one direct request to the documented V4 EPL prematch 1X2 endpoint using the key from ignored `local.properties`; authentication returned HTTP 200. The response contained 20 events and 298 complete bookmaker 1X2 lines. The request cost one credit; quota headers showed 2 credits used and 498 remaining out of the 500-credit monthly plan. The sample source timestamp was `2026-11-12T10:06:16Z`, about one minute before capture. No API key or raw response was written to the repository.

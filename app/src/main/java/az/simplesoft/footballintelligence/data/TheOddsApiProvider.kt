@@ -141,6 +141,7 @@ class TheOddsApiProvider {
                     }
 
                     val sourceUrl = "$THE_ODDS_API_BASE_URL/sports/$sportKey/odds"
+                    val fixtureLink = uniqueInternationalFixtureLink(home, away, kickoff, fixtures)
                     val candidate = InternationalOddsSnapshot(
                         providerId = THE_ODDS_API_PROVIDER_ID,
                         bookmakerId = bookmakerId,
@@ -161,7 +162,8 @@ class TheOddsApiProvider {
                         homePriceChangedAtMillis = updatedAt,
                         drawPriceChangedAtMillis = updatedAt,
                         awayPriceChangedAtMillis = updatedAt,
-                        matchId = uniqueExactInternationalFixtureMatchId(home, away, kickoff, fixtures),
+                        matchId = fixtureLink?.matchId,
+                        matchLinkBasis = fixtureLink?.basis,
                     )
                     if (parsed.any { existing ->
                             existing.bookmakerId == bookmakerId && OddsQualityGate.sameUnderlyingEvent(

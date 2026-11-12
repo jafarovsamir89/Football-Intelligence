@@ -2,6 +2,7 @@ package az.simplesoft.footballintelligence.data
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.Instant
@@ -30,11 +31,59 @@ class TheOddsApiProviderTest {
         assertEquals(4.5, quote.draw, 0.0)
         assertEquals(5.8, quote.away, 0.0)
         assertEquals(42, quote.matchId)
+        assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF, quote.matchLinkBasis)
         assertEquals(captured, quote.capturedAtMillis)
         assertEquals(captured - 10_000L, quote.providerPolledAtMillis)
         assertEquals(quote.providerPolledAtMillis, quote.homePriceChangedAtMillis)
         assertFalse(quote.sourceUrl.contains("apiKey"))
         assertFalse(quote.sourceUrl.contains("secret"))
+    }
+
+    @Test fun linksUniqueDateOnlyFixtureAndKeepsItsLowerTimePrecisionExplicit() {
+        val dateOnly = FixtureIdentity(
+            43,
+            "Manchester City",
+            "Fulham",
+            Instant.parse("2026-11-21T00:00:00Z").toEpochMilli(),
+            exactKickoff = false,
+        )
+        val linked = provider.parseOdds(
+            response(event(book("book", "Book"))), captured, captured, "soccer_epl", fixtures = listOf(dateOnly),
+        ).snapshots.single()
+        assertEquals(43, linked.matchId)
+        assertEquals(InternationalMatchLinkBasis.UNIQUE_DATE_ONLY, linked.matchLinkBasis)
+
+        val ambiguous = provider.parseOdds(
+            response(event(book("book", "Book"))),
+            captured,
+            captured,
+            "soccer_epl",
+            fixtures = listOf(dateOnly, dateOnly.copy(matchId = 44)),
+        ).snapshots.single()
+        assertNull(ambiguous.matchId)
+        assertNull(ambiguous.matchLinkBasis)
+
+        val exactDuplicate = dateOnly.copy(matchId = 45, kickoffMillis = kickoff + 60_000L, exactKickoff = true)
+        val exactWins = provider.parseOdds(
+            response(event(book("book", "Book"))),
+            captured,
+            captured,
+            "soccer_epl",
+            fixtures = listOf(dateOnly, exactDuplicate),
+        ).snapshots.single()
+        assertEquals(45, exactWins.matchId)
+        assertEquals(InternationalMatchLinkBasis.EXACT_KICKOFF, exactWins.matchLinkBasis)
+
+        val exactOutsideTolerance = dateOnly.copy(matchId = 46, kickoffMillis = kickoff - 3 * 60 * 60 * 1000L, exactKickoff = true)
+        val noFallback = provider.parseOdds(
+            response(event(book("book", "Book"))),
+            captured,
+            captured,
+            "soccer_epl",
+            fixtures = listOf(dateOnly, exactOutsideTolerance),
+        ).snapshots.single()
+        assertNull(noFallback.matchId)
+        assertNull(noFallback.matchLinkBasis)
     }
 
     @Test fun rejectsStaleIncompleteLiveAndDuplicateMarketsWithExclusiveCounts() {

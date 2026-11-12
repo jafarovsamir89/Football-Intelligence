@@ -19,6 +19,7 @@ import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
+import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncAttempt
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.MarketReferenceSnapshot
@@ -204,9 +205,14 @@ internal fun InternationalMarketTabContent(
                             Text("Изменение с предыдущего сохранённого снимка: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены, не вероятности).",style=MaterialTheme.typography.bodySmall)
                         }
                         if(quote.matchId==null) {
-                            Text("Нет уникального точного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
+                            Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
                         } else {
-                            Text("Локальный матч ID ${quote.matchId} · сопоставление команд, порядка хозяев и времени строгое.",style=MaterialTheme.typography.labelSmall)
+                            val linkDescription=when(quote.matchLinkBasis) {
+                                InternationalMatchLinkBasis.EXACT_KICKOFF -> "точное время kickoff и порядок команд"
+                                InternationalMatchLinkBasis.UNIQUE_DATE_ONLY -> "команды и UTC-дата совпали с единственной записью; локальный источник содержит только дату"
+                                null -> "точность сопоставления не записана"
+                            }
+                            Text("Локальный матч ID ${quote.matchId} · $linkDescription.",style=MaterialTheme.typography.labelSmall)
                             if(model==null) {
                                 Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
                             } else {
