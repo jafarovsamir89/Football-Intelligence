@@ -37,6 +37,7 @@ data class FootballScreenStoreSnapshot(
     val theOddsApiSyncHistory: List<InternationalOddsSyncAttempt>,
     val internationalOdds: List<InternationalOddsSnapshot>,
     val internationalOddsHistory: List<InternationalOddsSnapshot>,
+    val internationalOddsEvaluationHistory: List<InternationalOddsSnapshot>,
     val marketReferenceSyncState: MarketReferenceSyncState?,
     val marketReferences: List<MarketReferenceSnapshot>,
     val historicalByLeague: Map<String, List<HistoricalMatch>>,
@@ -65,6 +66,7 @@ data class FootballScreenStoreSnapshot(
             theOddsApiSyncHistory = emptyList(),
             internationalOdds = emptyList(),
             internationalOddsHistory = emptyList(),
+            internationalOddsEvaluationHistory = emptyList(),
             marketReferenceSyncState = null,
             marketReferences = emptyList(),
             historicalByLeague = emptyMap(),
@@ -120,8 +122,9 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         checkActive()
         val internationalLines = freshInternationalOdds()
         checkActive()
-        val internationalHistory = internationalOddsHistory(700)
+        val internationalEvaluationHistory = internationalOddsHistory(5_000)
         checkActive()
+        val internationalHistory = internationalEvaluationHistory.take(700)
         val referenceState = marketReferenceSyncState()
         checkActive()
         val references = freshMarketReferences()
@@ -154,6 +157,7 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
             theOddsApiSyncHistory = theOddsApiAttempts,
             internationalOdds = internationalLines,
             internationalOddsHistory = internationalHistory,
+            internationalOddsEvaluationHistory = internationalEvaluationHistory,
             marketReferenceSyncState = referenceState,
             marketReferences = references,
             historicalByLeague = history,

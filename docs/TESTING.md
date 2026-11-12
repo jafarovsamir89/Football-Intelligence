@@ -1,5 +1,12 @@
 # Testing
 
+## Paired prospective international-market baseline (local passed; Actions pending)
+
+- Unit tests cover the last valid fresh quote selection per underlying bookmaker/fixture, duplicate intermediary reports, the latest Elo snapshot available by quote capture, post-kickoff result availability, and same-cohort market/Elo scores.
+- Reject unlinked, stale or post-kickoff quotes and forecasts made after the quote. Keep pending results out of the metrics and exclude contradictory result corrections with equal settlement times.
+- Compose UI coverage checks that the paired evaluation card renders. The report uses at most 5,000 retained quote-change rows from the existing 30-day table and does not change SQLite schema.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 155 JVM tests (0 failures, errors or skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. The debug APK payload audit found no personal key; the local personal APK contains the key and remains private. Actions API 26/34 instrumentation is pending.
+
 ## International odds link precision and v17 migration (Actions passed)
 
 - JVM coverage checks exact kickoff preference, unique date-only linking, rejection of ambiguous candidates, and refusal to fall back to a date-only row when an exact-time same-day candidate is outside tolerance.
@@ -221,5 +228,5 @@ Commit `92836d8` passed Actions [42761781971](https://github.com/jafarovsamir89/
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.
 - Misli and TOPAZ WebViews were cross-checked against UEFA fixtures; explicit automated-reuse permission remains unconfirmed. Seven TOPAZ events joined local fixtures on one API 34 run; Misli had no exact links on that capture. More dates/timezones/devices remain untested.
 - Compose accessibility and physical-device layout remain unverified. API 26 cold start skipped 44 frames during initial JIT compilation on the latest CI APK. On a local API 34 cold start after moving the 39k match-list query to IO, 68 frames were skipped during JIT startup, the activity reached `Displayed` in 3.6s, and its Compose controls were present in the UI hierarchy; no fresh ANR or SQLite-helper leak was logged. Repeat cold/warm measurements remain open.
-- The automatic-source walk-forward is retrospective on current files. Prospective calibration, source vintages, timestamped historical odds, CLV, a market baseline, and confidence intervals remain unavailable.
+- The automatic-source walk-forward is retrospective on current files. A large prospective sample, archived historical odds vintages, CLV, and confidence intervals remain unavailable; the app has a bounded paired prospective market baseline, but not enough settled outcomes to judge it.
 - TipsAudit's 2026-11-11 POC returned no reference row within the app's 30-minute source-freshness limit. A connected provider implementation does not yet mean a fresh market comparison is available at runtime.

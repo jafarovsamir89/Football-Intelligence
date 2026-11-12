@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — add paired prospective international market and Elo scoring (local passed; Actions pending)
+
+- Added `InternationalMarketEvaluationEngine` for the World Market. It picks the latest retained fresh pre-kickoff 1X2 quote per linked local fixture and underlying bookmaker, pairs only with the latest current-Elo forecast already saved by quote capture, removes market margin proportionally, and compares market/Elo Brier, Log Loss and top-outcome accuracy on the same settled fixtures. Source providers remain visible in the report; the median quote lead time before kickoff and unsettled/unverified count are shown per bookmaker.
+- It rejects unmatched, stale, post-kickoff, malformed, model-unpaired and result-time-inconsistent rows; it excludes same-time contradictory score corrections. It reads the existing 30-day/5,000-row international quote history and full prospective forecast ledger. No database schema or migration changed. The report is a bounded snapshot baseline, not a closing line, CLV, ROI or profit signal.
+- The initial grouped run exposed an incorrect expected median-lead value in the new test; corrected the fixture expectation from 5 to 65 seconds before kickoff. The final grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 155 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `f9e0ef3252374d6564a7864f7fc3a1710368f9bff049086854f4df7dad17049e`; personal APK SHA-256 `fa38d7bd6dd2a6f72e07058716bfc3fd7684c3c5d7a2e367a219337d628b8df0`. Both local APK signatures verified. An uncompressed payload audit found the user's private key absent from debug and present only in the owner-only personal APK.
+- No APK was installed and no emulator database was touched. Actions API 26/34 tests, keyless signing/artifact and uploaded APK inspection are pending. Next: commit/push this grouped implementation, inspect the single CI run, then update the continuation record with its outcome.
+
 ## 2026-11-12 — retain international odds match-link precision (CI/API 26/API 34 passed)
 
 - Extended international fixture linking to use exact kickoff when available or a unique same-orientation team pair on the same UTC date when the local feed is date-only. The linker considers all unfinished local fixtures for the day, refuses multiple candidates, and leaves Misli/TOPAZ's stricter exact-kickoff rule unchanged.

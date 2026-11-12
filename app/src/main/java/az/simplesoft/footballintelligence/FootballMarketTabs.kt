@@ -15,6 +15,7 @@ import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.InternationalMarketConsensus
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
@@ -30,6 +31,7 @@ import az.simplesoft.footballintelligence.data.visibleInternationalOddsStatus
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 @Composable
 internal fun MatchAnalysisTab(
@@ -101,6 +103,7 @@ internal fun InternationalMarketTabContent(
     theOddsApiSyncHistory: List<InternationalOddsSyncAttempt>,
     internationalOdds: List<InternationalOddsSnapshot>,
     internationalOddsHistory: List<InternationalOddsSnapshot>,
+    internationalMarketEvaluation: InternationalMarketEvaluationReport,
     internationalConsensus: List<InternationalMarketConsensus>,
     forecastedMatches: List<ForecastedMatch>,
     misliOdds: List<BookmakerOddsSnapshot>,
@@ -167,6 +170,38 @@ internal fun InternationalMarketTabContent(
             }
         }
         LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(bottom=12.dp)) {
+            item {
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                        Text("Предварительная проверка рынка и Elo",fontWeight=FontWeight.SemiBold)
+                        Text(
+                            "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом Elo, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
+                            Text("Пока нет подходящих связанных предматчевых котировок для сравнения.",style=MaterialTheme.typography.bodySmall)
+                        } else {
+                            internationalMarketEvaluation.bookmakerReports.take(6).forEach { report ->
+                                val metricText = if(report.settledFixtureCount == 0) {
+                                    "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
+                                } else {
+                                    "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
+                                }
+                                val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
+                                Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
+                            }
+                        }
+                        Text(
+                            "Метрики описывают эту сохранённую выборку, не означают прибыль и не подтверждают превосходство источника или модели. Текущая история цен ограничена хранением источника.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+            }
             if(internationalOdds.isEmpty()) {
                 item {
                     ElevatedCard(Modifier.fillMaxWidth()) {
@@ -256,6 +291,14 @@ private fun internationalBookmakerName(providerId:String,bookmakerId:String):Str
     MOVIODDS_PROVIDER_ID -> "bet365"
     THE_ODDS_API_PROVIDER_ID -> bookmakerId.split('_').joinToString(" ") { part -> part.replaceFirstChar { it.uppercase() } }
     else -> bookmakerId
+}
+
+private fun Double.formatScore():String = String.format(Locale.ROOT,"%.3f",this)
+private fun Double.formatPercent():String = String.format(Locale.ROOT,"%.1f%%",this*100.0)
+private fun Double.formatLeadTime():String = when {
+    this < 1.0/60.0 -> "<1 мин"
+    this < 1.0 -> String.format(Locale.ROOT,"%.0f мин",this*60.0)
+    else -> String.format(Locale.ROOT,"%.1f ч",this)
 }
 
 private fun marketPercentagePoints(value: Double): String = "%.1f".format(value * 100.0)

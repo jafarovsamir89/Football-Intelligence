@@ -27,6 +27,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
@@ -217,6 +219,16 @@ import androidx.work.WorkManager
     val prospectiveForecastHistory=storeSnapshot.prospectiveForecastHistory
     val prospectiveForecastReport=remember(storeSnapshot.prospectiveForecastEvaluationHistory) {
         ProspectiveForecastEvaluator.evaluate(storeSnapshot.prospectiveForecastEvaluationHistory)
+    }
+    var internationalMarketEvaluation by remember {
+        mutableStateOf(InternationalMarketEvaluationReport(0,0,0,0,emptyList()))
+    }
+    LaunchedEffect(storeSnapshot.internationalOddsEvaluationHistory,storeSnapshot.prospectiveForecastEvaluationHistory) {
+        val oddsHistory = storeSnapshot.internationalOddsEvaluationHistory
+        val forecastHistory = storeSnapshot.prospectiveForecastEvaluationHistory
+        internationalMarketEvaluation = withContext(Dispatchers.Default) {
+            InternationalMarketEvaluationEngine.evaluate(oddsHistory,forecastHistory)
+        }
     }
     val accumulatorHistory=storeSnapshot.accumulatorHistory
     val mapped=matches.associateBy { it.id }
@@ -431,6 +443,7 @@ import androidx.work.WorkManager
                 theOddsApiSyncHistory=theOddsApiSyncHistory,
                 internationalOdds=internationalOdds,
                 internationalOddsHistory=internationalOddsHistory,
+                internationalMarketEvaluation=internationalMarketEvaluation,
                 internationalConsensus=internationalConsensus,
                 forecastedMatches=forecastedMatches,
                 misliOdds=misliOdds,

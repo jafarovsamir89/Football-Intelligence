@@ -10,6 +10,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
@@ -192,6 +193,7 @@ class FootballTabUiInstrumentedTest {
                     theOddsApiSyncHistory = emptyList(),
                     internationalOdds = listOf(quote),
                     internationalOddsHistory = emptyList(),
+                    internationalMarketEvaluation = InternationalMarketEvaluationReport(0,0,0,0,emptyList()),
                     internationalConsensus = emptyList(),
                     forecastedMatches = emptyList(),
                     misliOdds = emptyList(),
@@ -206,6 +208,7 @@ class FootballTabUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
         composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
     }

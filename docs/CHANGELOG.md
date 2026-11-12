@@ -1,5 +1,12 @@
 # Changelog
 
+## Add paired prospective international-market scoring (local passed; Actions pending)
+
+- Compare the last retained fresh pre-kickoff international 1X2 quote per linked fixture and bookmaker with a saved current-Elo forecast available by quote capture. Keep bookmakers separate and show only Brier, log loss and top-outcome accuracy for a shared settled cohort.
+- Exclude unmatched, stale, post-kickoff, unpaired and result-time-inconsistent rows. Use the existing 30-day/5,000-row quote history; no schema migration, CLV or ROI calculation is added.
+- Add engine tests for freshness, link basis, latest-row selection, temporal pairing, distinct books, pending results and conflicting result corrections; add a World Market UI rendering assertion.
+- The grouped local command passed 155 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. `git diff --check` passed. Debug APK SHA-256 `f9e0ef3252374d6564a7864f7fc3a1710368f9bff049086854f4df7dad17049e`; personal APK SHA-256 `fa38d7bd6dd2a6f72e07058716bfc3fd7684c3c5d7a2e367a219337d628b8df0`. An uncompressed APK-payload audit found the private key only in the personal APK; both local signatures verified. Actions instrumentation and artifact checks are pending.
+
 ## Track fixture-link precision for international odds (CI verified)
 
 - Keep exact-kickoff matching, and allow a local date-only fixture only when normalized home/away teams and UTC date identify one unfinished local row. Reject same-day ambiguities, orientation changes, and wrong dates.

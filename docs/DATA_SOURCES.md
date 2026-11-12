@@ -99,6 +99,8 @@ SQLite v17 retains the current-market table introduced in v13, refreshed at each
 
 International prices are shown separately from Misli and TOPAZ, never enter local virtual coupons, and produce no EV while the model lacks prospective calibration. Public JSON access from Azerbaijan on a physical handset has not been tested; regional availability remains unverified. WorkManager can defer requests; cached quotes and price changes remain available offline with historical labeling.
 
+The World Market's paired baseline uses only its locally retained 30-day/5,000-row quote-change history. It keeps one latest fresh pre-kickoff line per linked fixture and underlying bookmaker, pairs it only with a saved Elo forecast already present by the app capture, and scores both after a timestamped post-kickoff result becomes available. The report is bounded by device-local retention and does not represent closing odds or CLV.
+
 ## Tipster and crowd sources
 
 | Source | What / coverage | Free / key | Automation and history | Android fit and assessment |
