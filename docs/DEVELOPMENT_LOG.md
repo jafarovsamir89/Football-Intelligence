@@ -1,11 +1,13 @@
 # Development log
 
-## 2026-11-12 — move Compose screen reads off the main thread (local checks passed; CI pending)
+## 2026-11-12 — move Compose screen reads off the main thread (local and CI checks passed)
 
 - Added `FootballScreenStoreSnapshot`, an immutable read model that gathers the screen's SQLite match, result, provider, odds, quote/pick, ticket, coupon and forecast-ledger data on `Dispatchers.IO`. The Compose screen now updates only after the read finishes, retains the last successful snapshot on subsequent read failure, and displays a database read error instead of treating an empty result as an empty database.
 - Misli and TOPAZ foreground WebViews now wait for the initial saved provider-check times before deciding whether their 30-minute capture interval has expired. This prevents the asynchronous UI load from accidentally making both sources look never checked and reloading immediately.
 - Added an API 26/API 34 instrumentation regression using an isolated SQLite database and selected fixture quotes/picks. The grouped local cycle `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `7c437adbaf6c2f2db77ba1d8657d7ca94bc4efed76952eef63ebf7ff8dedbe04`; `git diff --check` passed.
-- First local compilation caught a missing `HistoricalMatch` import in the new read model; after adding it, the full grouped command passed. Next: push the code, run both instrumentation API levels, inspect the signed APK, and update `AGENTS.md` with the verified result. No persistent emulator was used.
+- First local compilation caught a missing `HistoricalMatch` import in the new read model; after adding it, the full grouped command passed. Commit `0898713` passed Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684): all 32 API 34 tests, API 26 with one radio-off test skipped and no failures, APK build, stable signing and artifact upload `13918259270` (16,885,059 bytes).
+- The API 26 emulator runner said “Starting 32 tests,” then “32/32 completed (1 skipped, 0 failed),” and later logged “33/32 completed”/“Finished 33 tests.” The declared instrumentation method inventory is 32 and Gradle succeeded; treat the over-count as an emulator-runner progress inconsistency, not as an extra test.
+- Downloaded APK SHA-256: `2af956f21c46bddbda5913492e4bb31b532971bb0bc539b1834cebdfc446f860`; `apksigner verify` succeeded with stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No local APK install or persistent-emulator change occurred. Next: extract a screen repository boundary without changing SQLite v16; continue future-outcome and physical-device validation when evidence becomes available.
 
 ## 2026-11-12 — use structured background work for CSV and backtests (local and CI checks passed)
 

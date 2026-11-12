@@ -1,10 +1,11 @@
 # Testing
 
-## Asynchronous Compose screen read model (CI pending)
+## Asynchronous Compose screen read model (CI passed)
 
 - Replace SQLite reads executed in Compose `remember` blocks with one immutable screen read model loaded on `Dispatchers.IO`; retain the previous successful data and expose read errors. Delay bookmaker WebView startup until the stored last-check timestamps have loaded so the 30-minute capture gate remains effective.
 - Add an isolated-database instrumentation regression for fixture/quote/pick reads. Local grouped verification passed 131 JVM tests, Android-test Kotlin compilation (including the new test), APK assembly, and `git diff --check`. Local APK SHA-256: `7c437adbaf6c2f2db77ba1d8657d7ca94bc4efed76952eef63ebf7ff8dedbe04`.
-- Run the complete API 34/API 26 CI matrix and inspect the stable-signed artifact before calling this milestone verified. Do not install on the persistent emulator.
+- Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684) passed all 32 API 34 tests, API 26 with one radio-off test skipped and no failures, APK build, stable signing and artifact upload `13918259270` (16,885,059 bytes). Downloaded APK SHA-256 `2af956f21c46bddbda5913492e4bb31b532971bb0bc539b1834cebdfc446f860`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- The API 26 emulator-runner log reports 32 declared tests and 32/32 complete with one skip, then emits `33/32`/“Finished 33 tests” while Gradle succeeds with zero failures. Record this as a progress-counter inconsistency; the declared instrumentation method inventory is 32. API 26 radio-off behavior remains unverified. No local APK install or persistent-emulator change was made.
 
 ## Structured CSV/backtest background execution (CI passed)
 

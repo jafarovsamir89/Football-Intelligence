@@ -22,6 +22,8 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 
 `FootballScreenStoreSnapshot.kt` groups the Compose screen's SQLite reads into an immutable read model fetched on `Dispatchers.IO`. The screen retains its last successful data if a later read fails and surfaces that failure in the source-status area. The first bookmaker WebView capture waits for the stored last-check time so asynchronous screen loading preserves the existing freshness gate. Database writes and domain calculations remain in their current Store/analytics boundaries; the read model does not change SQLite schema or migration behavior.
 
+The v16 screen-read model and selected-fixture path are covered by an isolated SQLite instrumentation test. Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684) passed all 32 tests on API 34 and the API 26 suite with its radio-state test skipped; the debug APK was built and stable-signed. Next, extract a repository boundary around screen reads before deciding whether a Room migration is warranted.
+
 ## Provider and persistence rules
 
 - `ProviderMatch` keeps stable provider ID, competition/season, event date, exact-vs-date-only kickoff, source URL, capture time, and safe result-availability time.

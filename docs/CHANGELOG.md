@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — load the Compose screen read model asynchronously
+## Load the Compose screen read model asynchronously (CI verified)
 
 - Group the screen's match, provider, odds, coupon and forecast-history queries in an immutable read model fetched on `Dispatchers.IO`. Compose keeps the last successful snapshot when a later read fails and shows the database error; bookmaker WebViews wait for the first stored freshness state so launch does not bypass the 30-minute capture gate.
-- Add an isolated SQLite instrumentation test for loading a fixture and its selected quotes/picks. Local verification passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; the API 34/API 26 instrumentation matrix is pending.
+- Add an isolated SQLite instrumentation test for loading a fixture and its selected quotes/picks. Local verification passed 131 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43162242684](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43162242684) passed all 32 API 34 tests and API 26 with 1 radio test skipped/0 failures, then built and stable-signed artifact `13918259270`. The API 26 runner printed `33/32` after its `32/32` completion line; Gradle reported no test failure.
 
 ## Keep CSV import and backtests within the screen coroutine scope (CI verified)
 
