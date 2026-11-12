@@ -6,6 +6,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
@@ -93,6 +94,33 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Misli.az · публичные линии 1X2").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("TOPAZ / eTopaz").performScrollTo().assertIsDisplayed()
         assertTrue(showQuotes.value)
+    }
+
+    @Test
+    fun couponTabHidesOldProspectiveSummaryWhileAnalyticsRefreshes() {
+        composeRule.setContent {
+            MaterialTheme {
+                FootballCouponTabContent(
+                    misliSyncState = null,
+                    misliOdds = emptyList(),
+                    topazSyncState = null,
+                    topazOdds = emptyList(),
+                    forecastedMatches = emptyList(),
+                    showBookmakerQuotes = false,
+                    onToggleBookmakerQuotes = {},
+                    oddsProviders = emptyList(),
+                    accumulatorDrafts = emptyList(),
+                    accumulatorHistory = emptyList(),
+                    checkedCouponHistory = emptyList(),
+                    prospectiveForecastHistory = emptyList(),
+                    prospectiveForecastReport = ProspectiveForecastReport(9, 4, .26, .5, 1.0),
+                    analyticsUpdating = true,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Обновляю метрики прогнозов; предыдущая сводка временно скрыта.").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("В локальном журнале 9 снимков.").fetchSemanticsNodes().isEmpty())
     }
 
     @Test
@@ -194,7 +222,23 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("нужно ≥30 завершённых матчей, сейчас 29", substring = true).assertIsDisplayed()
     }
 
-    private fun showWorldMarket(evaluation: InternationalMarketEvaluationReport) {
+    @Test
+    fun worldMarketHidesOldSummaryButKeepsCurrentQuotesWhileAnalyticsRefreshes() {
+        showWorldMarket(marketEvaluation(30), analyticsUpdating = true)
+
+        val marketList = composeRule.onNodeWithTag("internationalMarketList")
+        marketList.performScrollToNode(hasText("Обновляю оценку рынка", substring = true))
+        composeRule.onNodeWithText("Обновляю оценку рынка; предыдущие сводные показатели временно скрыты.").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Котировок БК–матч:", substring = true).fetchSemanticsNodes().isEmpty())
+        assertTrue(composeRule.onAllNodesWithText("95% парный bootstrap", substring = true).fetchSemanticsNodes().isEmpty())
+        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
+        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+    }
+
+    private fun showWorldMarket(
+        evaluation: InternationalMarketEvaluationReport,
+        analyticsUpdating: Boolean = false,
+    ) {
         val now = System.currentTimeMillis()
         val quote = InternationalOddsSnapshot(
             providerId = THE_ODDS_API_PROVIDER_ID,
@@ -239,6 +283,7 @@ class FootballTabUiInstrumentedTest {
                     onToggleInternationalHistory = {},
                     onOpenMoviOddsTerms = {},
                     onConfirmMoviOddsAge = {},
+                    analyticsUpdating = analyticsUpdating,
                 )
             }
         }

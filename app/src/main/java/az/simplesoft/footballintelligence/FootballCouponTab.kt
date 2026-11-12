@@ -32,6 +32,7 @@ internal fun FootballCouponTabContent(
     checkedCouponHistory: List<LoggedCouponPick>,
     prospectiveForecastHistory: List<ProspectiveForecastObservation>,
     prospectiveForecastReport: ProspectiveForecastReport,
+    analyticsUpdating: Boolean = false,
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text("Автоматические модельные черновики",style=MaterialTheme.typography.titleLarge)
@@ -187,21 +188,25 @@ internal fun FootballCouponTabContent(
                     "Модель ${CURRENT_ELO_MODEL_VERSION}. Сохраняется один неизменяемый снимок на матч, версию и UTC-день до kickoff; итог записывается отдельно, когда результат стал доступен. Это будущая проверка без оценки прибыли.",
                     style=MaterialTheme.typography.bodySmall,
                 )
-                Text(
-                    "В локальном журнале ${prospectiveForecastReport.snapshotCount} снимков. Оценка учитывает последний снимок до kickoff для каждого матча отдельно по версии модели; повторные ежедневные снимки одного матча не увеличивают выборку.",
-                    style=MaterialTheme.typography.bodySmall,
-                )
-                if(prospectiveForecastReport.modelReports.isEmpty()) {
-                    Text("Предматчевые результаты появятся после автоматической фиксации прогнозов и доступности итоговых счётов.",style=MaterialTheme.typography.bodySmall)
-                }
-                prospectiveForecastReport.modelReports.forEach { report ->
-                    val metrics=report.meanBrierScore?.let {
-                        " · Brier ${"%.4f".format(it)} · Log Loss ${"%.4f".format(report.meanLogLoss)} · попадание наиболее вероятного ${"%.1f".format((report.topOutcomeAccuracy ?: 0.0)*100)}% (n=${report.settledCount})"
-                    } ?: " · проверяемых результатов пока нет"
+                if(analyticsUpdating) {
+                    Text("Обновляю метрики прогнозов; предыдущая сводка временно скрыта.",style=MaterialTheme.typography.bodySmall)
+                } else {
                     Text(
-                        "${report.modelVersion}: прогнозы по матчам ${report.fixtureCount}, проверено ${report.settledCount}, ожидают ${report.pendingCount}$metrics",
+                        "В локальном журнале ${prospectiveForecastReport.snapshotCount} снимков. Оценка учитывает последний снимок до kickoff для каждого матча отдельно по версии модели; повторные ежедневные снимки одного матча не увеличивают выборку.",
                         style=MaterialTheme.typography.bodySmall,
                     )
+                    if(prospectiveForecastReport.modelReports.isEmpty()) {
+                        Text("Предматчевые результаты появятся после автоматической фиксации прогнозов и доступности итоговых счётов.",style=MaterialTheme.typography.bodySmall)
+                    }
+                    prospectiveForecastReport.modelReports.forEach { report ->
+                        val metrics=report.meanBrierScore?.let {
+                            " · Brier ${"%.4f".format(it)} · Log Loss ${"%.4f".format(report.meanLogLoss)} · попадание наиболее вероятного ${"%.1f".format((report.topOutcomeAccuracy ?: 0.0)*100)}% (n=${report.settledCount})"
+                        } ?: " · проверяемых результатов пока нет"
+                        Text(
+                            "${report.modelVersion}: прогнозы по матчам ${report.fixtureCount}, проверено ${report.settledCount}, ожидают ${report.pendingCount}$metrics",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                    }
                 }
                 if(prospectiveForecastHistory.isEmpty()) {
                     Text("Первые прогнозы появятся после автоматического расчёта матчей с достаточной предматчевой историей.",style=MaterialTheme.typography.bodySmall)

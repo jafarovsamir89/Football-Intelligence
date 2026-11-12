@@ -1,5 +1,21 @@
 # Development log
 
+## 2026-11-12 — hide stale aggregate metrics during background recalculation (local verification passed; CI pending)
+
+- Follow-up inspection found that moving calculations off the Compose thread left the prior completed market/prospective summary briefly visible after source snapshots changed. That could pair fresh quote rows with an older aggregate.
+- The screen now marks summary analytics as updating for the duration of calculation. Market and coupon tabs hide prior aggregate metrics and show a status message; current quote rows and saved forecast history remain visible. International consensus decoration is suppressed until the new aggregate is ready.
+- Added two Compose regressions: the coupon report and World Market hide the old aggregate while updating; the World Market continues showing current source quote rows. Model inputs, scoring rules, cutoffs, persistence and schema are unchanged.
+- The first grouped pass exposed a missing closing brace; after fixing it, the next pass caught an unavailable test assertion import. The final grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 161 JVM tests (0 failures/errors/skips; unit task up-to-date from the preceding successful run), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `b6fb608f87600b03931e902e88d5a92454a7b61be3f613fa223c80467e4287ad`; private personal APK SHA-256 `5f9af2357eaf87394ba20724ae780fba06ff80556043374b29c994023ca8bd20`. Both local signatures verify with signer SHA-256 `1d5bf81541d66c56c79c3a7c36cbbeca06c353e4604abca671e2207ef88f7370`. DEX inspection confirmed the personal key is absent from debug and present only in the owner-only personal APK; it stays private.
+- No instrumentation execution or device install was done locally; the two new UI regressions await Actions. No API credits were used. No schema change.
+- Next: commit/push the code and docs, then verify both Compose tests in GitHub Actions. Do not install an APK; ADB shows only unrelated emulator `5558`, and the host still lacks enough disk space for another clean AVD.
+
+## 2026-11-12 — hide stale aggregate metrics during background recalculation (verification pending)
+
+- Follow-up inspection found that moving calculations off the Compose thread left the prior completed market/prospective summary briefly visible after source snapshots changed. That could pair fresh quote rows with an older aggregate.
+- The screen now marks summary analytics as updating for the duration of calculation. Market and coupon tabs hide prior aggregate metrics and show a status message; live quote rows and saved forecast history remain available. International consensus decoration is suppressed until the new aggregate is ready.
+- Added Compose regressions for both tabs: stale aggregate metrics stay absent while updating, and current international quote rows remain visible. Model inputs, scoring rules, cutoffs, persistence and schema are unchanged.
+- Next: include these changes with any connected screen-analytics refinements, then run one grouped local test/compile/APK cycle and one CI workflow. No device install is needed for this rendering-state change.
+
 ## 2026-11-12 — compute full-screen market diagnostics off the UI thread (local and CI verification passed)
 
 - Found that SQLite reads already ran on `Dispatchers.IO`, but international consensus and prospective forecast scoring still ran synchronously during Compose recomposition. Paired international-market evaluation was already dispatched in the background.

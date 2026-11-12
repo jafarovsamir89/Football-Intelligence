@@ -116,6 +116,7 @@ internal fun InternationalMarketTabContent(
     onToggleInternationalHistory: () -> Unit,
     onOpenMoviOddsTerms: () -> Unit,
     onConfirmMoviOddsAge: () -> Unit,
+    analyticsUpdating: Boolean = false,
 ) {
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal=14.dp).testTag("internationalMarketList"),
@@ -186,37 +187,41 @@ internal fun InternationalMarketTabContent(
                         "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом Elo, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
                         style=MaterialTheme.typography.bodySmall,
                     )
-                    Text(
-                        "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
-                        style=MaterialTheme.typography.bodySmall,
-                    )
-                    if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
-                        Text("Пока нет подходящих связанных предматчевых котировок для сравнения.",style=MaterialTheme.typography.bodySmall)
+                    if(analyticsUpdating) {
+                        Text("Обновляю оценку рынка; предыдущие сводные показатели временно скрыты.",style=MaterialTheme.typography.bodySmall)
                     } else {
-                        internationalMarketEvaluation.bookmakerReports.take(6).forEach { report ->
-                            val metricText = if(report.settledFixtureCount == 0) {
-                                "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
-                            } else {
-                                "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
+                        Text(
+                            "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
+                            Text("Пока нет подходящих связанных предматчевых котировок для сравнения.",style=MaterialTheme.typography.bodySmall)
+                        } else {
+                            internationalMarketEvaluation.bookmakerReports.take(6).forEach { report ->
+                                val metricText = if(report.settledFixtureCount == 0) {
+                                    "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
+                                } else {
+                                    "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
+                                }
+                                val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
+                                Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
+                                val confidenceText = if(report.settledFixtureCount >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS) {
+                                    "95% парный bootstrap, Δ Elo−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
+                                } else {
+                                    "95% интервалы пока недоступны: нужно ≥${InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS} завершённых матчей, сейчас ${report.settledFixtureCount}."
+                                }
+                                Text(confidenceText,style=MaterialTheme.typography.bodySmall)
                             }
-                            val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
-                            Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
-                            val confidenceText = if(report.settledFixtureCount >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS) {
-                                "95% парный bootstrap, Δ Elo−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
-                            } else {
-                                "95% интервалы пока недоступны: нужно ≥${InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS} завершённых матчей, сейчас ${report.settledFixtureCount}."
-                            }
-                            Text(confidenceText,style=MaterialTheme.typography.bodySmall)
                         }
+                        Text(
+                            "Знак Δ Elo−рынок: для Brier и Log Loss отрицательное значение означает меньшую ошибку Elo; для top-1 положительное — больше правильных исходов Elo.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Интервалы — парная выборка матчей bootstrap, предполагающая независимость матчей; повторяющиеся команды и туры могут занижать неопределённость. Эти описательные метрики не означают прибыль и не подтверждают превосходство модели. История цен ограничена хранением источника.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
                     }
-                    Text(
-                        "Знак Δ Elo−рынок: для Brier и Log Loss отрицательное значение означает меньшую ошибку Elo; для top-1 положительное — больше правильных исходов Elo.",
-                        style=MaterialTheme.typography.bodySmall,
-                    )
-                    Text(
-                        "Интервалы — парная выборка матчей bootstrap, предполагающая независимость матчей; повторяющиеся команды и туры могут занижать неопределённость. Эти описательные метрики не означают прибыль и не подтверждают превосходство модели. История цен ограничена хранением источника.",
-                        style=MaterialTheme.typography.bodySmall,
-                    )
                 }
             }
         }
@@ -231,7 +236,7 @@ internal fun InternationalMarketTabContent(
             }
         }
         items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}"}) { quote ->
-            val eventConsensus=internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
+            val eventConsensus=if(analyticsUpdating) null else internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
             val model=quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
             val localMisli=quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
             val localTopaz=quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }

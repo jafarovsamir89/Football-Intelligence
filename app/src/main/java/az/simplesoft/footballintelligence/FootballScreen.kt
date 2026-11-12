@@ -51,6 +51,7 @@ import androidx.work.WorkManager
     val coroutineScope = rememberCoroutineScope()
     var storeLoadState by remember(repository) { mutableStateOf(FootballScreenStoreLoadState()) }
     var screenAnalytics by remember(repository) { mutableStateOf(FootballScreenAnalytics.empty()) }
+    var screenAnalyticsUpdating by remember(repository) { mutableStateOf(true) }
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -101,10 +102,12 @@ import androidx.work.WorkManager
         storeSnapshot.internationalOddsEvaluationHistory,
         storeSnapshot.prospectiveForecastEvaluationHistory,
     ) {
+        screenAnalyticsUpdating=true
         val snapshot = storeSnapshot
         screenAnalytics = withContext(Dispatchers.Default) {
             calculateFootballScreenAnalytics(snapshot)
         }
+        screenAnalyticsUpdating=false
     }
     val syncSummaries=storeSnapshot.providerSyncSummaries
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
@@ -409,6 +412,7 @@ import androidx.work.WorkManager
                 checkedCouponHistory=checkedCouponHistory,
                 prospectiveForecastHistory=prospectiveForecastHistory,
                 prospectiveForecastReport=prospectiveForecastReport,
+                analyticsUpdating=screenAnalyticsUpdating,
               )
               3 -> FootballResultsTabContent(recentResults)
               4 -> FootballBacktestTabContent(
@@ -450,6 +454,7 @@ import androidx.work.WorkManager
                     internationalAgeConfirmed=true
                     InternationalOddsMarketScheduler.scheduleOnAppOpen(activity)
                 },
+                analyticsUpdating=screenAnalyticsUpdating,
               )
               else -> FootballSettingsTabContent(
                 fallbackCompetition=fallbackCompetition,
