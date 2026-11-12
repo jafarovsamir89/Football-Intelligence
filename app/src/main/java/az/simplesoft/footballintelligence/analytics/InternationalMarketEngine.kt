@@ -29,16 +29,41 @@ object InternationalMarketEngine {
     /**
      * A bookmaker contributes once per event, even when two intermediaries report that same
      * bookmaker. The event join is exact after Unicode/punctuation normalization and allows a
-     * five-minute kickoff difference; no fuzzy team matching is used.
+     * five-minute kickoff difference; no fuzzy team matching is used. If tolerance matches form
+     * an overlapping chain rather than one complete-link group, every row in that component is
+     * kept separate because the available identity fields cannot distinguish its events safely.
      */
     fun consensus(snapshots: List<InternationalOddsSnapshot>): List<InternationalMarketConsensus> {
-        val eventGroups = mutableListOf<MutableList<InternationalOddsSnapshot>>()
-        snapshots.sortedWith(compareByDescending<InternationalOddsSnapshot> { it.providerPolledAtMillis }
-            .thenByDescending { it.capturedAtMillis }).forEach { candidate ->
-            val group = eventGroups.firstOrNull { existing ->
-                existing.any { sameUnderlyingEvent(it, candidate) }
+        val eventGroups = snapshots.groupBy(::eventNameKey).values.flatMap { identityCandidates ->
+            val ordered = identityCandidates.sortedWith(compareBy<InternationalOddsSnapshot> { it.kickoffMillis }
+                .thenBy { it.bookmakerId.lowercase() }.thenBy { it.providerId }
+                .thenBy { it.providerPolledAtMillis }.thenBy { it.capturedAtMillis })
+            val remaining = ordered.indices.toMutableSet()
+            val groups = mutableListOf<MutableList<InternationalOddsSnapshot>>()
+            while (remaining.isNotEmpty()) {
+                val seed = remaining.first()
+                remaining.remove(seed)
+                val componentIndices = mutableListOf(seed)
+                val frontier = java.util.ArrayDeque<Int>().apply { add(seed) }
+                while (frontier.isNotEmpty()) {
+                    val current = frontier.removeFirst()
+                    val connectedToCurrent = remaining.filter { candidate ->
+                        sameUnderlyingEvent(ordered[current], ordered[candidate])
+                    }
+                    connectedToCurrent.forEach { index ->
+                        remaining.remove(index)
+                        componentIndices += index
+                        frontier.add(index)
+                    }
+                }
+                val component = componentIndices.map { ordered[it] }
+                val completeLink = component.indices.all { i ->
+                    (i + 1 until component.size).all { j -> sameUnderlyingEvent(component[i], component[j]) }
+                }
+                if (completeLink) groups += component.toMutableList()
+                else component.forEach { groups += mutableListOf(it) }
             }
-            if (group == null) eventGroups += mutableListOf(candidate) else group += candidate
+            groups
         }
 
         return eventGroups.mapNotNull { eventRows ->
@@ -79,9 +104,16 @@ object InternationalMarketEngine {
         return InternationalLineMovement(previous, current)
     }
 
+    private data class EventNameKey(val market: String, val home: String, val away: String)
+
+    private fun eventNameKey(snapshot: InternationalOddsSnapshot) = EventNameKey(
+        snapshot.market,
+        TeamNameIdentity.canonical(snapshot.homeTeam),
+        TeamNameIdentity.canonical(snapshot.awayTeam),
+    )
+
     private fun sameUnderlyingEvent(a: InternationalOddsSnapshot, b: InternationalOddsSnapshot): Boolean =
-        a.market == b.market &&
-            TeamNameIdentity.canonical(a.homeTeam) == TeamNameIdentity.canonical(b.homeTeam) &&
-            TeamNameIdentity.canonical(a.awayTeam) == TeamNameIdentity.canonical(b.awayTeam) &&
+            eventNameKey(a) == eventNameKey(b) &&
+            (a.matchId == null || b.matchId == null || a.matchId == b.matchId) &&
             abs(a.kickoffMillis - b.kickoffMillis) <= EVENT_KICKOFF_TOLERANCE_MILLIS
 }

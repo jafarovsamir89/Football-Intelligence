@@ -44,6 +44,38 @@ class InternationalMarketEngineTest {
         assertFalse(consensus.any { it.distinctBookmakerCount>1 })
     }
 
+    @Test fun kickoffToleranceDoesNotTransitivelyMergeDifferentEvents() {
+        val atZero=quote("a","bet365","https://moviodds.com/odds",captured=100_000,kickoffMillis=kickoff)
+        val atFour=quote("b","Pinnacle","https://example.org/odds",captured=200_000,kickoffMillis=kickoff+4*60_000L)
+        val atEight=quote("c","William Hill","https://example.org/odds",captured=300_000,kickoffMillis=kickoff+8*60_000L)
+
+        val groups=InternationalMarketEngine.consensus(listOf(atZero,atFour,atEight))
+
+        assertEquals(3,groups.size)
+        assertTrue(groups.all { it.distinctBookmakerCount==1 })
+    }
+
+    @Test fun ambiguousMidpointIsNotAssignedToEitherNearbyEvent() {
+        val atZero=quote("a","bet365","https://moviodds.com/odds",captured=200_000,kickoffMillis=kickoff)
+        val atEight=quote("b","Pinnacle","https://example.org/odds",captured=200_000,kickoffMillis=kickoff+8*60_000L)
+        val midpoint=quote("c","William Hill","https://example.org/odds",captured=300_000,kickoffMillis=kickoff+4*60_000L)
+
+        val groups=InternationalMarketEngine.consensus(listOf(atZero,atEight,midpoint))
+
+        assertEquals(3,groups.size)
+        assertTrue(groups.all { it.distinctBookmakerCount==1 })
+    }
+
+    @Test fun conflictingExactLocalMatchIdsAreNeverMerged() {
+        val first=quote("a","bet365","https://moviodds.com/odds",captured=100_000,matchId=42)
+        val second=quote("b","Pinnacle","https://example.org/odds",captured=200_000,matchId=84)
+
+        val groups=InternationalMarketEngine.consensus(listOf(first,second))
+
+        assertEquals(2,groups.size)
+        assertTrue(groups.all { it.distinctBookmakerCount==1 })
+    }
+
     @Test fun movementUsesPriorSavedSnapshotFromSameProviderEvent() {
         val previous=quote("moviodds_bet365","bet365","https://moviodds.com/odds",captured=100_000,home=2.2)
         val current=quote("moviodds_bet365","bet365","https://moviodds.com/odds",captured=200_000,home=2.0)
@@ -66,8 +98,9 @@ class InternationalMarketEngineTest {
         homeTeam:String="Roma",
         awayTeam:String="Napoli",
         kickoffMillis:Long=kickoff,
+        matchId:Int?=42,
     )=InternationalOddsSnapshot(
         provider,bookmaker,"event-$homeTeam-$awayTeam-$kickoffMillis",url,"Serie A",null,captured,captured,kickoffMillis,"1X2",
-        homeTeam,awayTeam,home,draw,away,captured,captured,captured,42,
+        homeTeam,awayTeam,home,draw,away,captured,captured,captured,matchId,
     )
 }

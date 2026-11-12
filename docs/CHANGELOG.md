@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — prevent false international market consensus (local pass; Actions pending)
+
+- Require every quote in a consensus event group to match each other on normalized home/away order and five-minute kickoff tolerance. Conflicting exact local match IDs cannot merge, and ambiguous rows compatible with multiple groups are kept separate.
+- Add regression coverage for chained kickoff tolerances, midpoint ambiguity and conflicting fixture IDs.
+- Recheck international sources: Football-Data.co.uk's limited personal-use automation did not produce upcoming 1X2 prices or a quote-level time in the observed file; 1.ML's terms require written authorization for automated collection and local archiving. No new live adapter is claimed.
+- The grouped local cycle passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly; SHA-256 `5379bfe5d89557030589451661fc7cb0e55585015de4c22ff9b0e7a63a055882`. CI verification is pending.
+
 ## Unreleased — retain international source-attempt history
 
 - Save MoviOdds request status, safe detail and available parser quality counts for 30 days. Show the five latest attempts on World Market; do not calculate an uptime/reliability percentage from this short, device-local sample.
