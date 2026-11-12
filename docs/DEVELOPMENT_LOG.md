@@ -1,11 +1,12 @@
 # Development log
 
-## 2026-11-12 — cover conditional HTTP cache revalidation (local verification passed; CI pending)
+## 2026-11-12 — cover conditional HTTP cache revalidation (local and CI verification passed)
 
 - The football sync already sends cached ETag/Last-Modified validators and handles HTTP 304, but the path lacked deterministic regression coverage. Exposed the existing HTTP client and OpenFootball sync seam at module visibility for tests; runtime behavior is unchanged.
 - Added a loopback HTTP test that inspects `If-None-Match` and `If-Modified-Since`, returns a real 304 response with updated validators, and checks the client returns an empty body plus response metadata.
 - Added an isolated SQLite instrumentation case that seeds five season catalogs, file counters and saved match rows, then returns 304 for every request. It verifies all validators are sent to the injected client, records and cached catalog bodies survive, match source keys/names are unchanged, and check timestamps advance.
 - Updated the README, roadmap, architecture, test guide and zero-touch requirements to reflect the already-passed Poisson/international-feed CI and v13 migrations. The combined local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 120 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `b835f39b4595eacd5ae6be2ec13497a8db5f6a9fd694ac53f6a852b890d9b768`; `git diff --check` passed.
+- Commit `06ab802` passed Actions [43137789034](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43137789034): unit tests, all 23 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and artifact upload `13909145161` (16,855,250 bytes). Downloaded CI APK SHA-256: `e95fdd3ab9c3a27e7d070efa39e5d374c2d0c6b454d6c757cc967d40703b7350`; signer certificate SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 - No device install was performed. ADB shows API 34 emulator `5558` with no Football Intelligence package installed, and the Xiaomi is disconnected. Next: commit/push the grouped test/docs update and verify it in one Actions cycle; keep both emulator profiles untouched.
 
 ## 2026-11-12 — integrate a permitted international bookmaker feed (CI passed; Azerbaijan device check pending)

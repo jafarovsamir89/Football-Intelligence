@@ -18,11 +18,11 @@
 - One combined local cycle passed 107 JVM tests (0 failures/errors/skips), `:app:compileDebugAndroidTestKotlin` and `:app:assembleDebug`. Actions [43126942380](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43126942380) passed the unit job, all 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13902324452`.
 - No APK was installed for this model stage. The Poisson analysis is a retrospective paired holdout comparison only; it does not alter saved or live Elo forecasts.
 
-## Current conditional-cache regression batch (2026-11-12; local verification passed, CI pending)
+## Completed conditional-cache regression batch (2026-11-12; local and CI verification passed)
 
 - Added a real loopback HTTP 304 test for cached ETag/Last-Modified request headers and response metadata.
 - Added isolated SQLite coverage for five OpenFootball season catalogs and files: a `304 Not Modified` response keeps match rows, catalog body, cached record counts and validators while refreshing check times.
-- One combined local cycle passed 120 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and `assembleDebug`. CI has not run for this batch yet.
+- One combined local cycle passed 120 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and `assembleDebug`. Actions [43137789034](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43137789034) passed unit tests, all 23 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and artifact upload `13909145161`.
 
 ## Historical runtime verification (through 2026-11-10)
 
@@ -109,7 +109,7 @@ The first CI artifact used the runner's generated debug certificate, so Android 
 ## Remaining verification gaps
 
 - SQLite v1, v9, v10, v11 and v12→v13 migration preservation, cross-provider score retention during incomplete/conflicting refresh, and WAL foreground-reader access during a provider write have isolated instrumentation coverage on CI [43135555477](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43135555477). The tests use separate random database names.
-- WorkManager offline queue gating, delayed exponential retry/backoff, network-proof Worker failure routing, and SQLite WAL/read-concurrency pass locally and in CI. Conditional ETag/304 tests pass locally in the current batch; source pacing/429 recovery, lock expiry and a physical handset still need dedicated validation.
+- WorkManager offline queue gating, delayed exponential retry/backoff, network-proof Worker failure routing, SQLite WAL/read-concurrency, and conditional ETag/304 validation pass locally and in CI. Source pacing/429 recovery, lock expiry and a physical handset still need dedicated validation.
 
 Commit `92836d8` passed Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971): **84 JUnit tests**, **3 API 34 instrumentation tests**, APK build, stable signing and artifact upload. The instrumentation job confirmed the SQLite migration tests and WorkManager scheduler test on its API 34 emulator.
 - First-open full sync is verified on API 34 and API 26 emulators. API 26 bookmaker WebViews returned no visible text; use a current physical handset/WebView when available.

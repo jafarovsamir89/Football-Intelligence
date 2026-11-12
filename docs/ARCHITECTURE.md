@@ -52,6 +52,6 @@ No server, account, secret, paid API, or bookmaker action exists. WorkManager ru
 
 1. Collect and settle future results in the immutable prospective ledger; report prospective accuracy only after results become locally available under the saved source/capture cutoffs.
 2. Verify the international market and local bookmaker collectors on a physical Android phone in Azerbaijan. The latest CI APK has not been installed there; app access, source availability and fresh current prices remain unverified. Preserve local data and require the user's explicit 18+ confirmation before MoviOdds access.
-3. Add focused tests for source request pacing and HTTP `429`/`Retry-After`. Conditional ETag/Last-Modified and `304` behavior now has deterministic local HTTP and isolated SQLite regression tests; CI is pending for that test batch.
+3. Add focused tests for source request pacing and HTTP `429`/`Retry-After`. Conditional ETag/Last-Modified and `304` behavior has deterministic local HTTP and isolated SQLite regression coverage; Actions [43137789034](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43137789034) passed all 23 API 34 instrumentation tests.
 4. Extract provider/store/repository boundaries from `MainActivity.kt`; move to Room + repository/Flow when migration tests justify the added migration surface.
 5. Verify collectors across timezones and more events. Do not use stealth, hidden endpoints, login, CAPTCHA solving, or restricted detail paths.

@@ -3,7 +3,7 @@
 ## Unreleased — verify conditional football-source cache reuse
 
 - Add a loopback HTTP regression test for ETag/Last-Modified request headers and real 304 response metadata, plus isolated SQLite coverage proving cached five-season OpenFootball rows, validators and catalog bodies survive revalidation.
-- The combined local cycle passed 120 JVM tests, Android-test Kotlin compilation and APK assembly. GitHub Actions has not run for this batch yet.
+- The combined local cycle passed 120 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43137789034](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43137789034) passed all 23 API 34 instrumentation tests, APK build, stable signing and artifact upload `13909145161` (16,855,250 bytes). Downloaded APK SHA-256 `e95fdd3ab9c3a27e7d070efa39e5d374c2d0c6b454d6c757cc967d40703b7350`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Unreleased — add a gated international 1X2 market feed (CI passed)
 
