@@ -1,11 +1,11 @@
 # Changelog
 
-## Add paired prospective international-market scoring (local passed; Actions pending)
+## Fix compact-screen World Market scrolling and add paired market scoring (local passed; Actions pending)
 
 - Compare the last retained fresh pre-kickoff international 1X2 quote per linked fixture and bookmaker with a saved current-Elo forecast available by quote capture. Keep bookmakers separate and show only Brier, log loss and top-outcome accuracy for a shared settled cohort.
 - Exclude unmatched, stale, post-kickoff, unpaired and result-time-inconsistent rows. Use the existing 30-day/5,000-row quote history; no schema migration, CLV or ROI calculation is added.
-- Add engine tests for freshness, link basis, latest-row selection, temporal pairing, distinct books, pending results and conflicting result corrections; add a World Market UI rendering assertion.
-- The grouped local command passed 155 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. `git diff --check` passed. Debug APK SHA-256 `f9e0ef3252374d6564a7864f7fc3a1710368f9bff049086854f4df7dad17049e`; personal APK SHA-256 `fa38d7bd6dd2a6f72e07058716bfc3fd7684c3c5d7a2e367a219337d628b8df0`. An uncompressed APK-payload audit found the private key only in the personal APK; both local signatures verified. Actions instrumentation and artifact checks are pending.
+- Put the full World Market header and quotes in one scrollable list so the header cannot consume the quote viewport on compact Android screens; instrumentation scrolls to the evaluation card, named bookmaker quote and provider attribution.
+- The grouped local command passed 155 JVM tests, Android-test Kotlin compilation, and debug/personal APK assembly. `git diff --check` passed. Debug APK SHA-256 `9576237e823d7d7b15c9672ae2ac134613222c5a04d1254475ea26ead6ca29e0`; personal APK SHA-256 `3be1e7933eca13df69c063d74d7adf4c95f2a897fc18ee6195f26c22c96a232e`. Both signatures verified; payload audit found the private key absent from debug and present only in the owner-only personal APK. Actions run [43206307429](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43206307429) passed all 43 API 34 tests, but API 26 found the compact-screen quote-list issue; the scrolling fix is pending its next full CI run.
 
 ## Track fixture-link precision for international odds (CI verified)
 

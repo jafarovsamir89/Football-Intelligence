@@ -3,9 +3,12 @@ package az.simplesoft.footballintelligence
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -208,9 +211,13 @@ class FootballTabUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
+        val marketList = composeRule.onNodeWithTag("internationalMarketList")
+        marketList.performScrollToNode(hasText("Предварительная проверка рынка и Elo"))
         composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
-        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Источник: The Odds API", substring = true).performScrollTo().assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
+        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
+        composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
     }
 
     private companion object {

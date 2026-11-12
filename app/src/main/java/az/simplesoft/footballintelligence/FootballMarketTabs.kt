@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.EloEngine
@@ -114,168 +115,172 @@ internal fun InternationalMarketTabContent(
     onOpenMoviOddsTerms: () -> Unit,
     onConfirmMoviOddsAge: () -> Unit,
 ) {
-    Column(Modifier.fillMaxSize().padding(horizontal=14.dp)) {
-        Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-            val moviOddsLines=internationalOdds.count { it.providerId==MOVIODDS_PROVIDER_ID }
-            val checked=internationalOddsSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
-            Text("Мировой рынок · футбольный 1X2",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-            Text("bet365 через независимый агрегатор MoviOdds · ${if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,moviOddsLines) else "ТРЕБУЕТСЯ 18+"} · проверка $checked · свежих линий $moviOddsLines${if(workerBusy) " · обновление выполняется" else ""}",style=MaterialTheme.typography.bodySmall)
-            internationalOddsSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
-            internationalOddsSyncState?.qualityCounts?.let { quality ->
-                Text(
-                    "Quality gate последнего ответа: принято ${quality.acceptedMatches}/${quality.receivedMatches}, отклонено ${quality.rejectedMatches}, устарело ${quality.staleMatches}, дубликаты ${quality.duplicateMatches}, не подтверждено ${quality.unverifiedMatches}. Это счётчики разбора, не рейтинг точности.",
-                    style=MaterialTheme.typography.bodySmall,
-                )
-            }
-            if(internationalOddsSyncHistory.isNotEmpty()) {
-                Text("История проверок источника · последние ${internationalOddsSyncHistory.size} попыток за 30 дней",fontWeight=FontWeight.SemiBold)
-                internationalOddsSyncHistory.take(5).forEach { attempt ->
-                    val attemptTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
-                    val attemptCounts=attempt.qualityCounts?.let { " · принято ${it.acceptedMatches}/${it.receivedMatches}, отклонено ${it.rejectedMatches}, устарело ${it.staleMatches}, дубликаты ${it.duplicateMatches}, не подтверждено ${it.unverifiedMatches}" }
-                        ?: " · разбор ответа недоступен"
-                    Text("$attemptTime · ${attempt.status}$attemptCounts",style=MaterialTheme.typography.bodySmall)
+    LazyColumn(
+        Modifier.fillMaxSize().padding(horizontal=14.dp).testTag("internationalMarketList"),
+        verticalArrangement=Arrangement.spacedBy(8.dp),
+        contentPadding=PaddingValues(bottom=12.dp),
+    ) {
+        item {
+            Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                val moviOddsLines=internationalOdds.count { it.providerId==MOVIODDS_PROVIDER_ID }
+                val checked=internationalOddsSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                Text("Мировой рынок · футбольный 1X2",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                Text("bet365 через независимый агрегатор MoviOdds · ${if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,moviOddsLines) else "ТРЕБУЕТСЯ 18+"} · проверка $checked · свежих линий $moviOddsLines${if(workerBusy) " · обновление выполняется" else ""}",style=MaterialTheme.typography.bodySmall)
+                internationalOddsSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                internationalOddsSyncState?.qualityCounts?.let { quality ->
+                    Text(
+                        "Quality gate последнего ответа: принято ${quality.acceptedMatches}/${quality.receivedMatches}, отклонено ${quality.rejectedMatches}, устарело ${quality.staleMatches}, дубликаты ${quality.duplicateMatches}, не подтверждено ${quality.unverifiedMatches}. Это счётчики разбора, не рейтинг точности.",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
                 }
-                Text("Это журнал наблюдений, а не процент доступности или гарантия будущей работы источника.",style=MaterialTheme.typography.bodySmall)
-            }
-            val theOddsApiLines=internationalOdds.count { it.providerId==THE_ODDS_API_PROVIDER_ID }
-            val theOddsApiChecked=theOddsApiSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
-            val theOddsApiStatus=if(theOddsApiConfigured) visibleInternationalOddsStatus(theOddsApiSyncState,theOddsApiLines) else "КЛЮЧ НЕ ВСТРОЕН В ЭТУ СБОРКУ"
-            Text("The Odds API · EU · $theOddsApiStatus · проверка $theOddsApiChecked · свежих линий $theOddsApiLines",style=MaterialTheme.typography.bodySmall)
-            theOddsApiSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
-            if(theOddsApiSyncHistory.isNotEmpty()) {
-                Text("The Odds API · последние проверки",fontWeight=FontWeight.SemiBold)
-                theOddsApiSyncHistory.take(3).forEach { attempt ->
-                    val time=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
-                    Text("$time · ${attempt.status} · сохранено линий ${attempt.qualityCounts?.acceptedMatches ?: 0}",style=MaterialTheme.typography.bodySmall)
+                if(internationalOddsSyncHistory.isNotEmpty()) {
+                    Text("История проверок источника · последние ${internationalOddsSyncHistory.size} попыток за 30 дней",fontWeight=FontWeight.SemiBold)
+                    internationalOddsSyncHistory.take(5).forEach { attempt ->
+                        val attemptTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
+                        val attemptCounts=attempt.qualityCounts?.let { " · принято ${it.acceptedMatches}/${it.receivedMatches}, отклонено ${it.rejectedMatches}, устарело ${it.staleMatches}, дубликаты ${it.duplicateMatches}, не подтверждено ${it.unverifiedMatches}" }
+                            ?: " · разбор ответа недоступен"
+                        Text("$attemptTime · ${attempt.status}$attemptCounts",style=MaterialTheme.typography.bodySmall)
+                    }
+                    Text("Это журнал наблюдений, а не процент доступности или гарантия будущей работы источника.",style=MaterialTheme.typography.bodySmall)
                 }
-            }
-            if(!theOddsApiConfigured) {
-                Text("Эта публичная/CI-сборка не содержит личный ключ. Персональная APK-сборка читает ключ только из игнорируемого local.properties; не публикуй её или сам APK-ключ в открытом репозитории.",style=MaterialTheme.typography.bodySmall)
-            }
-            Text("Для ограничения бесплатной квоты The Odds API проверяет максимум 12 активных лиг за суточный проход, один регион EU и рынок 1X2; очередность лиг вращается. Обновление остальных лиг растянуто по циклу.",style=MaterialTheme.typography.bodySmall)
-            Text("Котировка считается свежей только при недавнем времени опроса рынка у источника (до 15 минут), независимо от того, когда изменился коэффициент. Приложение и источник сохраняются с разными отметками времени.",style=MaterialTheme.typography.bodySmall)
-            Text("Данные bet365 поступают через MoviOdds, который не аффилирован с bet365. Условия MoviOdds требуют возраст 18+ и разрешают использование в собственных приложениях; точная доступность в Азербайджане на физическом телефоне ещё не проверена. Источник может быть неполным или недоступным.",style=MaterialTheme.typography.bodySmall)
-            Text("Misli/TOPAZ остаются отдельными местными линиями. Международная цена не используется для виртуальных купонов Misli или TOPAZ. Цены и модели не являются доказательством преимущества или прибыли.",style=MaterialTheme.typography.bodySmall)
-            if(!internationalAgeConfirmed) {
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                        Text("Международный источник доступен только пользователям 18+.",fontWeight=FontWeight.SemiBold)
-                        Text("Подтвердите возраст один раз, чтобы включить автоматическое обновление bet365 через MoviOdds. Остальная футбольная база обновляется независимо.",style=MaterialTheme.typography.bodySmall)
-                        TextButton(onClick=onOpenMoviOddsTerms) {
-                            Text("Условия MoviOdds")
+                val theOddsApiLines=internationalOdds.count { it.providerId==THE_ODDS_API_PROVIDER_ID }
+                val theOddsApiChecked=theOddsApiSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                val theOddsApiStatus=if(theOddsApiConfigured) visibleInternationalOddsStatus(theOddsApiSyncState,theOddsApiLines) else "КЛЮЧ НЕ ВСТРОЕН В ЭТУ СБОРКУ"
+                Text("The Odds API · EU · $theOddsApiStatus · проверка $theOddsApiChecked · свежих линий $theOddsApiLines",style=MaterialTheme.typography.bodySmall)
+                theOddsApiSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                if(theOddsApiSyncHistory.isNotEmpty()) {
+                    Text("The Odds API · последние проверки",fontWeight=FontWeight.SemiBold)
+                    theOddsApiSyncHistory.take(3).forEach { attempt ->
+                        val time=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
+                        Text("$time · ${attempt.status} · сохранено линий ${attempt.qualityCounts?.acceptedMatches ?: 0}",style=MaterialTheme.typography.bodySmall)
+                    }
+                }
+                if(!theOddsApiConfigured) {
+                    Text("Эта публичная/CI-сборка не содержит личный ключ. Персональная APK-сборка читает ключ только из игнорируемого local.properties; не публикуй её или сам APK-ключ в открытом репозитории.",style=MaterialTheme.typography.bodySmall)
+                }
+                Text("Для ограничения бесплатной квоты The Odds API проверяет максимум 12 активных лиг за суточный проход, один регион EU и рынок 1X2; очередность лиг вращается. Обновление остальных лиг растянуто по циклу.",style=MaterialTheme.typography.bodySmall)
+                Text("Котировка считается свежей только при недавнем времени опроса рынка у источника (до 15 минут), независимо от того, когда изменился коэффициент. Приложение и источник сохраняются с разными отметками времени.",style=MaterialTheme.typography.bodySmall)
+                Text("Данные bet365 поступают через MoviOdds, который не аффилирован с bet365. Условия MoviOdds требуют возраст 18+ и разрешают использование в собственных приложениях; точная доступность в Азербайджане на физическом телефоне ещё не проверена. Источник может быть неполным или недоступным.",style=MaterialTheme.typography.bodySmall)
+                Text("Misli/TOPAZ остаются отдельными местными линиями. Международная цена не используется для виртуальных купонов Misli или TOPAZ. Цены и модели не являются доказательством преимущества или прибыли.",style=MaterialTheme.typography.bodySmall)
+                if(!internationalAgeConfirmed) {
+                    ElevatedCard(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                            Text("Международный источник доступен только пользователям 18+.",fontWeight=FontWeight.SemiBold)
+                            Text("Подтвердите возраст один раз, чтобы включить автоматическое обновление bet365 через MoviOdds. Остальная футбольная база обновляется независимо.",style=MaterialTheme.typography.bodySmall)
+                            TextButton(onClick=onOpenMoviOddsTerms) {
+                                Text("Условия MoviOdds")
+                            }
+                            Button(onClick=onConfirmMoviOddsAge) { Text("Подтверждаю, мне 18 лет или больше") }
                         }
-                        Button(onClick=onConfirmMoviOddsAge) { Text("Подтверждаю, мне 18 лет или больше") }
                     }
                 }
             }
         }
-        LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp),contentPadding=PaddingValues(bottom=12.dp)) {
-            item {
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                        Text("Предварительная проверка рынка и Elo",fontWeight=FontWeight.SemiBold)
-                        Text(
-                            "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом Elo, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
-                            style=MaterialTheme.typography.bodySmall,
-                        )
-                        Text(
-                            "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
-                            style=MaterialTheme.typography.bodySmall,
-                        )
-                        if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
-                            Text("Пока нет подходящих связанных предматчевых котировок для сравнения.",style=MaterialTheme.typography.bodySmall)
-                        } else {
-                            internationalMarketEvaluation.bookmakerReports.take(6).forEach { report ->
-                                val metricText = if(report.settledFixtureCount == 0) {
-                                    "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
-                                } else {
-                                    "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
-                                }
-                                val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
-                                Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                        Text(
-                            "Метрики описывают эту сохранённую выборку, не означают прибыль и не подтверждают превосходство источника или модели. Текущая история цен ограничена хранением источника.",
-                            style=MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                }
-            }
-            if(internationalOdds.isEmpty()) {
-                item {
-                    ElevatedCard(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
-                            Text("Сейчас нет подтверждённых свежих международных котировок.",fontWeight=FontWeight.SemiBold)
-                            Text("Последние сохранённые снимки доступны ниже как исторические данные и не помечаются текущими ценами.",style=MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            }
-            items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}"}) { quote ->
-                val eventConsensus=internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
-                val model=quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
-                val localMisli=quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
-                val localTopaz=quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
-                val internationalFair=ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
-                val movement=InternationalMarketEngine.latestMovement(quote,internationalOddsHistory)
-                val distinctBooks=eventConsensus?.distinctBookmakerCount ?: 1
-                val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
-                val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
-                val priceTimes=listOf(quote.homePriceChangedAtMillis,quote.drawPriceChangedAtMillis,quote.awayPriceChangedAtMillis).joinToString(" / ") {
-                    DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
-                }
-                val updateDescription=if(quote.providerId==THE_ODDS_API_PROVIDER_ID) "рынок обновлён $pollTime" else "времена цен 1/X/2: $priceTimes"
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                        Text("${quote.league} · ${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary)
-                        Text("${quote.homeTeam} — ${quote.awayTeam}",fontWeight=FontWeight.SemiBold)
-                        val bookmakerName=internationalBookmakerName(quote.providerId,quote.bookmakerId)
-                        val sourceName=internationalProviderName(quote.providerId)
-                        Text("$bookmakerName · 1 ${"%.2f".format(quote.home)} / X ${"%.2f".format(quote.draw)} / 2 ${"%.2f".format(quote.away)}",fontWeight=FontWeight.Bold)
-                        Text("Рыночные вероятности без маржи: ${"%.1f".format(internationalFair.home*100)} / ${"%.1f".format(internationalFair.draw*100)} / ${"%.1f".format(internationalFair.away*100)}%${if(distinctBooks>=2) " · линии ${distinctBooks} разных БК" else " · ориентир одной БК"}${quote.region?.let { " · регион источника $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
-                        Text("Источник: $sourceName · $updateDescription · сохранено приложением $captureTime",style=MaterialTheme.typography.bodySmall)
-                        Text(if(distinctBooks>=2) "Межкнижный ориентир: среднее вероятностей без маржи по $distinctBooks разным букмекерам; это описательное сравнение, не подтверждённый edge." else "Международный консенсус не рассчитан: доступен один букмекерский ориентир.",style=MaterialTheme.typography.labelSmall)
-                        movement?.let {
-                            Text("Изменение с предыдущего сохранённого снимка: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены, не вероятности).",style=MaterialTheme.typography.bodySmall)
-                        }
-                        if(quote.matchId==null) {
-                            Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
-                        } else {
-                            val linkDescription=when(quote.matchLinkBasis) {
-                                InternationalMatchLinkBasis.EXACT_KICKOFF -> "точное время kickoff и порядок команд"
-                                InternationalMatchLinkBasis.UNIQUE_DATE_ONLY -> "команды и UTC-дата совпали с единственной записью; локальный источник содержит только дату"
-                                null -> "точность сопоставления не записана"
-                            }
-                            Text("Локальный матч ID ${quote.matchId} · $linkDescription.",style=MaterialTheme.typography.labelSmall)
-                            if(model==null) {
-                                Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
+        item {
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
+                    Text("Предварительная проверка рынка и Elo",fontWeight=FontWeight.SemiBold)
+                    Text(
+                        "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом Elo, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                    if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
+                        Text("Пока нет подходящих связанных предматчевых котировок для сравнения.",style=MaterialTheme.typography.bodySmall)
+                    } else {
+                        internationalMarketEvaluation.bookmakerReports.take(6).forEach { report ->
+                            val metricText = if(report.settledFixtureCount == 0) {
+                                "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
                             } else {
-                                val p=model.probabilities
-                                Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус $bookmakerName без маржи: ${"%+.1f".format((p.home-internationalFair.home)*100)} / ${"%+.1f".format((p.draw-internationalFair.draw)*100)} / ${"%+.1f".format((p.away-internationalFair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                                "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
                             }
-                            listOf("Misli" to localMisli,"TOPAZ" to localTopaz).forEach { (name,local) ->
-                                if(local==null) Text("$name: нет свежей локальной линии по этому матчу.",style=MaterialTheme.typography.bodySmall)
-                                else {
-                                    val localFair=ProbabilityEngine.removeMargin(local.home,local.draw,local.away,MarginMethod.BASIC)
-                                    val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(local.capturedAtMillis))
-                                    Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к $bookmakerName ${"%+.1f".format((localFair.home-internationalFair.home)*100)}/${"%+.1f".format((localFair.draw-internationalFair.draw)*100)}/${"%+.1f".format((localFair.away-internationalFair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
-                                }
+                            val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
+                            Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    Text(
+                        "Метрики описывают эту сохранённую выборку, не означают прибыль и не подтверждают превосходство источника или модели. Текущая история цен ограничена хранением источника.",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
+        if(internationalOdds.isEmpty()) {
+            item {
+                ElevatedCard(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
+                        Text("Сейчас нет подтверждённых свежих международных котировок.",fontWeight=FontWeight.SemiBold)
+                        Text("Последние сохранённые снимки доступны ниже как исторические данные и не помечаются текущими ценами.",style=MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+        items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}"}) { quote ->
+            val eventConsensus=internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
+            val model=quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
+            val localMisli=quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
+            val localTopaz=quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
+            val internationalFair=ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
+            val movement=InternationalMarketEngine.latestMovement(quote,internationalOddsHistory)
+            val distinctBooks=eventConsensus?.distinctBookmakerCount ?: 1
+            val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
+            val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
+            val priceTimes=listOf(quote.homePriceChangedAtMillis,quote.drawPriceChangedAtMillis,quote.awayPriceChangedAtMillis).joinToString(" / ") {
+                DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
+            }
+            val updateDescription=if(quote.providerId==THE_ODDS_API_PROVIDER_ID) "рынок обновлён $pollTime" else "времена цен 1/X/2: $priceTimes"
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(13.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
+                    Text("${quote.league} · ${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())}",style=MaterialTheme.typography.labelMedium,color=MaterialTheme.colorScheme.primary)
+                    Text("${quote.homeTeam} — ${quote.awayTeam}",fontWeight=FontWeight.SemiBold)
+                    val bookmakerName=internationalBookmakerName(quote.providerId,quote.bookmakerId)
+                    val sourceName=internationalProviderName(quote.providerId)
+                    Text("$bookmakerName · 1 ${"%.2f".format(quote.home)} / X ${"%.2f".format(quote.draw)} / 2 ${"%.2f".format(quote.away)}",fontWeight=FontWeight.Bold)
+                    Text("Рыночные вероятности без маржи: ${"%.1f".format(internationalFair.home*100)} / ${"%.1f".format(internationalFair.draw*100)} / ${"%.1f".format(internationalFair.away*100)}%${if(distinctBooks>=2) " · линии ${distinctBooks} разных БК" else " · ориентир одной БК"}${quote.region?.let { " · регион источника $it" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
+                    Text("Источник: $sourceName · $updateDescription · сохранено приложением $captureTime",style=MaterialTheme.typography.bodySmall)
+                    Text(if(distinctBooks>=2) "Межкнижный ориентир: среднее вероятностей без маржи по $distinctBooks разным букмекерам; это описательное сравнение, не подтверждённый edge." else "Международный консенсус не рассчитан: доступен один букмекерский ориентир.",style=MaterialTheme.typography.labelSmall)
+                    movement?.let {
+                        Text("Изменение с предыдущего сохранённого снимка: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены, не вероятности).",style=MaterialTheme.typography.bodySmall)
+                    }
+                    if(quote.matchId==null) {
+                        Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
+                    } else {
+                        val linkDescription=when(quote.matchLinkBasis) {
+                            InternationalMatchLinkBasis.EXACT_KICKOFF -> "точное время kickoff и порядок команд"
+                            InternationalMatchLinkBasis.UNIQUE_DATE_ONLY -> "команды и UTC-дата совпали с единственной записью; локальный источник содержит только дату"
+                            null -> "точность сопоставления не записана"
+                        }
+                        Text("Локальный матч ID ${quote.matchId} · $linkDescription.",style=MaterialTheme.typography.labelSmall)
+                        if(model==null) {
+                            Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
+                        } else {
+                            val p=model.probabilities
+                            Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус $bookmakerName без маржи: ${"%+.1f".format((p.home-internationalFair.home)*100)} / ${"%+.1f".format((p.draw-internationalFair.draw)*100)} / ${"%+.1f".format((p.away-internationalFair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                        }
+                        listOf("Misli" to localMisli,"TOPAZ" to localTopaz).forEach { (name,local) ->
+                            if(local==null) Text("$name: нет свежей локальной линии по этому матчу.",style=MaterialTheme.typography.bodySmall)
+                            else {
+                                val localFair=ProbabilityEngine.removeMargin(local.home,local.draw,local.away,MarginMethod.BASIC)
+                                val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(local.capturedAtMillis))
+                                Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к $bookmakerName ${"%+.1f".format((localFair.home-internationalFair.home)*100)}/${"%+.1f".format((localFair.draw-internationalFair.draw)*100)}/${"%+.1f".format((localFair.away-internationalFair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
                             }
                         }
                     }
                 }
             }
-            item {
-                    TextButton(onClick={onToggleInternationalHistory()}) {
-                    Text(if(showInternationalHistory) "Скрыть историю изменений международных цен" else "Показать историю изменений международных цен (${internationalOddsHistory.size})")
-                }
+        }
+        item {
+            TextButton(onClick={onToggleInternationalHistory()}) {
+                Text(if(showInternationalHistory) "Скрыть историю изменений международных цен" else "Показать историю изменений международных цен (${internationalOddsHistory.size})")
             }
-            if(showInternationalHistory) {
-                item { Text("Сохранённые изменения котировок · не являются текущими линиями; одинаковые повторные опросы не дублируются",fontWeight=FontWeight.SemiBold) }
-                items(internationalOddsHistory.take(120),key={"history:${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.capturedAtMillis}"}) { old ->
-                    Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} (${internationalProviderName(old.providerId)}) · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
-                }
+        }
+        if(showInternationalHistory) {
+            item { Text("Сохранённые изменения котировок · не являются текущими линиями; одинаковые повторные опросы не дублируются",fontWeight=FontWeight.SemiBold) }
+            items(internationalOddsHistory.take(120),key={"history:${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.capturedAtMillis}"}) { old ->
+                Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} (${internationalProviderName(old.providerId)}) · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
             }
         }
     }
