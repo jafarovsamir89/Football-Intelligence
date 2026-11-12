@@ -274,6 +274,18 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     private fun ensureInternationalOddsQuoteSideSchema(db:SQLiteDatabase) {
         val tables = listOf("international_odds_snapshots", "international_odds_current")
+        val missingTable = tables.any { table ->
+            db.rawQuery(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?",
+                arrayOf(table),
+            ).use { !it.moveToFirst() }
+        }
+        if (missingTable) {
+            // Some older or partially initialized databases may have sync state without quote tables.
+            // Create only missing tables; CREATE TABLE IF NOT EXISTS preserves any existing quote data.
+            createInternationalOddsTables(db)
+            return
+        }
         val required = setOf("source_market_key", "quote_side", "home_bet_limit", "draw_bet_limit", "away_bet_limit")
         tables.forEach { table ->
             val exists = db.rawQuery(

@@ -289,7 +289,7 @@ internal fun InternationalMarketTabContent(
                     if(sourceLimits.isNotBlank()) {
                         Text("Лимит ставки, как передан источником (единица не указана): $sourceLimits. Это не оценка доступной ликвидности.",style=MaterialTheme.typography.bodySmall)
                     }
-                    if(isBetfairExchange) {
+                    if(isBetfairExchange && !isLay) {
                         exchangeSpread?.let {
                             Text("Спред котировок Lay − Back: 1 ${"%.2f".format(it.home)} · X ${"%.2f".format(it.draw)} · 2 ${"%.2f".format(it.away)} (разница цен, не доходность).",style=MaterialTheme.typography.bodySmall)
                         } ?: Text("Спред Back/Lay не рассчитан: нет обеих сторон из одного подтверждённого снимка.",style=MaterialTheme.typography.bodySmall)

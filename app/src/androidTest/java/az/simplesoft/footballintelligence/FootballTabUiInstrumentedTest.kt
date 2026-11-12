@@ -207,8 +207,8 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Знак Δ Elo−рынок", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Интервалы — парная выборка", substring = true))
         composeRule.onNodeWithText("Интервалы — парная выборка", substring = true).assertIsDisplayed()
-        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
-        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true))
+        composeRule.onNodeWithText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Источник: The Odds API", substring = true))
         composeRule.onNodeWithText("Источник: The Odds API", substring = true).assertIsDisplayed()
     }
@@ -224,6 +224,7 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Betfair Exchange · Lay (h2h_lay)", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Спред котировок Lay − Back: 1 0.04", substring = true))
         composeRule.onNodeWithText("Спред котировок Lay − Back: 1 0.04 · X 0.10 · 2 0.10", substring = true).assertIsDisplayed()
+        assertEquals(1, composeRule.onAllNodesWithText("Спред котировок Lay − Back:", substring = true).fetchSemanticsNodes().size)
         marketList.performScrollToNode(hasText("Лимит ставки, как передан источником", substring = true))
         composeRule.onNodeWithText("Лимит ставки, как передан источником (единица не указана): 1 250.00 / X 125.00 / 2 200.00. Это не оценка доступной ликвидности.").assertIsDisplayed()
         marketList.performScrollToNode(hasText("Комиссия Betfair не передана источником", substring = true))
@@ -249,8 +250,8 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Обновляю оценку рынка; предыдущие сводные показатели временно скрыты.").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("Котировок БК–матч:", substring = true).fetchSemanticsNodes().isEmpty())
         assertTrue(composeRule.onAllNodesWithText("95% парный bootstrap", substring = true).fetchSemanticsNodes().isEmpty())
-        marketList.performScrollToNode(hasText("Unibet Fr · 1 1.27", substring = true))
-        composeRule.onNodeWithText("Unibet Fr · 1 1.27", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true))
+        composeRule.onNodeWithText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true).assertIsDisplayed()
     }
 
     private fun showWorldMarket(
