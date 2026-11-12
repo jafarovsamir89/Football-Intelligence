@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased — добавить venue-split Home/Away baseline (local checks passed; Actions pending)
+
+- Add a separate research model for home-team home scoring/conceding and away-team away scoring/conceding, shrink venue rates toward league rates, and gate forecasts on prior league and venue-specific sample sizes. Run it through strict availability walk-forward and report validation plus paired Elo holdout metrics. It does not alter live forecasts, virtual coupons, or model selection. The local grouped cycle passed 174 JVM tests, Android-test Kotlin compilation, and both APK assemblies; API 26/API 34 Actions verification is pending.
+
 ## Unreleased — add rate-limited automatic current-season match statistics (CI/API 26/API 34 passed)
 
 - Add a Football-Data.co.uk worker which makes at most two requests in any rolling seven days, persists the request reservation before HTTP (including failures), rotates one current-season European division at a time, and saves only shots, shots on target, corners, fouls and cards for a unique exact local completed match. The results history shows source, capture time and availability; no CSV odds are parsed or saved, and no model input changes.

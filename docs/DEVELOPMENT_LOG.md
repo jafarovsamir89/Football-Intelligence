@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-12 — add a venue-split Home/Away research baseline (local checks passed; Actions pending)
+
+- Audited the Football Intelligence 3.0 prompt against current analytics. The project compared Elo with a general goal-rate Poisson/Dixon–Coles model, but had no separate home-performance/away-performance baseline.
+- Added `HomeAwayPerformanceEngine`: it estimates the host's home scoring/conceding rates and visitor's away scoring/conceding rates, shrunk to their corresponding league venue rates. Defaults require at least 50 earlier same-competition matches, five home appearances by the host, and five away appearances by the visitor. Expected goal rates stay bounded and feed the existing score-grid probability calculation.
+- Added a streaming walk-forward evaluator that admits results only when conservative availability is strictly before cutoff and batches equal availability timestamps. `GoalModelComparisonEngine` now reports Home/Away validation metrics and a separate Elo/Home-Away paired holdout, with its own fixture count so unequal coverage is not conflated with the Elo/Poisson sample. UI explicitly labels this an unvalidated research baseline; it does not affect live Elo forecasts or coupons and is not tuned on the holdout.
+- Added JVM cases for venue-specific coverage gates, bounded rates, same-time/untrusted timestamp exclusion, same-cutoff consistency, independent strict-cutoff equivalence, and paired coverage; added Compose instrumentation coverage for the Home/Away validation/holdout display.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 174 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Local debug APK SHA-256 `ebd3907edc2c9637cf073836cde78ee83193f0bc54fc9316157c312c189d8b83`; local personal APK SHA-256 `8b66d1beaa85299cc700894813b0b15f4f681d5bbbd15c6f123df0e9daee4e2a`. `apksigner verify` passed both (local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`). Full DEX inspection confirmed the credential is absent from debug and present only in the private personal APK. `git diff --check` passed. No APK was installed, and no Odds API quota was used.
+- Next: commit/push this grouped milestone and wait for API 34/API 26 instrumentation, keyless CI build/signature and artifact upload. If Actions is green, update this log and `AGENTS.md` without rebuilding. No physical handset is connected; ADB continues to show only unrelated emulator `5558`, which must remain untouched.
+
 ## 2026-11-12 — add a bounded automatic match-statistics provider (local and CI checks passed)
 
 - The user's forwarded Odds API email confirmed the same credential already stored in ignored `local.properties`. No key was printed, changed, sent to CI, or exposed in tracked source; this turn made no Odds API request and spent no quota.

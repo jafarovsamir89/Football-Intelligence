@@ -18,6 +18,11 @@ import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluatio
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.EloConfig
+import az.simplesoft.footballintelligence.analytics.EloExperimentMetrics
+import az.simplesoft.footballintelligence.analytics.GoalExpectationConfig
+import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
+import az.simplesoft.footballintelligence.analytics.HomeAwayPerformanceConfig
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
@@ -188,6 +193,61 @@ class FootballTabUiInstrumentedTest {
 
         assertEquals("TEST", selectedCompetition)
         assertEquals("TEST", requestedBacktest)
+    }
+
+    @Test
+    fun backtestShowsHomeAwayResearchBaselineAndPairedHoldoutCoverage() {
+        val metrics = EloExperimentMetrics(2, 2, 0.45, 1.02)
+        val comparison = GoalModelComparisonReport(
+            validationStartMillis = 100L,
+            holdoutStartMillis = 200L,
+            validationTargetCount = 4,
+            validationGoalMetrics = metrics,
+            validationHomeAwayMetrics = metrics,
+            selectedRhoValidationMetrics = null,
+            rhoCandidates = emptyList(),
+            selectedDixonColesRho = null,
+            rhoSelectionAvailable = false,
+            minimumValidationForecastsForRhoSelection = 100,
+            holdoutTargetCount = 2,
+            eloHoldoutForecastCount = 2,
+            goalHoldoutForecastCount = 2,
+            homeAwayHoldoutForecastCount = 2,
+            pairedHoldoutTargetCount = 2,
+            homeAwayPairedHoldoutTargetCount = 1,
+            eloPairedHoldout = metrics,
+            goalPairedHoldout = metrics,
+            eloHomeAwayPairedHoldout = metrics,
+            homeAwayPairedHoldout = metrics.copy(targetCount = 1, forecastCount = 1),
+            selectedEloConfig = EloConfig(),
+            usedValidationSelectedEloConfig = true,
+            goalConfig = GoalExpectationConfig(),
+            homeAwayConfig = HomeAwayPerformanceConfig(),
+        )
+        composeRule.setContent {
+            MaterialTheme {
+                FootballBacktestTabContent(
+                    automaticBacktestRunning = false,
+                    automaticBacktestMessage = "",
+                    automaticBacktestReport = null,
+                    automaticEloExperiment = null,
+                    automaticGoalComparison = comparison,
+                    importedCompetitionCodes = emptyList(),
+                    activeBacktestCode = "",
+                    onSelectBacktestCode = {},
+                    onRunImportedBacktest = {},
+                    backtestRunning = false,
+                    backtestMessage = "",
+                    backtestReportCode = "",
+                    backtestReport = null,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Elo, Poisson и Home/Away performance").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Validation Home/Away:", substring = true).assertExists()
+        composeRule.onNodeWithText("Holdout Elo/Home-Away на общих матчах 1:", substring = true).assertExists()
+        composeRule.onNodeWithText("Home/Away пока исследовательская модель", substring = true).assertExists()
     }
 
     @Test

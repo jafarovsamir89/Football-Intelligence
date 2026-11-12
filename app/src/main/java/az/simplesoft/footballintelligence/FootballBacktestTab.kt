@@ -90,12 +90,16 @@ internal fun FootballBacktestTabContent(
                 }
                 automaticGoalComparison?.let { comparison ->
                     HorizontalDivider()
-                    Text("Poisson по голам: сравнение с Elo",fontWeight=FontWeight.SemiBold)
+                    Text("Elo, Poisson и Home/Away performance",fontWeight=FontWeight.SemiBold)
                     if(comparison.validationStartMillis==null||comparison.holdoutStartMillis==null) {
                         Text("Недостаточно отдельных временных срезов для validation/holdout.",style=MaterialTheme.typography.bodySmall)
                     } else {
                         Text(
                             "Validation Poisson при ρ=0: Brier ${comparison.validationGoalMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${comparison.validationGoalMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · прогнозов ${comparison.validationGoalMetrics.forecastCount}/${comparison.validationTargetCount}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Validation Home/Away: Brier ${comparison.validationHomeAwayMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${comparison.validationHomeAwayMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · прогнозов ${comparison.validationHomeAwayMetrics.forecastCount}/${comparison.validationTargetCount}.",
                             style=MaterialTheme.typography.bodySmall,
                         )
                         Text(
@@ -112,12 +116,18 @@ internal fun FootballBacktestTabContent(
                             "Holdout на общих матчах ${comparison.pairedHoldoutTargetCount}: Elo ${eloPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${eloPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Poisson ${goalPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${goalPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}. Доступность прогнозов на holdout: Elo ${comparison.eloHoldoutForecastCount}, Poisson ${comparison.goalHoldoutForecastCount} из ${comparison.holdoutTargetCount}.",
                             style=MaterialTheme.typography.bodySmall,
                         )
+                        val eloHomeAwayPaired=comparison.eloHomeAwayPairedHoldout
+                        val homeAwayPaired=comparison.homeAwayPairedHoldout
                         Text(
-                            "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}; Poisson сглаживает атаки/оборону на ${comparison.goalConfig.smoothingMatches.toInt()} псевдоматчах, требует ${comparison.goalConfig.minimumLeagueMatches} матчей лиги и ${comparison.goalConfig.minimumMatchesPerTeam} матчей команды. Holdout не используется для выбора ρ.",
+                            "Holdout Elo/Home-Away на общих матчах ${comparison.homeAwayPairedHoldoutTargetCount}: Elo ${eloHomeAwayPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${eloHomeAwayPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Home/Away ${homeAwayPaired.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${homeAwayPaired.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}. Прогнозов Home/Away: ${comparison.homeAwayHoldoutForecastCount} из ${comparison.holdoutTargetCount}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}. Poisson использует общие голы команды, Home/Away отдельно считает домашние и гостевые голы и сглаживает их на ${comparison.homeAwayConfig.smoothingMatches.toInt()} псевдоматчах. Для Home/Away нужно ${comparison.homeAwayConfig.minimumLeagueMatches} матчей лиги и минимум ${comparison.homeAwayConfig.minimumMatchesPerSplit} домашних матчей хозяев и гостевых матчей гостей. Holdout не используется для выбора параметров.",
                             style=MaterialTheme.typography.labelSmall,
                         )
                     }
-                    Text("Обе модели используют только результаты, доступные до cutoff. Это одна проверка текущих исторических файлов; она не подтверждает будущую точность или преимущество.",style=MaterialTheme.typography.labelSmall)
+                    Text("Все сравниваемые модели используют только результаты, доступные до cutoff. Это одна проверка текущих исторических файлов; она не подтверждает будущую точность или преимущество. Home/Away пока исследовательская модель и не влияет на live-прогнозы или купоны.",style=MaterialTheme.typography.labelSmall)
                 }
                 HorizontalDivider()
                 Text("Дополнительный импортированный CSV",fontWeight=FontWeight.SemiBold)
