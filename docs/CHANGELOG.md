@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — move full-screen market and forecast diagnostics off the UI thread
+
+- Calculate international consensus, paired market evaluation, and prospective forecast metrics together from one immutable screen snapshot on `Dispatchers.Default`.
+- Keep the full prospective evaluation ledger as the scoring input while the recent-history panel stays capped at 100 rows. Add a regression test for that boundary and document that the previous completed report may remain visible while a new snapshot is evaluated.
+- No database schema, scoring rule, forecast input, or cutoff changes.
+
 ## Distribute free Odds API refreshes across the day (CI/API 26/API 34 passed)
 
 - Change from a once-daily batch of 12 leagues to one rotating league per two-hour WorkManager run. A synchronized persisted gate allows at most 12 attempts in any rolling 24-hour window, stores quota response headers, pauses when 20 or fewer credits remain until after the monthly reset window, and honors server `Retry-After` after HTTP 429/503 responses.

@@ -26,9 +26,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import az.simplesoft.footballintelligence.analytics.EloEngine
-import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
-import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
-import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationEngine
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
@@ -36,7 +33,6 @@ import az.simplesoft.footballintelligence.analytics.EloChronologicalExperimentRe
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
-import az.simplesoft.footballintelligence.analytics.ProspectiveForecastEvaluator
 import az.simplesoft.footballintelligence.analytics.historyAvailableAt
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
@@ -54,6 +50,7 @@ import androidx.work.WorkManager
     val activity = LocalContext.current as ComponentActivity
     val coroutineScope = rememberCoroutineScope()
     var storeLoadState by remember(repository) { mutableStateOf(FootballScreenStoreLoadState()) }
+    var screenAnalytics by remember(repository) { mutableStateOf(FootballScreenAnalytics.empty()) }
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
     var tab by remember { mutableIntStateOf(0) }
@@ -98,6 +95,17 @@ import androidx.work.WorkManager
         }
     }
     val storeSnapshot=storeLoadState.snapshot
+    LaunchedEffect(
+        repository,
+        storeSnapshot.internationalOdds,
+        storeSnapshot.internationalOddsEvaluationHistory,
+        storeSnapshot.prospectiveForecastEvaluationHistory,
+    ) {
+        val snapshot = storeSnapshot
+        screenAnalytics = withContext(Dispatchers.Default) {
+            calculateFootballScreenAnalytics(snapshot)
+        }
+    }
     val syncSummaries=storeSnapshot.providerSyncSummaries
     val syncBusy=(oneTimeSync+periodicSync).any { it.state==WorkInfo.State.RUNNING }
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
@@ -163,7 +171,6 @@ import androidx.work.WorkManager
         (misliOdds+topazOdds).map { listOf(it.providerId,it.matchId,it.kickoffMillis,it.home,it.draw,it.away,it.capturedAtMillis) }.hashCode()
     }
     var forecastedMatches by remember { mutableStateOf<List<ForecastedMatch>>(emptyList()) }
-    val internationalConsensus=remember(internationalOdds) { InternationalMarketEngine.consensus(internationalOdds) }
     LaunchedEffect(matchForecastKey,oddsForecastKey,storeLoadState.version) {
         val matchSnapshot=matches
         val oddsSnapshot=misliOdds+topazOdds
@@ -217,25 +224,10 @@ import androidx.work.WorkManager
     }
     val checkedCouponHistory=storeSnapshot.checkedCouponHistory
     val prospectiveForecastHistory=storeSnapshot.prospectiveForecastHistory
-    val prospectiveForecastReport=remember(storeSnapshot.prospectiveForecastEvaluationHistory) {
-        ProspectiveForecastEvaluator.evaluate(storeSnapshot.prospectiveForecastEvaluationHistory)
-    }
-    var internationalMarketEvaluation by remember {
-        mutableStateOf(InternationalMarketEvaluationReport(0,0,0,0,emptyList()))
-    }
-    LaunchedEffect(storeSnapshot.internationalOddsEvaluationHistory,storeSnapshot.prospectiveForecastEvaluationHistory) {
-        val oddsHistory = storeSnapshot.internationalOddsEvaluationHistory
-        val forecastHistory = storeSnapshot.prospectiveForecastEvaluationHistory
-        internationalMarketEvaluation = withContext(Dispatchers.Default) {
-            InternationalMarketEvaluationEngine.evaluate(oddsHistory,forecastHistory)
-        }
-    }
+    val internationalConsensus=screenAnalytics.internationalConsensus
+    val internationalMarketEvaluation=screenAnalytics.internationalMarketEvaluation
+    val prospectiveForecastReport=screenAnalytics.prospectiveForecastReport
     val accumulatorHistory=storeSnapshot.accumulatorHistory
-    val mapped=matches.associateBy { it.id }
-    val settled=tickets.mapNotNull { t -> ticketMatches[t.matchId]?.let { m -> scoreResult(m)?.let { it to t } } }
-    val exposure=settled.sumOf { it.second.stake }
-    val returned=settled.sumOf { (r,t)->if(r==t.outcome) t.stake*t.price else 0.0 }
-    val roi=if(exposure>0) (returned/exposure-1)*100 else 0.0
     var source by remember(selected) { mutableStateOf("") }
     var outcome by remember(selected) { mutableStateOf("H") }
     var stake by remember(selected) { mutableStateOf("10") }
