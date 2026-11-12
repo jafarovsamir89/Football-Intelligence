@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — validate the configured personal Odds API key against live EPL odds
+
+- Made one direct request to the documented V4 EPL prematch 1X2 endpoint using the key from ignored `local.properties`; authentication returned HTTP 200. The response contained 20 events and 298 complete bookmaker 1X2 lines. The request cost one credit; quota headers showed 2 credits used and 498 remaining out of the 500-credit monthly plan. The sample source timestamp was `2026-11-12T10:06:16Z`, about one minute before capture. No API key or raw response was written to the repository.
+- Confirmed `local.properties` remains git-ignored and untracked. The already-built personal APK contains the configured local key; the debug APK does not. No source or credential configuration changed, so no rebuild, APK install, or test rerun was needed. This validates provider authentication and a live public response, not local exact-fixture matching, persistent Android Worker execution, access from Azerbaijan, or future accuracy.
+- Next: improve the strict exact fixture linker where source kickoff precision differs, while retaining conservative rejection of ambiguous events; continue prospective forecast settlement and physical-device acceptance when available.
+
 ## 2026-11-12 — evaluate the complete prospective forecast ledger once per fixture (CI/API 26/API 34 passed)
 
 - Fixed an evaluation-sample bug: the coupon screen showed only the newest 100 forecast rows and also scored every daily snapshot, so older settled matches could disappear and repeated forecasts of the same match could inflate sample size.
