@@ -38,7 +38,7 @@
 
 ## Android APK
 
-Последняя успешная сборка: [GitHub Actions 43137789034](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43137789034), код `06ab802`. CI прошёл unit-тесты, все 23 API 34 instrumentation-теста, сборку APK, стабильную подпись и загрузку артефакта `13909145161`. SHA-256 APK `e95fdd3ab9c3a27e7d070efa39e5d374c2d0c6b454d6c757cc967d40703b7350`; SHA-256 сертификата `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Это тестовая debug-сборка, не релиз Play Store.
+Последняя успешная сборка: [GitHub Actions 43191151068](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43191151068), код `6eae5b5`. CI прошёл 147 JVM-тестов, 41/41 API 34 instrumentation-тест и API 26 (40 пройдено, один сетевой тест пропущен, 0 ошибок); собрал debug и personal варианты без ключа в CI и загрузил стабильную подписанную keyless debug APK — артефакт `13930344719`. SHA-256 APK `30fba2445dbf0832a1693596b6b61857efedd13c81c3474b836d7a61cfb1f82a`; SHA-256 сертификата `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. Это тестовая debug-сборка, не релиз Play Store. Личная APK с ключом собирается только локально, лежит в `app/build/outputs/apk/personal/app-personal.apk` и не должна передаваться другим лицам.
 
 ADB в последней проверке видел только эмулятор `5558`, где пакет приложения не установлен; физический Xiaomi не подключён. APK не устанавливался, эмуляторы и их данные не менялись. Доступность MoviOdds и операторских страниц на физическом телефоне в Азербайджане пока не проверена. Предыдущий прямой MoviOdds POC — 923 строки/904 прошедших фильтр — исторический и не является подтверждением текущих котировок.
 
