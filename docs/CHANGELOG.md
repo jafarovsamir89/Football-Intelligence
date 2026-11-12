@@ -4,7 +4,7 @@
 
 - Persist received, accepted, rejected, stale, duplicate and unverified match counts from each parsed MoviOdds board and show them on the World Market screen. The counters describe only the latest JSON response; they are not a source reliability score.
 - Add mutually exclusive parser accounting, API 34 v14→v15 migration and Worker persistence coverage. Alternative-feed research found The Odds Gap's keyless endpoints may not be repackaged into another product, while UK Odds API and The Odds API free tiers require accounts/keys; no additional feed was added.
-- The first combined local cycle found and fixed a missing instrumentation-test import. The successful cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly. APK SHA-256 `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`. CI instrumentation/runtime verification is pending.
+- The first combined local cycle found and fixed a missing instrumentation-test import. The successful cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly. Local APK SHA-256 `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`. Commit `1c26c43` passed Actions [43149054713](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43149054713), including all 29 API 34 instrumentation tests, stable signing and artifact upload `13912194538`; downloaded APK SHA-256 `d5869a0e06e8f2c6f47ae9ac44e79e2f07423a7c127db653cc49939c5c5e2124`, signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Unreleased — add same-book market-disagreement accumulator drafts
 

@@ -1,10 +1,11 @@
 # Testing
 
-## International quality-gate counters (local passed; CI pending)
+## International quality-gate counters (local and CI passed)
 
 - Assert each parsed MoviOdds event is classified exactly once as accepted, rejected, stale, duplicate or unverified; persist the latest breakdown in the v14→v15 migration and show it in World Market without turning counts into a reliability score.
 - Cover API 34 migration preservation and Worker-to-SQLite counter persistence. Keep the persistent emulator database untouched.
-- The first combined local cycle found a missing instrumentation-test import, which was fixed before rerunning. The successful combined cycle passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. APK SHA-256: `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`; `git diff --check` passed. The instrumentation suite still needs its CI runtime run.
+- The first combined local cycle found a missing instrumentation-test import, which was fixed before rerunning. The successful combined cycle passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. Local APK SHA-256: `6607c46c3200d07444342ce39edadc90ad53e09a6c54969f40349b78a9632a00`; `git diff --check` passed.
+- Commit `1c26c43` passed Actions [43149054713](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43149054713): all 29 API 34 instrumentation tests, APK build, stable signing and artifact upload `13912194538`. Downloaded APK SHA-256 `d5869a0e06e8f2c6f47ae9ac44e79e2f07423a7c127db653cc49939c5c5e2124`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Completed same-book market-disagreement coupon batch (local and CI verification passed)
 
