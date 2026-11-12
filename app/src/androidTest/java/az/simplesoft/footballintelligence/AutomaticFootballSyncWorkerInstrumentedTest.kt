@@ -7,6 +7,9 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ListenableWorker
+import androidx.work.NetworkType
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.OpenFootballJsonParser
 import az.simplesoft.footballintelligence.data.OpenLigaDbParser
@@ -161,6 +164,154 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
             }
         } finally {
             baseContext.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun rateLimitedProvidersStopTheirRequestsAndQueueOneDelayedRetry() = runBlocking {
+        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-worker-retry-after-${UUID.randomUUID()}.db"
+        baseContext.deleteDatabase(databaseName)
+        val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
+        val workManager = WorkManager.getInstance(baseContext)
+        workManager.cancelUniqueWork(FootballSyncScheduler.UNIQUE_ONCE_NAME).result.get(10, TimeUnit.SECONDS)
+        val client = RateLimitedProviderHttpClient(
+            openFootballDelayMillis = TimeUnit.MINUTES.toMillis(2),
+            openLigaDelayMillis = TimeUnit.MINUTES.toMillis(5),
+        )
+
+        try {
+            val worker = TestListenableWorkerBuilder<AutomaticFootballSyncWorker>(isolatedContext)
+                .setRunAttemptCount(1)
+                .build()
+            worker.providerHttpClient = client
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.success().javaClass, result.javaClass)
+            assertEquals(
+                "Each independent provider must stop after its first 429 instead of continuing its catalog loop.",
+                2,
+                client.requestedUrls.size,
+            )
+            val queued = awaitActiveWork(workManager, FootballSyncScheduler.UNIQUE_ONCE_NAME)
+            assertEquals(WorkInfo.State.ENQUEUED, queued.state)
+            assertEquals(TimeUnit.MINUTES.toMillis(5), queued.initialDelayMillis)
+            assertEquals(NetworkType.CONNECTED, queued.constraints.requiredNetworkType)
+            assertEquals(0, queued.runAttemptCount)
+            Store(baseContext, databaseName).use { store ->
+                val summaries = store.providerSyncSummaries().associateBy { it.providerId }
+                assertEquals(setOf(OpenFootballJsonParser.PROVIDER_ID, OpenLigaDbParser.PROVIDER_ID), summaries.keys)
+                assertTrue(summaries.values.all { it.status == "ERROR" })
+                store.writableDatabase.rawQuery("SELECT COUNT(*) FROM provider_sync_lock WHERE id=1", null).use { cursor ->
+                    assertTrue(cursor.moveToFirst())
+                    assertEquals(0, cursor.getInt(0))
+                }
+            }
+        } finally {
+            workManager.cancelUniqueWork(FootballSyncScheduler.UNIQUE_ONCE_NAME).result.get(10, TimeUnit.SECONDS)
+            baseContext.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun openFootballStopsAfterRateLimitOnFirstCompetitionFile() {
+        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-openfootball-file-429-${UUID.randomUUID()}.db"
+        baseContext.deleteDatabase(databaseName)
+        val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
+        val now = System.currentTimeMillis()
+        val today = LocalDate.of(2026, 11, 12)
+        val season = OpenFootballJsonParser.planSeasons(today, 5).first()
+        val delay = TimeUnit.MINUTES.toMillis(3)
+        val client = RateLimitedProviderHttpClient(delay, delay)
+
+        try {
+            Store(isolatedContext, databaseName).use { store ->
+                store.saveProviderFileCache(
+                    "openfootball:directory:$season",
+                    OpenFootballJsonParser.PROVIDER_ID,
+                    null,
+                    null,
+                    now,
+                    2,
+                    """[{"type":"file","name":"one.json"},{"type":"file","name":"two.json"}]""",
+                )
+
+                val outcome = OpenFootballSync(store, client).sync(today, now, now + TimeUnit.MINUTES.toMillis(10))
+
+                assertEquals(1, client.requestedUrls.size)
+                assertEquals("ERROR", outcome.status)
+                assertTrue(outcome.retryNeeded)
+                assertEquals(delay, outcome.retryAfterDelayMillis)
+            }
+        } finally {
+            baseContext.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun openLigaDbStopsAfterRateLimitOnFirstLeagueMatchRequest() {
+        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-openligadb-match-429-${UUID.randomUUID()}.db"
+        baseContext.deleteDatabase(databaseName)
+        val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
+        val now = System.currentTimeMillis()
+        val today = LocalDate.of(2026, 11, 12)
+        val delay = TimeUnit.MINUTES.toMillis(4)
+        val client = RateLimitedProviderHttpClient(delay, delay)
+        val catalogBody = """[
+            {"leagueId":1,"leagueName":"Test One","leagueShortcut":"tst1","leagueSeason":"2026","sport":{"sportId":1,"sportName":"Football"}},
+            {"leagueId":2,"leagueName":"Test Two","leagueShortcut":"tst2","leagueSeason":"2026","sport":{"sportId":1,"sportName":"Football"}}
+        ]"""
+
+        try {
+            Store(isolatedContext, databaseName).use { store ->
+                store.saveProviderFileCache(
+                    "openligadb:catalog:2026",
+                    OpenLigaDbParser.PROVIDER_ID,
+                    null,
+                    null,
+                    now,
+                    2,
+                    catalogBody,
+                )
+
+                val outcome = OpenLigaDbSync(store, client).sync(today, now, now + TimeUnit.MINUTES.toMillis(10))
+
+                assertEquals(1, client.requestedUrls.size)
+                assertTrue(client.requestedUrls.single().endsWith("/getmatchdata/tst1/2026"))
+                assertEquals("ERROR", outcome.status)
+                assertTrue(outcome.retryNeeded)
+                assertEquals(delay, outcome.retryAfterDelayMillis)
+            }
+        } finally {
+            baseContext.deleteDatabase(databaseName)
+        }
+    }
+
+    private fun awaitActiveWork(workManager: WorkManager, uniqueName: String): WorkInfo {
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(30)
+        while (System.currentTimeMillis() < deadline) {
+            val active = workManager.getWorkInfosForUniqueWork(uniqueName).get(10, TimeUnit.SECONDS)
+                .filter { it.state == WorkInfo.State.ENQUEUED || it.state == WorkInfo.State.RUNNING }
+            if (active.size == 1) return active.single()
+            Thread.sleep(100)
+        }
+        throw AssertionError("No delayed retry was queued for $uniqueName.")
+    }
+
+    private class RateLimitedProviderHttpClient(
+        private val openFootballDelayMillis: Long,
+        private val openLigaDelayMillis: Long,
+    ) : ProviderHttpClient {
+        val requestedUrls = ConcurrentLinkedQueue<String>()
+
+        override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
+            requestedUrls.add(url)
+            val delay = if (url.startsWith("https://api.github.com/") || url.startsWith("https://raw.githubusercontent.com/")) {
+                openFootballDelayMillis
+            } else {
+                openLigaDelayMillis
+            }
+            throw ProviderHttpException(429, delay)
         }
     }
 

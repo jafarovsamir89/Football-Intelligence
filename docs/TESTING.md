@@ -1,5 +1,11 @@
 # Testing
 
+## Current grouped Retry-After milestone (local verification passed; Actions pending)
+
+- Added strict parsing for both HTTP `Retry-After` forms, a local HTTP 429 regression, and an API 34 worker test checking that OpenFootball/OpenLigaDB stop after their first 429 and enqueue one CONNECTED retry after the longest valid server delay.
+- Before the combined verification/build, the requested public Odds sources were rechecked against their public pages and terms. No prohibited WebView/parser path was added. The existing MoviOdds adapter already has its own historical public-feed POC and app quality tests; current access from Azerbaijan is still unverified.
+- One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 122 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `6c3c23928250ebc6e8a93858667c4798d2cb5addc4997251509b7a8da9a94ed6`; `git diff --check` passed. GitHub Actions is pending. No APK installation or persistent emulator database changes are part of this check.
+
 ## Latest completed milestone (2026-11-12; international feed CI passed)
 
 - Added independent MoviOdds market storage, age and Worker gates, exact event linking, quote freshness/history, single-book no-vig display and migration coverage. The provider is labelled “bet365 via MoviOdds”; international prices remain excluded from Misli/TOPAZ coupons.

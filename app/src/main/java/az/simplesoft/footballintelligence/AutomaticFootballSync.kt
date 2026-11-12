@@ -6,6 +6,7 @@ import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.ListenableWorker
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -38,6 +39,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.charset.StandardCharsets
 import java.time.LocalDate
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
@@ -57,6 +60,44 @@ private const val WORKER_SYNC_BUDGET_MILLIS = 7L * 60 * 1000
 internal const val PERIODIC_SYNC_INTERVAL_HOURS = 24L
 internal const val APP_OPEN_SYNC_STALE_AFTER_HOURS = 8L
 internal const val SYNC_RETRY_BACKOFF_SECONDS = 30L
+
+internal fun parseRetryAfterDelayMillis(value: String?, nowMillis: Long): Long? {
+    val header = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    if (header.all(Char::isDigit)) {
+        val seconds = header.toLongOrNull()?.takeIf { it >= 0L } ?: return null
+        return runCatching { Math.multiplyExact(seconds, 1_000L) }.getOrNull()
+    }
+    val retryAtMillis = runCatching {
+        ZonedDateTime.parse(header, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
+    }.getOrNull() ?: return null
+    return if (retryAtMillis <= nowMillis) 0L else retryAtMillis - nowMillis
+}
+
+internal fun ProviderHttpException.shouldStopProviderRequests(): Boolean = statusCode == 429 || statusCode == 503
+
+internal fun combineRetryAfterDelays(current: Long?, candidate: Long?): Long? = when {
+    candidate == null || candidate <= 0L -> current
+    current == null || candidate > current -> candidate
+    else -> current
+}
+
+internal inline fun <reified W : ListenableWorker> enqueueDelayedNetworkRetry(
+    context: Context,
+    uniqueWorkName: String,
+    delayMillis: Long,
+): Boolean {
+    if (delayMillis <= 0L) return false
+    return runCatching {
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val request = withAutomaticSyncRetryBackoff(
+            OneTimeWorkRequestBuilder<W>()
+                .setInitialDelay(delayMillis, TimeUnit.MILLISECONDS)
+                .setConstraints(constraints),
+        ).build()
+        WorkManager.getInstance(context.applicationContext)
+            .enqueueUniqueWork(uniqueWorkName, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
+    }.isSuccess
+}
 
 internal fun <B : WorkRequest.Builder<B, W>, W : WorkRequest> withAutomaticSyncRetryBackoff(builder: B): B =
     builder.setBackoffCriteria(BackoffPolicy.EXPONENTIAL, SYNC_RETRY_BACKOFF_SECONDS, TimeUnit.SECONDS)
@@ -209,6 +250,9 @@ class TipsAuditMarketReferenceWorker(context:Context,params:WorkerParameters):Co
         val checkedAt=System.currentTimeMillis()
         try {
             val response=providerHttpClient.get(TIPSAUDIT_API_URL)
+            if(response.statusCode in setOf(429,503)) {
+                throw ProviderHttpException(response.statusCode,response.retryAfterDelayMillis)
+            }
             if(response.statusCode !in 200..299) throw IOException("Unexpected HTTP ${response.statusCode} for TipsAudit.")
             val parsed=TipsAuditFairOddsProvider().parse(response.body,checkedAt,store.matchIdentities())
             store.saveMarketReferenceCapture(
@@ -220,6 +264,14 @@ class TipsAuditMarketReferenceWorker(context:Context,params:WorkerParameters):Co
             )
             store.relinkUnmatchedMarketReferences(checkedAt)
             Result.success()
+        } catch(error:ProviderHttpException) {
+            store.saveMarketReferenceCapture(checkedAt,MarketReferenceStatus.ERROR,emptyList(),null,error.message)
+            val queued=if(error.shouldStopProviderRequests()) error.retryAfterDelayMillis?.let { delay ->
+                enqueueDelayedNetworkRetry<TipsAuditMarketReferenceWorker>(applicationContext,TIPSAUDIT_ONCE_SYNC_NAME,delay)
+            } == true else false
+            if(queued) {
+                Result.success()
+            } else Result.retry()
         } catch(error:Exception) {
             store.saveMarketReferenceCapture(checkedAt,MarketReferenceStatus.ERROR,emptyList(),null,safeError(error))
             Result.retry()
@@ -314,7 +366,10 @@ class InternationalOddsMarketWorker(context:Context,params:WorkerParameters):Cor
             }
             if(response.statusCode==429||response.statusCode==503) {
                 store.saveInternationalOddsCapture(checkedAt,InternationalOddsStatus.ERROR,emptyList(),"Источник временно ограничил запрос (HTTP ${response.statusCode}); WorkManager повторит позже.")
-                return@withContext Result.retry()
+                val queued=response.retryAfterDelayMillis?.let { delay ->
+                    enqueueDelayedNetworkRetry<InternationalOddsMarketWorker>(applicationContext,INTERNATIONAL_ODDS_ONCE_WORK_NAME,delay)
+                } == true
+                return@withContext if(queued) Result.success() else Result.retry()
             }
             if(response.statusCode !in 200..299) throw IOException("Unexpected HTTP ${response.statusCode} from MoviOdds.")
             val parsed=Bet365ViaMoviOddsProvider().parse(response.body,checkedAt,store.matchIdentities())
@@ -325,7 +380,10 @@ class InternationalOddsMarketWorker(context:Context,params:WorkerParameters):Cor
             val blocked=error.statusCode in setOf(401,403,451)
             val status=if(blocked) InternationalOddsStatus.BLOCKED else InternationalOddsStatus.ERROR
             store.saveInternationalOddsCapture(checkedAt,status,emptyList(),safeError(error),replaceCurrentBoard=blocked)
-            if(blocked) Result.success() else Result.retry()
+            val delay=error.retryAfterDelayMillis
+            val queued=!blocked && error.shouldStopProviderRequests() && delay!=null &&
+                enqueueDelayedNetworkRetry<InternationalOddsMarketWorker>(applicationContext,INTERNATIONAL_ODDS_ONCE_WORK_NAME,delay)
+            if(blocked || queued) Result.success() else Result.retry()
         } catch(error:Exception) {
             store.saveInternationalOddsCapture(checkedAt,InternationalOddsStatus.ERROR,emptyList(),safeError(error))
             Result.retry()
@@ -353,6 +411,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         var anySuccess = false
         var retryNeeded = false
         var continuationNeeded = false
+        var retryAfterDelayMillis: Long? = null
         val summaryText = mutableListOf<String>()
         var openFootballRecords = 0
 
@@ -376,6 +435,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
                 anySuccess = anySuccess || outcome.successAtMillis != null
                 retryNeeded = retryNeeded || outcome.retryNeeded
                 continuationNeeded = continuationNeeded || outcome.continuationNeeded
+                retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, outcome.retryAfterDelayMillis)
                 summaryText += "OpenFootball ${outcome.status}: ${outcome.records}"
             }.onFailure { error ->
                 retryNeeded = true
@@ -403,6 +463,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
                 anySuccess = anySuccess || outcome.successAtMillis != null
                 retryNeeded = retryNeeded || outcome.retryNeeded
                 continuationNeeded = continuationNeeded || outcome.continuationNeeded
+                retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, outcome.retryAfterDelayMillis)
                 summaryText += "OpenLigaDB ${outcome.status}: ${outcome.records}"
             }.onFailure { error ->
                 retryNeeded = true
@@ -419,7 +480,10 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         val nextStep = decideSyncNextStep(retryNeeded, continuationNeeded, anySuccess)
         setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds, "marketFixturesLinked" to linkedMarketReferences))
         when (nextStep) {
-            SyncNextStep.RETRY -> Result.retry()
+            SyncNextStep.RETRY -> {
+                val delayMillis = retryAfterDelayMillis
+                if (delayMillis != null && enqueueDelayedAutomaticRetry(delayMillis)) Result.success() else Result.retry()
+            }
             SyncNextStep.SUCCESS -> Result.success()
             SyncNextStep.CONTINUE -> if (enqueueContinuation()) Result.success() else Result.retry()
         }
@@ -440,6 +504,9 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         WorkManager.getInstance(applicationContext)
             .enqueueUniqueWork(ONCE_SYNC_NAME, ExistingWorkPolicy.APPEND_OR_REPLACE, continuation)
     }.isSuccess
+
+    private fun enqueueDelayedAutomaticRetry(delayMillis: Long): Boolean =
+        enqueueDelayedNetworkRetry<AutomaticFootballSyncWorker>(applicationContext, ONCE_SYNC_NAME, delayMillis)
 }
 
 internal data class SyncOutcome(
@@ -449,6 +516,7 @@ internal data class SyncOutcome(
     val retryNeeded: Boolean,
     val continuationNeeded: Boolean,
     val errors: List<String>,
+    val retryAfterDelayMillis: Long? = null,
 )
 
 internal data class ProviderHttpResult(
@@ -456,9 +524,13 @@ internal data class ProviderHttpResult(
     val body: String,
     val etag: String?,
     val lastModified: String?,
+    val retryAfterDelayMillis: Long? = null,
 )
 
-internal class ProviderHttpException(val statusCode:Int):IOException("HTTP $statusCode from provider.")
+internal class ProviderHttpException(
+    val statusCode:Int,
+    val retryAfterDelayMillis:Long? = null,
+):IOException("HTTP $statusCode from provider.")
 
 private fun safeError(error: Throwable): String = (error.message ?: error.javaClass.simpleName).take(400)
 
@@ -486,7 +558,12 @@ internal class PublicJsonClient : ProviderHttpClient {
             if (code == HttpURLConnection.HTTP_NOT_FOUND) {
                 return ProviderHttpResult(code, "", connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
             }
-            if (code !in 200..299) throw ProviderHttpException(code)
+            if (code !in 200..299) {
+                throw ProviderHttpException(
+                    code,
+                    parseRetryAfterDelayMillis(connection.getHeaderField("Retry-After"), System.currentTimeMillis()),
+                )
+            }
             val rawInput = connection.inputStream
             val input = if(connection.getHeaderField("Content-Encoding").orEmpty().contains("gzip",ignoreCase=true)) GZIPInputStream(rawInput) else rawInput
             val output = ByteArrayOutputStream()
@@ -525,14 +602,23 @@ internal class OpenFootballSync(private val store: Store, private val http: Prov
         var continuationNeeded = false
         var consecutiveErrors = 0
         val seasons = OpenFootballJsonParser.planSeasons(today, 5)
-        for (season in seasons) {
+        var retryAfterDelayMillis: Long? = null
+        seasonLoop@ for (season in seasons) {
             if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
                 continuationNeeded = true
                 errors += SYNC_CONTINUATION_MESSAGE
                 break
             }
             val currentSeason = season == seasons.first()
-            val directory = getSeasonDirectory(season, currentSeason, syncStartedAt, errors)
+            val directory = try {
+                getSeasonDirectory(season, currentSeason, syncStartedAt, errors)
+            } catch (error: ProviderHttpException) {
+                if (!error.shouldStopProviderRequests()) throw error
+                errors += "catalog $season: ${safeError(error)}"
+                needsRetry = true
+                retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, error.retryAfterDelayMillis)
+                break@seasonLoop
+            }
             if (directory.isEmpty()) continue
             for (file in directory) {
                 if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
@@ -574,6 +660,10 @@ internal class OpenFootballSync(private val store: Store, private val http: Prov
                 } catch (error: Exception) {
                     errors += "${file.season}/${file.fileName}: ${safeError(error)}"
                     needsRetry = true
+                    if (error is ProviderHttpException && error.shouldStopProviderRequests()) {
+                        retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, error.retryAfterDelayMillis)
+                        break@seasonLoop
+                    }
                     consecutiveErrors++
                     if (consecutiveErrors >= 3) break
                 }
@@ -591,6 +681,7 @@ internal class OpenFootballSync(private val store: Store, private val http: Prov
             retryNeeded = needsRetry || errors.any { it != SYNC_CONTINUATION_MESSAGE },
             continuationNeeded = continuationNeeded,
             errors = errors,
+            retryAfterDelayMillis = retryAfterDelayMillis,
         )
     }
 
@@ -620,14 +711,15 @@ internal class OpenFootballSync(private val store: Store, private val http: Prov
                 }
             }
         } catch (error: Exception) {
+            if (error is ProviderHttpException && error.shouldStopProviderRequests()) throw error
             errors += "catalog $season: ${safeError(error)}"
-            // Use the last successful catalog while offline or rate-limited.
+            // Use the last successful catalog for ordinary failures; 429/503 propagate to stop this source.
             cached?.cachedBody?.let { OpenFootballJsonParser.parseSeasonDirectory(it, season) }.orEmpty()
         }
     }
 }
 
-private class OpenLigaDbSync(private val store: Store, private val http: ProviderHttpClient) {
+internal class OpenLigaDbSync(private val store: Store, private val http: ProviderHttpClient) {
     private var lastRequestAtMillis = 0L
     private val weeklyFullSyncTtl = TimeUnit.DAYS.toMillis(7)
     private val checkTtl = TimeUnit.HOURS.toMillis(12)
@@ -638,13 +730,22 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
         var catalogsFound = 0
         var retryNeeded = false
         var continuationNeeded = false
+        var retryAfterDelayMillis: Long? = null
         seasonLoop@ for (seasonYear in today.year downTo today.year - 4) {
             if (System.currentTimeMillis() >= runtimeDeadlineMillis) {
                 continuationNeeded = true
                 errors += SYNC_CONTINUATION_MESSAGE
                 break@seasonLoop
             }
-            val catalog = getCatalog(seasonYear, syncStartedAt)
+            val catalog = try {
+                getCatalog(seasonYear, syncStartedAt)
+            } catch (error: ProviderHttpException) {
+                if (!error.shouldStopProviderRequests()) throw error
+                errors += "catalog $seasonYear: ${safeError(error)}"
+                retryNeeded = true
+                retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, error.retryAfterDelayMillis)
+                break@seasonLoop
+            }
             if (catalog.isEmpty()) continue
             catalogsFound++
             for (league in catalog) {
@@ -713,13 +814,22 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
                 } catch (error: Exception) {
                     errors += "${league.shortcut}/${league.season}: ${safeError(error)}"
                     retryNeeded = true
+                    if (error is ProviderHttpException && error.shouldStopProviderRequests()) {
+                        retryAfterDelayMillis = combineRetryAfterDelays(retryAfterDelayMillis, error.retryAfterDelayMillis)
+                        store.saveOpenLigaState(leagueKey, state?.sourceChange, state?.currentGroupOrderId, 0L, 0L, state?.recordCount ?: 0)
+                        break@seasonLoop
+                    }
                     // A failed check must not mark this league fresh; WorkManager's retry should retry it.
                     store.saveOpenLigaState(leagueKey, state?.sourceChange, state?.currentGroupOrderId, 0L, 0L, state?.recordCount ?: 0)
                 }
             }
         }
         if (catalogsFound == 0 && !continuationNeeded) {
-            return SyncOutcome("ERROR", 0, null, true, false, listOf("OpenLigaDB football catalogs were unavailable."))
+            return SyncOutcome(
+                "ERROR", 0, null, true, false,
+                errors.ifEmpty { listOf("OpenLigaDB football catalogs were unavailable.") },
+                retryAfterDelayMillis,
+            )
         }
         return SyncOutcome(
             status = automaticProviderSyncStatus(
@@ -732,6 +842,7 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
             retryNeeded = retryNeeded,
             continuationNeeded = continuationNeeded,
             errors = errors,
+            retryAfterDelayMillis = retryAfterDelayMillis,
         )
     }
 
@@ -743,7 +854,12 @@ private class OpenLigaDbSync(private val store: Store, private val http: Provide
             return OpenLigaDbParser.parseAvailableLeagues(cached.cachedBody, season.toString())
         }
         val url = "${OpenLigaDbParser.BASE_URL}/getavailableleagues/$season"
-        val response = runCatching { throttledGet(url, cached) }.getOrElse {
+        val response = try {
+            throttledGet(url, cached)
+        } catch (error: ProviderHttpException) {
+            if (error.shouldStopProviderRequests()) throw error
+            return cached?.cachedBody?.let { OpenLigaDbParser.parseAvailableLeagues(it, season.toString()) }.orEmpty()
+        } catch (_: Exception) {
             return cached?.cachedBody?.let { OpenLigaDbParser.parseAvailableLeagues(it, season.toString()) }.orEmpty()
         }
         if (response.statusCode == HttpURLConnection.HTTP_NOT_MODIFIED) {

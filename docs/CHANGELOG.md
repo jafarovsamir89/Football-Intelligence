@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — respect source `Retry-After` limits
+
+- Parse HTTP `Retry-After` delta-seconds and RFC 1123 dates for provider 429/503 responses. Stop further catalog/file requests to that provider and queue one network-constrained retry after the longest supplied delay; invalid or absent headers keep WorkManager exponential backoff.
+- Apply the same delayed retry behavior to the independent TipsAudit and MoviOdds workers. Add unit and API 34 instrumentation coverage for header parsing, real local HTTP 429 response metadata, request stopping, combined delays and queued WorkManager timing. The combined local cycle passed 122 JVM tests, Android-test Kotlin compilation and APK assembly; Actions is pending.
+- Recheck the requested public odds pages and terms. Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker still fail the app's automated-reuse or regional-access gate; existing MoviOdds remains the permitted integrated source.
+
 ## Unreleased — verify conditional football-source cache reuse
 
 - Add a loopback HTTP regression test for ETag/Last-Modified request headers and real 304 response metadata, plus isolated SQLite coverage proving cached five-season OpenFootball rows, validators and catalog bodies survive revalidation.
