@@ -1,5 +1,11 @@
 # Testing
 
+## Add API 26 instrumentation coverage to Actions (verification pending)
+
+- Run the existing complete instrumentation suite on both API 34 and the minimum supported API 26 before the single APK build/sign/upload stage.
+- Keep the persistent local API 34 emulator and its database untouched; the CI runner creates a disposable API 26 emulator.
+- Local source/build output has not changed in this workflow-only batch. Verify both emulator jobs, all instrumentation tests, and the one signed artifact in GitHub Actions.
+
 ## International event-identity hardening (local and Actions passed)
 
 - Add regression cases for kickoff-tolerance chains, ambiguous midpoint quotes and conflicting non-null local match IDs. Consensus groups must not merge distinct or ambiguous fixtures through transitive matching.

@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — add minimum-supported API instrumentation run (verification pending)
+
+- Added a second disposable Android emulator run at API 26 to the existing GitHub Actions job. It executes the same full instrumentation suite that already runs on API 34. APK assembly, stable signing and artifact upload remain one-time steps after both runs.
+- This targets the minimum Android runtime and SQLite v16 upgrade coverage without changing app source or touching the persistent local API 34 emulator/database.
+- Next: push the workflow/doc batch and inspect the API 26, API 34, APK-signing and artifact results. If API 26 exposes compatibility failures, fix them in one grouped follow-up before claiming the matrix verified.
+
 ## 2026-11-12 — harden international event identity and recheck public odds sources (local and CI passed)
 
 - Rechecked the requested international source stage. Prior audit remains: Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker do not have a verified permitted automated reuse path. New candidates: Football-Data.co.uk permits personal-use downloads and at most light automation twice per week, but one current-season `E0.csv` read yielded 100 rows through 8 Nov and no future rows with Bet365 1X2. Its fixtures page showed last upload 06/11/26 11:14 UK time; one request to the linked fixtures CSV returned HTTP 429, and was not retried. The public table has no per-quote timestamp, so this did not qualify as a fresh current-price feed. 1.ML's developer page advertises free no-key JSON with attribution, but its Terms prohibit automated access without written authorization and copying/archiving without prior written consent; no adapter was added.
