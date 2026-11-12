@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — validate OpenLigaDB final-score semantics (local checks passed; Actions pending)
+
+- OpenLigaDB's current OpenAPI schema distinguishes `matchIsFinished` and result kinds. The parser now settles 1X2 only from a finished match's semantic `After90Minutes` row. Extra-time/penalty-only rows and unfinished matches stay unsettled; the numeric result-type ID fallback is limited to legacy payloads with no semantic kind. The provider schema exposes no separate cancellation status, so missing results remain pending. Added regressions for mixed half-time/90-minute/extra-time/penalty payloads, penalty-only/unfinished payloads, and legacy compatibility.
+- This is an ingestion correction, not a database migration: existing potentially premature results are not cleared, because `Store` intentionally preserves saved complete scores when a later response is incomplete. See `docs/LIMITATIONS.md`.
+- Grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 181 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed. Debug SHA-256 `31ec20459612c451e7d1e5bf6ea41bb7c0eb856a8f14c8dc395f2f67fdc0c98c`; personal APK SHA-256 `9c326e8ea721881356bcd226d3567ff9ed0858cbd7f242ac01e7354dc9aa1e8e`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit found the local key absent from debug and present only in the owner-only personal APK. No APK was installed and no API quota was used.
+- Next: commit and push this grouped milestone, then verify the GitHub Actions API 26/API 34 and keyless-artifact run before marking it CI-verified. No schema migration is involved.
+
 ## 2026-11-12 — add competition/season Elo walk-forward diagnostics (CI/API 26/API 34 passed)
 
 - The 3.0 backlog requires model quality by league and season. SQLite already stores source season labels, but the automatic walk-forward previously dropped them. `WalkForwardTarget` now carries the exact stored label; missing labels remain null and are grouped separately. No season is inferred from kickoff dates, and no holdout or model-selection rules changed.

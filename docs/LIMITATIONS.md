@@ -1,6 +1,7 @@
 # Current limitations
 
 - Football-Data.co.uk match-stat collection currently rotates only current-season division files and is bounded to at most two attempts per rolling seven days, including failed/404 requests. Coverage accumulates gradually and requires an exact same-date, same-orientation local fixture join. The app displays source-provided stats in recent result history only; they do not affect Elo predictions or backtests. It does not yet fetch prior-season stats or cover every competition.
+- OpenLigaDB result parsing requires both its `matchIsFinished` flag and the semantic `After90Minutes` score for 1X2 settlement. Penalty/extra-time scores and unfinished rows remain unsettled; older payloads lacking semantic result kinds use the documented legacy result ID. The provider schema has no separate cancellation state, so missing results cannot safely be labeled cancelled. Existing rows are not rewritten by a migration; the parser correction applies to new/future sync data. Because the store preserves a previously complete score when a later response is incomplete, this change alone cannot retract a potentially premature score already saved by an older app version.
 
 The app is an offline-first research notebook with experimental probabilities, not a validated betting product.
 

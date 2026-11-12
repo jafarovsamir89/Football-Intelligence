@@ -81,7 +81,7 @@ object OpenLigaDbParser {
             val home = row.optJSONObject("team1")?.optString("teamName").orEmpty().trim()
             val away = row.optJSONObject("team2")?.optString("teamName").orEmpty().trim()
             if (!TeamDataQuality.isValidFixture(home,away)) continue
-            val score = finalScore(row.optJSONArray("matchResults"))
+            val score = finalScore(row)
             val key = "$PROVIDER_ID:$providerMatchId"
             if (!seen.add(key)) continue
             val eventDate = runCatching {
@@ -113,15 +113,19 @@ object OpenLigaDbParser {
         return matches
     }
 
-    private fun finalScore(results: JSONArray?): Pair<Int, Int>? {
-        if (results == null) return null
-        for (i in 0 until results.length()) {
-            val row = results.optJSONObject(i) ?: continue
-            if (row.optInt("resultTypeID", -1) != 2) continue
-            val home = row.optInt("pointsTeam1", -1)
-            val away = row.optInt("pointsTeam2", -1)
-            if (home >= 0 && away >= 0) return home to away
-        }
-        return null
+    private fun finalScore(match: JSONObject): Pair<Int, Int>? {
+        if (!match.optBoolean("matchIsFinished", false)) return null
+        val results = match.optJSONArray("matchResults") ?: return null
+        val rows = (0 until results.length()).mapNotNull { results.optJSONObject(it) }
+        val hasSemanticKinds = rows.any { it.optString("resultTypeKind").isNotBlank() }
+        val finalRow = if (hasSemanticKinds) {
+            rows.firstOrNull { it.optString("resultTypeKind").equals("After90Minutes", ignoreCase = true) }
+        } else {
+            // Compatibility with older payloads that predate resultTypeKind.
+            rows.firstOrNull { it.optInt("resultTypeID", -1) == 2 }
+        } ?: return null
+        val home = finalRow.optInt("pointsTeam1", -1)
+        val away = finalRow.optInt("pointsTeam2", -1)
+        return (home to away).takeIf { home >= 0 && away >= 0 }
     }
 }

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — validate OpenLigaDB final-score semantics
+
+- Settle imported 1X2 results only from matches marked finished and the semantic `After90Minutes` row. Do not treat extra-time, penalty-only or unfinished results as settled; retain result type ID 2 only for older payloads with no semantic-kind fields. Added regression coverage for mixed score rows, unfinished matches and legacy payloads. Cancellation remains unknown because the source schema has no cancellation field.
+- Local grouped verification passed 181 JVM tests (zero failures/errors/skips), Android-test Kotlin compilation, debug/personal APK assembly, signature verification and DEX credential audit. GitHub Actions is pending; the private APK was not installed and no odds quota was used.
+
 ## Unreleased — разбить Elo walk-forward по лигам и сезонам
 
 - Сохранять исходную метку сезона в walk-forward target и группировать уже рассчитанные строгие as-of Elo оценки по соревнованию и сезону. Пропущенные метки остаются неизвестными; даты не используются для их угадывания. Экран показывает Brier/Log Loss, coverage и предупреждение для n<30. Добавлены unit и Compose regression tests.
