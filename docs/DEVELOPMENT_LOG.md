@@ -1,12 +1,12 @@
 # Development log
 
-## 2026-11-12 — add paired holdout uncertainty for goal-model comparisons (local checks passed; Actions pending)
+## 2026-11-12 — add paired holdout uncertainty for goal-model comparisons (CI assertion corrected; rerun pending)
 
 - Extended the automatic model comparison with paired Elo-minus-Poisson and Elo-minus-Home/Away bootstrap intervals for Brier and Log Loss. Each resample uses the exact shared chronological holdout fixtures; parameters remain selected on validation only.
 - Intervals use 2,000 deterministic percentile-bootstrap resamples and remain unavailable below 30 pairs. The UI labels negative deltas as lower Elo loss and warns that recurring teams/rounds can make fixture-independent resampling too narrow. Intervals are descriptive, not evidence of future superiority.
 - Added unit coverage for deterministic output, the 30-fixture gate and unavailable intervals on a smaller sample, plus Compose coverage for the below-gate message. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 175 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies.
 - Local debug APK SHA-256 `cf17a8f76fc0e99e13959481f108f4e4591cebc721ef62bca437c4d60f442e1a`; personal APK SHA-256 `cd712c5b15fd569e748833019b66b9edafd83ee6428420b546bbbb8a813a9c80`. `apksigner verify` passed both with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36cbbeca06c353e4604abca671e2207ef88f7370`. Full DEX inspection found the personal credential absent from debug and present only in the private personal build. `git diff --check` passed. No APK was installed and no external API quota was used.
-- Next: commit/push this grouped milestone, wait for API 34/API 26 instrumentation and keyless artifact signing/upload, then update this log without rebuilding. No physical handset is connected; unrelated emulator `5558` remains untouched.
+- First Actions run [43273684904](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43273684904) passed its unit task, then found one API 34 Compose assertion expected exactly one semantics node although the same below-30 label correctly appears for both model comparisons. Changed the UI test to assert that the label is present; no application behavior changed. The other 55/56 instrumentation tests passed. Next: push this test correction and rerun the full CI cycle; then record API 34/API 26 counts and keyless artifact evidence. No APK installation is needed for this assertion-only correction. No physical handset is connected; unrelated emulator `5558` remains untouched.
 
 ## 2026-11-12 — add a venue-split Home/Away research baseline (local and CI checks passed)
 

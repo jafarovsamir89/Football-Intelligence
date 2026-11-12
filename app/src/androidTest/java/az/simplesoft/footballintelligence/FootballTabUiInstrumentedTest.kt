@@ -253,7 +253,10 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Validation Home/Away:", substring = true).assertExists()
         composeRule.onNodeWithText("Holdout Elo/Home-Away на общих матчах 1:", substring = true).assertExists()
         composeRule.onNodeWithText("Парный bootstrap 95% Elo−Poisson", substring = true).assertExists()
-        composeRule.onNodeWithText("не рассчитан при n<30", substring = true).assertExists()
+        assertTrue(
+            composeRule.onAllNodesWithText("не рассчитан при n<30", substring = true)
+                .fetchSemanticsNodes().isNotEmpty(),
+        )
         composeRule.onNodeWithText("Home/Away пока исследовательская модель", substring = true).assertExists()
     }
 
