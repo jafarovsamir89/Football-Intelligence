@@ -10,9 +10,9 @@
 
 - Keep the version-16 SQLite helper behind the repository seam. The observed UI-thread database access is addressed by IO dispatch; migrating the active, migration-tested user database to Room would add conversion and data-loss risk without a measured benefit. Revisit only with a concrete DAO/invalidation need and a tested backup/copy/rollback plan across API 26 and API 34.
 
-## Unreleased — move SQLite ownership out of the activity
+## Move SQLite ownership out of the activity (CI verified)
 
-- Move the existing `StoreWriteCoordinator` and `Store` implementation into `Store.kt` without changing the v16 schema, SQL, transaction behavior, or migrations. Add an isolated repository test that closes/reopens the database and checks the v16 version and saved fixture. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`); CI verification is pending.
+- Move the existing `StoreWriteCoordinator` and `Store` implementation into `Store.kt` without changing the v16 schema, SQL, transaction behavior, or migrations. Add an isolated repository test that closes/reopens the database and checks the v16 version and saved fixture. The grouped local cycle passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (SHA-256 `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`). Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311) passed 32 API 34 tests and API 26 instrumentation (one network-radio skip), APK build, stable signing, and artifact upload `13921076146`; downloaded APK SHA-256 `f10d3899668032b84e9870fd8fa0102fd449aaf126f9a8d8c80ec1837e889bbb`, stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. The API 26 runner printed 33 finished after the 32 declared tests completed, while Gradle succeeded.
 
 ## Load the Compose screen read model asynchronously (CI verified)
 

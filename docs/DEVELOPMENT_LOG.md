@@ -1,12 +1,13 @@
 # Development log
 
-## 2026-11-12 — separate SQLite ownership from the activity (local checks passed; Actions pending)
+## 2026-11-12 — separate SQLite ownership from the activity (local and Actions checks passed)
 
 - Extracted `StoreWriteCoordinator` and `Store` from `MainActivity.kt` to same-package `Store.kt`. A source comparison confirms the 1,274-line coordinator/Store body is byte-identical; v16 schema SQL, transaction locking, public method signatures, and migrations did not change.
 - Added an API 26/API 34 isolated-database check through `FootballScreenRepository`: it asserts schema version 16, closes the adapter, reopens the same test database, and confirms the saved fixture remains. It only deletes its unique per-test database afterward.
 - Room decision: defer the dependency and migration. The issue that motivated this review (screen database calls on the main thread) is addressed by the repository's IO adapter. Room would add DAO/entity mapping and a second versioned migration surface without addressing a demonstrated defect. Revisit only for a measurable invalidation/query need or recurring SQLite defect, with tested copy/backup/rollback from a v16 database on API 26 and 34.
 - The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `1a1be257364c90b50e56ef8ffcccd2156f189cc82fd35090ac283b11e2d001f4`; `git diff --check` passed. API instrumentation execution awaits Actions.
-- No persistent user/emulator database is touched. Next update this log and `AGENTS.md` with the Actions result, then continue extracting the remaining presentation/data boundaries.
+- Commit `6bcb3c5` passed Actions [43167074311](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43167074311): unit tests, all 32 API 34 instrumentation tests, API 26 instrumentation, APK build, stable signing, and artifact upload `13921076146` (16,890,844 bytes). The isolated close/reopen test and existing migration/Worker tests passed. API 26 declared 32 tests, logged 32/32 with one radio-dependent skip, then anomalously printed “Finished 33 tests”; Gradle succeeded with no failures. API 26 offline-radio behavior remains unverified.
+- Downloaded APK SHA-256: `f10d3899668032b84e9870fd8fa0102fd449aaf126f9a8d8c80ec1837e889bbb`. `apksigner verify` passed with signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No persistent database or emulator/phone installation was touched. ADB sees emulator `5558` only. Next: continue extracting presentation and provider boundaries from `MainActivity.kt`; keep Room deferred until measured need and a data-preserving migration plan exist.
 
 ## 2026-11-12 — extract the screen repository and scope bookmaker capture work (local and Actions checks passed)
 
