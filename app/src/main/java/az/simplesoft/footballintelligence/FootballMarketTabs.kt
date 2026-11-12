@@ -241,6 +241,10 @@ internal fun InternationalMarketTabContent(
             val isLay=quote.quoteSide==InternationalOddsQuoteSide.LAY
             val isBetfairExchange=quote.providerId==THE_ODDS_API_PROVIDER_ID&&quote.bookmakerId.startsWith("betfair_ex_")
             val eventConsensus=if(analyticsUpdating||isLay) null else internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
+            val isConsensusSummaryQuote=eventConsensus!=null && quote.quoteSide==InternationalOddsQuoteSide.BACK &&
+                quote.providerId==eventConsensus.representativeProviderId &&
+                quote.bookmakerId==eventConsensus.representativeBookmakerId &&
+                quote.eventId==eventConsensus.representativeEventId
             val model=if(isLay) null else quote.matchId?.let { id -> forecastedMatches.firstOrNull { it.matchId==id } }
             val localMisli=if(isLay) null else quote.matchId?.let { id -> misliOdds.firstOrNull { it.matchId==id } }
             val localTopaz=if(isLay) null else quote.matchId?.let { id -> topazOdds.firstOrNull { it.matchId==id } }
@@ -286,7 +290,7 @@ internal fun InternationalMarketTabContent(
                     if(internationalFair!=null) {
                         if(eventConsensus==null) {
                             Text("Сводка методов недоступна без однозначной связи котировок с одним локальным матчем.",style=MaterialTheme.typography.labelSmall)
-                        } else {
+                        } else if(isConsensusSummaryQuote) {
                             val summaryBasis = if(distinctBooks>=2) {
                                 "равное среднее по $distinctBooks уникальным ID букмекера; независимость источников не доказана"
                             } else {

@@ -309,7 +309,11 @@ class FootballTabUiInstrumentedTest {
                 .fetchSemanticsNodes().isNotEmpty(),
         )
         marketList.performScrollToNode(hasText("Сравнение снятия маржи · равное среднее по 2", substring = true))
-        composeRule.onNodeWithText("Сравнение снятия маржи · равное среднее по 2", substring = true).assertIsDisplayed()
+        assertEquals(
+            1,
+            composeRule.onAllNodesWithText("Сравнение снятия маржи · равное среднее по 2", substring = true)
+                .fetchSemanticsNodes().size,
+        )
         composeRule.onNodeWithText("Power", substring = true).assertExists()
         composeRule.onNodeWithText("Shin", substring = true).assertExists()
     }

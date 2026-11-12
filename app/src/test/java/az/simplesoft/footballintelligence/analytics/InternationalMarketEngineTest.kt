@@ -45,6 +45,8 @@ class InternationalMarketEngineTest {
         val shin=listOf(first,second).map { ProbabilityEngine.removeMargin(it.home,it.draw,it.away,MarginMethod.SHIN) }
 
         assertEquals(2,consensus.distinctBookmakerCount)
+        assertEquals("source-b",consensus.representativeProviderId)
+        assertEquals("beta",consensus.representativeBookmakerId)
         assertEquals((basic[0].home+basic[1].home)/2,consensus.probabilities.home,1e-9)
         assertEquals((power[0].draw+power[1].draw)/2,consensus.powerProbabilities.draw,1e-9)
         assertEquals((shin[0].away+shin[1].away)/2,consensus.shinProbabilities!!.away,1e-9)
