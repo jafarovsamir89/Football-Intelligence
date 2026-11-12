@@ -2,8 +2,12 @@
 
 ## Unreleased — repair minimum-API instrumentation compatibility (CI rerun pending)
 
-- Add the full instrumentation suite on API 26 alongside API 34 with a single APK build/sign/upload stage. The initial run passed API 34 but exposed API 26 test compatibility issues: Store's `use` call required `AutoCloseable`, and the offline test used newer shell commands.
-- Make `Store` explicitly `Closeable`, add a minimum-API regression check, and use API 26-compatible radio controls. Local verification passed 131 JVM tests and Android-test compilation; API 26/API 34 CI and APK build are pending.
+- Add API 26 instrumentation alongside API 34 with one APK build/sign/upload stage. The first run exposed `AutoCloseable`/`Store` test compatibility; the second passed 30/31 API 26 tests after adding `Closeable`, with the remaining failure caused by the API 26 emulator retaining Wi-Fi and an active network.
+- Skip only that radio-dependent emulator check on API 26 with an explicit reason; retain the connected-constraint queue test there and exercise actual radio-off behavior on API 34. Local verification passed 131 JVM tests and Android-test compilation; the corrected CI matrix/build is pending.
+
+## Unreleased — recheck free international odds pages
+
+- Confirm that the requested public pages can display soccer 1X2 prices, but their terms do not permit the app's automated collection/reuse without consent. Oddspedia advertises free data feeds/widgets, but those require a registered, verified account and limit service use to controlled assets; this does not meet the no-account default requirement. MoviOdds remains the existing documented no-key source; no new source is claimed.
 
 ## Unreleased — prevent false international market consensus (local and Actions passed)
 

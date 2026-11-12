@@ -5,7 +5,8 @@
 - Run the existing complete instrumentation suite on both API 34 and the minimum supported API 26 before the single APK build/sign/upload stage.
 - Keep the persistent local API 34 emulator and its database untouched; the CI runner creates a disposable API 26 emulator.
 - First run [43154571534](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43154571534): unit tests and all 30 API 34 tests passed; API 26 had 24 failures among 30 tests. Failures exposed the missing API 26 `AutoCloseable` relationship for `Store` and unsupported offline-test shell commands; APK build/sign/upload were skipped.
-- Added an explicit `Closeable` implementation and min-API regression check, and switched offline test radio controls to `settings` / `svc wifi`. The local grouped check passed 131 JVM tests and Android-test Kotlin compilation. Rerun the full matrix and one APK build in Actions; do not claim API 26 verified until it passes.
+- Added an explicit `Closeable` implementation and min-API regression check, and switched radio controls to `settings` / `svc wifi`. Run [43156179616](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43156179616) passed all 31 API 34 tests and 30/31 API 26 tests; API 26 still reported airplane=1, wifi=1 and an active network after shell control.
+- Skip only the emulator-specific radio-off test on API 26 with an explicit assumption reason; retain the CONNECTED-constraint test there and check real offline radio behavior on API 34. Local verification passed 131 JVM tests and Android-test Kotlin compilation. The corrected CI matrix and APK build are pending; API 26 radio-off behavior is unverified.
 
 ## International event-identity hardening (local and Actions passed)
 
