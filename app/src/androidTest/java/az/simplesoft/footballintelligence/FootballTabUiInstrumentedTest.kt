@@ -119,7 +119,7 @@ class FootballTabUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Обновляю метрики прогнозов; предыдущая сводка временно скрыта.").assertIsDisplayed()
+        composeRule.onNodeWithText("Обновляю метрики прогнозов; предыдущая сводка временно скрыта.").performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("В локальном журнале 9 снимков.").fetchSemanticsNodes().isEmpty())
     }
 
