@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — recheck Misli/eTopaz public-source terms and confirm local Odds API credential
+
+- The credential in the forwarded The Odds API email exactly matched the value already held in ignored `local.properties`; no key file or tracked source changed. The private personal APK was already assembled with this setting, so no rebuild or additional API call was needed.
+- Rechecked Misli's official `robots.txt`: it allows the public root while excluding account, shared-coupon and live-detail paths. Rechecked eTopaz's official subscriber agreement: clauses 4.2.1–4.2.2 restrict use of a subscriber account to permitted games and do not expressly resolve automated reading/reuse of anonymous public odds. The read-only web review could not fetch eTopaz `robots.txt`. These observations neither establish a reuse license nor imply that anonymous public access is prohibited. No collector route/parser changed.
+- Updated the source review, roadmap and agent continuation point. ADB still exposes only unrelated emulator `5558`; no existing AVD or database was touched. This was a docs-only research update, so no APK build/install, tests or API credits were needed.
+- Next: run the key-enabled worker only on the user's phone or a new isolated Android environment with adequate safe disk; verify saved status, fixture links, timestamps and quota headers. Separately inspect prospective outcomes after a safe app run. Keep `5558` untouched and do not claim Misli/eTopaz reuse permission.
+
 ## 2026-11-12 — repair partially present v17 odds tables during upgrade (local, CI, API 26/API 34 passed)
 
 - Reviewed the new v17→v18 path after the previous verification. It recovered correctly when both international quote tables were absent, but returned early after creating a missing table; a partially present v17 database could therefore leave the existing snapshot table without v18 columns.

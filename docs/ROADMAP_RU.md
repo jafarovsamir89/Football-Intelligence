@@ -62,22 +62,19 @@
 
 ## Проверки текущей ревизии
 
-- API 34 fresh install, многократная WorkManager sync и офлайн-перезапуск проверены ранее; новый SQLite v10 update install сохранил существующую базу.
-- Commit `fb65bcc` прошёл Actions [42759573588](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42759573588): CI API 34 запустил 2 SQLite instrumentation теста, собрал APK, подписал и загрузил artifact. Update-install сохранил 39 181 матч, 197 bookmaker snapshots, 59 accumulators и 328 legs.
-- Commit `92836d8` прошёл Actions [42761781971](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42761781971): 84 unit-теста, 3 API 34 instrumentation теста, APK, stable signing и artifact upload.
-- Commit `e8c3a33` прошёл CI [42752522409](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42752522409): 79 unit-тестов локально, APK и стабильная подпись в CI. Обновление того же APK на API 26 сохранило SQLite v10/32 680 исходных строк. Первый Worker завершился `SUCCESS` на границе 8 минут, созданный child-worker немедленно продолжил и тоже завершился `SUCCESS`. Финальная база API 26: 38 609 матчей, 29 588 результатов, 183 соревнования; OpenFootball `OK`/25 904, OpenLigaDB `OK`/17 202, обработано 214 league-season состояний. Оба bookmaker WebView на API 26 всё ещё показывают `ERROR` без видимых данных; свежих котировок нет и цены не подставляются.
-- Commit `6faac0b` прошёл Actions [42757663129](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/42757663129): 83 теста, APK, стабильная подпись и artifact upload. На API 34 UI показал 19 185 ретроспективных прогнозов и one-vs-rest ECE: общий 2.2%, П1 3.1%, X 0.9%, П2 2.5%; SQLite сохранила 39 181 матч, 197 bookmaker snapshots, 59 accumulator rows при update-install.
-- На capture 05:41:38 UTC составлены виртуальные same-book TOPAZ купоны и проверено сопоставление Portugal—Denmark. Снимок цены ограничен 30-минутной свежестью; статус `LIVE` означает только технический capture. Не обнаружена явная лицензия на повторное использование котировок.
+- Последний кодовый milestone `1eff091` прошёл Actions [43252033127](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43252033127): локально 163 JVM tests, Android-test Kotlin compilation и debug/personal APK assembly; CI unit-test task, API 34 instrumentation 51/51 и API 26 (51 тест завершён, один сетевой пропуск, без ошибок), сборка keyless вариантов и загрузка только debug artifact `13959732145`.
+- The Odds API host POC подтвердил credential/endpoint; Worker, scheduler и SQLite проверены Android instrumentation с fake HTTP. Live key-enabled Worker на Android ещё не запускался. Физический телефон не подключён, единственный ADB target `5558` посторонний и должен оставаться нетронутым.
+- Многосезонная OpenFootball/OpenLigaDB синхронизация, offline cache и update-install ранее проверены на Android; детали и сохранённые количества есть в журнале. Эти проверки не подтверждают запуск The Odds API на телефоне в Азербайджане.
 
 ## Оставшиеся инженерные задачи
 
-1. Повторить active refresh на физическом Android-устройстве, когда оно будет доступно; проверка API 26 emulator завершилась успешно.
-2. На API 34 проверены дополнительные capture: Misli 16/4 и TOPAZ 25/7 (видимые строки/точные локальные совпадения); на другом эмуляторе оба источника временно дали `UNAVAILABLE`. Продолжать проверять новые capture/timezone; условия автоматического reuse Misli/eTopaz остаются неясными. Не обходить защиту.
-3. Собирать будущие снимки и результаты, затем оценивать парный market baseline только по независимым завершённым матчам; калибровку и value-сигналы не обсуждать до достаточной выборки.
+1. Проверить key-enabled The Odds API WorkManager на физическом Android-телефоне либо новом изолированном AVD в безопасной среде. Убедиться, что приложение сохраняет status, exact-linked snapshots, timestamps и quota headers. Не трогать посторонний ADB `5558` или базы существующих AVD.
+2. Проверить Misli/eTopaz visible-page capture на физическом телефоне в Азербайджане. Коллектор и парсеры реализованы, но последняя задокументированная Android capture устарела; условия автоматического повторного использования котировок не установлены. Misli robots.txt разрешает публичный путь, но не выдаёт лицензию; eTopaz terms описывают аккаунт подписчика, не анонимное чтение публичной страницы. Не обходить ограничения.
+3. Накопить неизменяемые будущие forecast/market snapshots и дождаться результатов для независимой парной оценки. Последняя задокументированная проверка ledger имела 0 settled prospective forecasts, поэтому будущая точность и преимущество над рынком неизвестны. Обновить ledger при следующем безопасном запуске приложения.
 
 ## Далее
 
-- Продолжать накапливать неизменяемые предматчевые прогнозы и оценивать их по будущим результатам; пока ни один локально проверенный снимок не завершился.
+- Продолжать накапливать неизменяемые предматчевые прогнозы и оценивать их по будущим результатам; доступ к более поздней сохранённой локальной базе сейчас не подтверждён.
 - P2 Poisson baseline, paired Elo/Poisson holdout и validation-only подбор Dixon–Coles rho записаны в аналитическом отчёте; rho не меняет live Elo. Продолжить собирать проспективные прогнозы и результаты для независимой оценки.
 - P3: строить value-исследование только после независимой будущей проверки и лишь при одновременно свежем полном local-book price, точном fixture link и достаточно проверенной модели. На текущих данных никаких EV сигналов нет.
 - P4 coupon settlement, coverage reporting, separate Probability/Market-Disagreement cohorts, and Fréchet bounds are implemented. Continue to gather prospective outcomes per model version and show no single joint probability unless a dependence model is validated.
