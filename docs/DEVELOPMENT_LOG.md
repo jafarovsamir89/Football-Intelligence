@@ -1,5 +1,18 @@
 # Development log
 
+## 2026-11-12 — evaluate the complete prospective forecast ledger once per fixture (local checks passed; CI pending)
+
+- Fixed an evaluation-sample bug: the coupon screen showed only the newest 100 forecast rows and also scored every daily snapshot, so older settled matches could disappear and repeated forecasts of the same match could inflate sample size.
+- The screen now reads the complete prospective ledger on `Dispatchers.IO`, still shows only the latest 100 history rows, and scores the latest valid pre-kickoff snapshot once per fixture and model version. Per-version reports show unique fixture count, settled/pending count, Brier, Log Loss and top-outcome rate.
+- A saved result contributes only when the prediction was captured before kickoff, history meets the Elo minimum, fixture names are valid, result availability is timestamped at/after kickoff and after the forecast, local settlement is no earlier than availability, the source name exists, and H/D/A agrees with the saved score. No schema change or migration was needed.
+- Added JVM regressions for latest-snapshot selection, model-version separation, post-kickoff exclusion, result-score/time consistency, plus an API 26/API 34 isolated-SQLite instrumentation case with 101 daily snapshots proving the evaluator receives the whole ledger while the visible list remains bounded at 100.
+- The final grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 149 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug APK SHA-256 `07b5f7f9300357338ea68fbd57237ae01adc0804b6fe19058ec37771e752ad36`; private personal APK SHA-256 `6ab0ae7c9fabc8772e60f0ffcafbc8ff45b3ee8884f5c60e78a1ea232edc8cb7`. An uncompressed APK-payload audit confirmed the key is absent from tracked source and debug APK and present only in the owner-only personal APK. `git diff --check` passed. No APK was installed and no persistent database changed.
+
+### Next
+
+1. Commit/push this grouped evaluator and instrumentation milestone; inspect a single Actions run for 149 JVM tests, API 34/API 26 instrumentation, both variant assemblies, and the signed keyless artifact.
+2. Do not update-install or clear data-bearing emulators. Physical-device prospective performance and regional API access remain unverified.
+
 ## 2026-11-12 — integrate The Odds API V4 personal feed (CI/API 26/API 34 passed)
 
 - Following the user's explicit account/key authorization, added `TheOddsApiProvider` and a separate WorkManager worker. It reads the official active soccer catalog, cycles at most 12 leagues per 24-hour batch, keeps the catalog for seven days, observes request-quota headers, and stops before a 20-credit reserve. The catalog route is quota-free according to the official V4 docs. Each bookmaker's complete prematch h2h market must have a future kickoff, source `last_update` no older than 15 minutes, trusted HTTP `Date` within five minutes of device time, and a unique exact local fixture before an Elo comparison is attached. No fuzzy matching or local bookmaker price substitution is used.

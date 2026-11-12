@@ -1,5 +1,12 @@
 # Changelog
 
+## Correct prospective evaluation sampling (local checks passed; CI pending)
+
+- Score the full saved forecast ledger instead of only the latest 100 visible rows. Keep the recent screen list bounded at 100.
+- Deduplicate daily forecasts to the latest valid pre-kickoff snapshot per fixture/model version; show settled and pending unique fixture counts and Brier/Log Loss/top-outcome metrics by version.
+- Reject settlement records without a named result source, matching score/outcome, post-kickoff/post-forecast availability, and settlement at/after availability. No database migration is needed.
+- Local grouped cycle passed 149 JVM tests, Android-test Kotlin compilation, and debug/personal APK builds. Actions run is pending; see `docs/DEVELOPMENT_LOG.md` for hashes and the API 26/API 34 test case covering 101 stored snapshots.
+
 ## Add The Odds API V4 personal provider (CI verified)
 
 - Add an independent EU h2h odds provider with fresh complete 1X2 validation, server/device clock checks, exact unique fixture links, event/book deduplication, quota-header display, a seven-day soccer-catalog cache, and a bounded rotating 12-league daily Worker. The key is read from ignored `local.properties` and sent in the documented `x-api-key` header. Only the local personal APK embeds it; standard/CI debug APKs stay keyless, and CI uploads only the keyless APK. The private APK must not be published.

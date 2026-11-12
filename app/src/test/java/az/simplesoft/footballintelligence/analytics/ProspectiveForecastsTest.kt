@@ -45,6 +45,50 @@ class ProspectiveForecastsTest {
         assertNull(ProspectiveForecastEvaluator.evaluate(listOf(pending)).meanBrierScore)
     }
 
+    @Test fun prospectiveMetricsUseLatestPreKickoffSnapshotOncePerFixtureAndModelVersion() {
+        val earlier = observation("H", id = 1).copy(
+            forecastedAtMillis = 100,
+            probabilities = OutcomeProbabilities(.6, .3, .1),
+        )
+        val later = earlier.copy(
+            snapshotId = 2,
+            forecastedAtMillis = 150,
+            probabilities = OutcomeProbabilities(.1, .8, .1),
+        )
+        val afterKickoff = earlier.copy(
+            snapshotId = 3,
+            forecastedAtMillis = 201,
+            probabilities = OutcomeProbabilities(.99, .005, .005),
+        )
+        val secondModelVersion = later.copy(snapshotId = 4, modelVersion = "elo-1x2-v2")
+
+        val report = ProspectiveForecastEvaluator.evaluate(listOf(earlier, later, afterKickoff, secondModelVersion))
+
+        assertEquals(4, report.snapshotCount)
+        assertEquals(2, report.settledCount)
+        assertEquals(2, report.modelReports.size)
+        val firstVersion = report.modelReports.single { it.modelVersion == "elo-1x2-v1" }
+        assertEquals(2, firstVersion.snapshotCount)
+        assertEquals(1, firstVersion.fixtureCount)
+        assertEquals(1, firstVersion.settledCount)
+        assertEquals(1.46, firstVersion.meanBrierScore!!, 1e-12)
+        assertEquals("elo-1x2-v2", report.modelReports.last().modelVersion)
+    }
+
+    @Test fun prospectiveMetricsRejectInconsistentScoresAndResultTimesBeforeKickoff() {
+        val valid = observation("H")
+        val contradictoryScore = valid.copy(homeGoals = 0, awayGoals = 1)
+        val earlyAvailability = valid.copy(resultAvailableAtMillis = valid.kickoffMillis - 1)
+        val lateSettlement = valid.copy(settledAtMillis = valid.resultAvailableAtMillis!! - 1)
+        val missingSource = valid.copy(resultSourceName = null)
+
+        listOf(contradictoryScore, earlyAvailability, lateSettlement, missingSource).forEach { invalid ->
+            val report = ProspectiveForecastEvaluator.evaluate(listOf(invalid))
+            assertEquals(0, report.settledCount)
+            assertNull(report.meanBrierScore)
+        }
+    }
+
     private fun observation(outcome: String?, id: Long = 1) = ProspectiveForecastObservation(
         snapshotId = id,
         modelVersion = "elo-1x2-v1",

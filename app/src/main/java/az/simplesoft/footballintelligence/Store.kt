@@ -717,13 +717,19 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
     }
     fun prospectiveForecastHistory(limit:Int=100):List<ProspectiveForecastObservation> {
         val result=mutableListOf<ProspectiveForecastObservation>()
+        val queryLimit=when {
+            limit==0 -> null
+            limit>0 -> limit.coerceIn(1,500)
+            else -> 1
+        }
+        val sql="SELECT s.id,s.model_version,s.match_id,s.competition,s.home_team,s.away_team,s.forecasted_at,s.kickoff_at," +
+            "s.history_match_count,s.home_probability,s.draw_probability,s.away_probability," +
+            "r.actual_outcome,r.home_goals,r.away_goals,r.settled_at,r.result_available_at,r.result_source_name,r.result_source_url " +
+            "FROM prospective_forecast_snapshots s LEFT JOIN prospective_forecast_settlements r ON r.snapshot_id=s.id " +
+            "ORDER BY s.forecasted_at DESC,s.id DESC" + if(queryLimit==null) "" else " LIMIT ?"
         readableDatabase.rawQuery(
-            "SELECT s.id,s.model_version,s.match_id,s.competition,s.home_team,s.away_team,s.forecasted_at,s.kickoff_at," +
-                "s.history_match_count,s.home_probability,s.draw_probability,s.away_probability," +
-                "r.actual_outcome,r.home_goals,r.away_goals,r.settled_at,r.result_available_at,r.result_source_name,r.result_source_url " +
-                "FROM prospective_forecast_snapshots s LEFT JOIN prospective_forecast_settlements r ON r.snapshot_id=s.id " +
-                "ORDER BY s.forecasted_at DESC,s.id DESC LIMIT ?",
-            arrayOf(limit.coerceIn(1,500).toString()),
+            sql,
+            queryLimit?.let { arrayOf(it.toString()) },
         ).use { c ->
             while(c.moveToNext()) result+=ProspectiveForecastObservation(
                 snapshotId=c.getLong(0),

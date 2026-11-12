@@ -215,8 +215,8 @@ import androidx.work.WorkManager
     }
     val checkedCouponHistory=storeSnapshot.checkedCouponHistory
     val prospectiveForecastHistory=storeSnapshot.prospectiveForecastHistory
-    val prospectiveForecastReport=remember(prospectiveForecastHistory) {
-        ProspectiveForecastEvaluator.evaluate(prospectiveForecastHistory)
+    val prospectiveForecastReport=remember(storeSnapshot.prospectiveForecastEvaluationHistory) {
+        ProspectiveForecastEvaluator.evaluate(storeSnapshot.prospectiveForecastEvaluationHistory)
     }
     val accumulatorHistory=storeSnapshot.accumulatorHistory
     val mapped=matches.associateBy { it.id }

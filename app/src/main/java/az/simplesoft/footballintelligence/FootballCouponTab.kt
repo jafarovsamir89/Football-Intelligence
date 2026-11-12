@@ -188,12 +188,21 @@ internal fun FootballCouponTabContent(
                     style=MaterialTheme.typography.bodySmall,
                 )
                 Text(
-                    "Снимков в последних ${prospectiveForecastHistory.size}: проверено результатов ${prospectiveForecastReport.settledCount}" +
-                        (prospectiveForecastReport.meanBrierScore?.let {
-                            " · Brier ${"%.4f".format(it)} · Log Loss ${"%.4f".format(prospectiveForecastReport.meanLogLoss)} · попадание наиболее вероятного ${"%.1f".format((prospectiveForecastReport.topOutcomeAccuracy ?: 0.0)*100)}% (n=${prospectiveForecastReport.settledCount})"
-                        } ?: " · для оценки ждём завершившиеся матчи"),
+                    "В локальном журнале ${prospectiveForecastReport.snapshotCount} снимков. Оценка учитывает последний снимок до kickoff для каждого матча отдельно по версии модели; повторные ежедневные снимки одного матча не увеличивают выборку.",
                     style=MaterialTheme.typography.bodySmall,
                 )
+                if(prospectiveForecastReport.modelReports.isEmpty()) {
+                    Text("Предматчевые результаты появятся после автоматической фиксации прогнозов и доступности итоговых счётов.",style=MaterialTheme.typography.bodySmall)
+                }
+                prospectiveForecastReport.modelReports.forEach { report ->
+                    val metrics=report.meanBrierScore?.let {
+                        " · Brier ${"%.4f".format(it)} · Log Loss ${"%.4f".format(report.meanLogLoss)} · попадание наиболее вероятного ${"%.1f".format((report.topOutcomeAccuracy ?: 0.0)*100)}% (n=${report.settledCount})"
+                    } ?: " · проверяемых результатов пока нет"
+                    Text(
+                        "${report.modelVersion}: прогнозы по матчам ${report.fixtureCount}, проверено ${report.settledCount}, ожидают ${report.pendingCount}$metrics",
+                        style=MaterialTheme.typography.bodySmall,
+                    )
+                }
                 if(prospectiveForecastHistory.isEmpty()) {
                     Text("Первые прогнозы появятся после автоматического расчёта матчей с достаточной предматчевой историей.",style=MaterialTheme.typography.bodySmall)
                 } else {

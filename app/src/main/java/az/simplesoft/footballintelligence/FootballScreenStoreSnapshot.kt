@@ -42,6 +42,7 @@ data class FootballScreenStoreSnapshot(
     val historicalByLeague: Map<String, List<HistoricalMatch>>,
     val checkedCouponHistory: List<LoggedCouponPick>,
     val prospectiveForecastHistory: List<ProspectiveForecastObservation>,
+    val prospectiveForecastEvaluationHistory: List<ProspectiveForecastObservation>,
     val accumulatorHistory: List<VirtualAccumulatorHistoryEntry>,
 ) {
     companion object {
@@ -69,6 +70,7 @@ data class FootballScreenStoreSnapshot(
             historicalByLeague = emptyMap(),
             checkedCouponHistory = emptyList(),
             prospectiveForecastHistory = emptyList(),
+            prospectiveForecastEvaluationHistory = emptyList(),
             accumulatorHistory = emptyList(),
         )
     }
@@ -128,8 +130,9 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         checkActive()
         val couponHistory = loggedCouponPicks()
         checkActive()
-        val forecastHistory = prospectiveForecastHistory(100)
+        val completeForecastHistory = prospectiveForecastHistory(0)
         checkActive()
+        val forecastHistory = completeForecastHistory.take(100)
         val accumulators = virtualAccumulatorHistory()
 
         FootballScreenStoreSnapshot(
@@ -156,6 +159,7 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
             historicalByLeague = history,
             checkedCouponHistory = couponHistory,
             prospectiveForecastHistory = forecastHistory,
+            prospectiveForecastEvaluationHistory = completeForecastHistory,
             accumulatorHistory = accumulators,
         )
     }
