@@ -14,6 +14,10 @@ const val THE_ODDS_API_MINIMUM_CREDIT_RESERVE = 20
 const val THE_ODDS_API_CATALOG_TTL_MILLIS = 7L * 24L * 60L * 60L * 1_000L
 const val THE_ODDS_API_REFRESH_INTERVAL_HOURS = 24L
 
+internal fun isTheOddsApiCatalogCacheFresh(cachedAtMillis: Long, nowMillis: Long): Boolean =
+    cachedAtMillis > 0L && cachedAtMillis <= nowMillis &&
+        nowMillis - cachedAtMillis < THE_ODDS_API_CATALOG_TTL_MILLIS
+
 data class TheOddsApiSport(val key: String, val title: String)
 
 /** Parses only documented V4 soccer 1X2 markets and retains the API's market timestamp. */
@@ -165,13 +169,21 @@ class TheOddsApiProvider {
                         matchId = fixtureLink?.matchId,
                         matchLinkBasis = fixtureLink?.basis,
                     )
-                    if (parsed.any { existing ->
-                            existing.bookmakerId == bookmakerId && OddsQualityGate.sameUnderlyingEvent(
-                                existing.homeTeam, existing.awayTeam, existing.kickoffMillis,
-                                candidate.homeTeam, candidate.awayTeam, candidate.kickoffMillis,
-                            )
-                        }) {
+                    val duplicateIndex = parsed.indexOfFirst { existing ->
+                        existing.bookmakerId == bookmakerId && OddsQualityGate.sameUnderlyingEvent(
+                            existing.homeTeam, existing.awayTeam, existing.kickoffMillis,
+                            candidate.homeTeam, candidate.awayTeam, candidate.kickoffMillis,
+                        )
+                    }
+                    if (duplicateIndex >= 0) {
                         duplicates++
+                        val existing = parsed[duplicateIndex]
+                        if (candidate.providerPolledAtMillis > existing.providerPolledAtMillis ||
+                            (candidate.providerPolledAtMillis == existing.providerPolledAtMillis &&
+                                candidate.capturedAtMillis > existing.capturedAtMillis)
+                        ) {
+                            parsed[duplicateIndex] = candidate
+                        }
                     } else {
                         parsed += candidate
                     }

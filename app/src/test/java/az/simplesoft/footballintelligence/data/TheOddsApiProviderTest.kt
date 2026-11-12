@@ -114,13 +114,32 @@ class TheOddsApiProviderTest {
         assertEquals(InternationalOddsQualityCounts(1, 0, 0, 0, 0, 1), skewed.qualityCounts)
     }
 
-    @Test fun duplicateUnderlyingEventsForSameBookDoNotCreateDoubleLines() {
-        val first = event(book("book", "Book"), id = "first")
-        val second = event(book("book", "Book"), id = "second", home = "MANCHESTER CITY", kickoffAt = Instant.ofEpochMilli(kickoff + 4 * 60_000L).toString())
-        val result = provider.parseOdds(response(first, second), captured, captured, "soccer_epl")
+    @Test fun duplicateUnderlyingEventsKeepTheNewestBookLineRegardlessOfOrder() {
+        val older = event(book("book", "Book", updatedAt = captured - 10_000L), id = "older")
+        val newer = event(
+            book(
+                "book", "Book", updatedAt = captured - 5_000L,
+                outcomes = """[
+                    {"name":"Manchester City","price":1.31},{"name":"Draw","price":4.6},{"name":"Fulham","price":5.9}]""",
+            ),
+            id = "newer", home = "MANCHESTER CITY",
+            kickoffAt = Instant.ofEpochMilli(kickoff + 4 * 60_000L).toString(),
+        )
+        val ordered = provider.parseOdds(response(older, newer), captured, captured, "soccer_epl")
+        val reversed = provider.parseOdds(response(newer, older), captured, captured, "soccer_epl")
 
-        assertEquals(1, result.snapshots.size)
-        assertEquals(InternationalOddsQualityCounts(2, 1, 0, 0, 1, 0), result.qualityCounts)
+        assertEquals(1, ordered.snapshots.size)
+        assertEquals(1.31, ordered.snapshots.single().home, 0.0)
+        assertEquals(1, reversed.snapshots.size)
+        assertEquals(1.31, reversed.snapshots.single().home, 0.0)
+        assertEquals(InternationalOddsQualityCounts(2, 1, 0, 0, 1, 0), ordered.qualityCounts)
+    }
+
+    @Test fun catalogCacheRejectsMissingExpiredAndFutureCaptureTimes() {
+        assertFalse(isTheOddsApiCatalogCacheFresh(0L, captured))
+        assertFalse(isTheOddsApiCatalogCacheFresh(captured - THE_ODDS_API_CATALOG_TTL_MILLIS, captured))
+        assertFalse(isTheOddsApiCatalogCacheFresh(captured + 1L, captured))
+        assertTrue(isTheOddsApiCatalogCacheFresh(captured - 1L, captured))
     }
 
     @Test fun reviewedFootballClubSuffixAndShortNameVariantsNormalizeExactly() {

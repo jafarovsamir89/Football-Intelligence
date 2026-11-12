@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — prefer freshest duplicate Odds API lines and validate catalog-cache clock
+
+- For duplicate reports of the same bookmaker/event, retain the latest provider market timestamp (capture time breaks a tie) while counting one accepted line. Reject missing, expired or future-dated catalog-cache timestamps.
+- Add parser and cache-window regressions. The grouped local run passed 158 JVM tests, Android-test Kotlin compilation and debug/personal APK assembly; GitHub Actions verification is pending.
+
 ## Unreleased — clarify paired market delta direction in the Android UI
 
 - Explain which Elo-minus-market signs indicate lower Brier/Log Loss or higher top-1 accuracy, and keep the repeated-team/round independence limitation visible.

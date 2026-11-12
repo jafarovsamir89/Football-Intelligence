@@ -13,13 +13,13 @@ import androidx.work.WorkerParameters
 import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
-import az.simplesoft.footballintelligence.data.THE_ODDS_API_CATALOG_TTL_MILLIS
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_DAILY_LEAGUE_LIMIT
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_MINIMUM_CREDIT_RESERVE
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_REFRESH_INTERVAL_HOURS
 import az.simplesoft.footballintelligence.data.TheOddsApiProvider
 import az.simplesoft.footballintelligence.data.TheOddsApiSport
+import az.simplesoft.footballintelligence.data.isTheOddsApiCatalogCacheFresh
 import az.simplesoft.footballintelligence.data.theOddsApiAuthHeaders
 import az.simplesoft.footballintelligence.data.theOddsApiOddsUrl
 import az.simplesoft.footballintelligence.data.theOddsApiSportsUrl
@@ -278,7 +278,7 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
         val cached = prefs.getString(SPORTS_CACHE_KEY, null)
             ?.let { runCatching { provider.parseActiveSoccerSports(it) }.getOrNull() }
             .orEmpty()
-        if (cached.isNotEmpty() && now - cachedAt < THE_ODDS_API_CATALOG_TTL_MILLIS) return cached
+        if (cached.isNotEmpty() && isTheOddsApiCatalogCacheFresh(cachedAt, now)) return cached
 
         val response = providerHttpClient.getWithHeaders(theOddsApiSportsUrl(), theOddsApiAuthHeaders(apiKey))
         if (response.statusCode in setOf(401, 403, 451)) throw ProviderHttpException(response.statusCode)

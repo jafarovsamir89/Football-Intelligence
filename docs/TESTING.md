@@ -1,5 +1,11 @@
 # Testing
 
+## The Odds API duplicate and catalog-cache freshness (local passed; Actions pending)
+
+- The parser test provides two aliases for the same underlying bookmaker/fixture with different `last_update` values, then reverses response order; both parses must retain the newer line and report a single accepted row plus one duplicate.
+- Pure cache-window coverage rejects missing, expired and future-dated times, and accepts a timestamp within the seven-day TTL.
+- `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 158 JVM tests, Android-test Kotlin compilation and both APK assemblies. The private credential is present only in the local personal APK. API 26/34 instrumentation and CI artifact checks are pending.
+
 ## Paired prospective international-market baseline and compact-screen scrolling (CI verified)
 
 - Unit tests cover the last valid fresh quote selection per underlying bookmaker/fixture, duplicate intermediary reports, the latest Elo snapshot available by quote capture, post-kickoff result availability, same-cohort market/Elo scores, deterministic paired bootstrap intervals and the 30-settled-fixture minimum.

@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-12 — retain freshest duplicate Odds API lines and reject future catalog-cache times (local passed; Actions pending)
+
+- When one underlying bookmaker/event appeared more than once in a response, the parser previously kept whichever line arrived first. It now retains the quote with the newest provider market timestamp, then uses capture time as a tie-breaker, while still counting and storing only one event/book row.
+- The seven-day active-soccer catalog cache now requires a positive timestamp no later than device time. A clock correction into the past can no longer make a future-dated cache look fresh indefinitely.
+- Added regression tests for both duplicate response orders, newest-line selection, and absent/expired/future/fresh catalog timestamps.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 158 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `1dd62d0f45a3b65cbdcc3d111b41397461d23c65984851734871eed96b6e23c8`; private personal APK SHA-256 `ad217cbb251a928b81bf2023b3a5986ce423206a962c6f79dae20bd9fba849ba`. APK signatures verified locally. An uncompressed DEX audit confirmed the personal API credential is absent from debug and present only in personal; keep that APK private.
+- No live API call/credit was used, and no APK was installed. API 26/API 34 instrumentation, CI signing and artifact inspection are pending.
+
 ## 2026-11-12 — explain market-delta direction and test interval display (CI/API 26/API 34 passed)
 
 - Added user-facing sign interpretation: negative Elo-minus-market Brier/Log Loss means smaller loss for Elo; positive top-1 delta means more correct outcomes. Kept the bootstrap's repeated-team/round independence caveat next to the report.
