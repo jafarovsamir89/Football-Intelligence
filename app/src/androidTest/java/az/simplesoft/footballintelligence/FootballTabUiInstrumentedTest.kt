@@ -177,10 +177,7 @@ class FootballTabUiInstrumentedTest {
                 FootballBacktestTabContent(
                     automaticBacktestRunning = false,
                     automaticBacktestMessage = "",
-                    automaticBacktestReport = EloWalkForwardReport(1,1,0,0.5,1.0,emptyList()),
-                    automaticEloByCompetitionSeason = listOf(
-                        CompetitionSeasonWalkForwardMetrics("League A","2024-25",20,18,2,0.51,1.04),
-                    ),
+                    automaticBacktestReport = null,
                     automaticEloExperiment = null,
                     automaticGoalComparison = null,
                     importedCompetitionCodes = listOf("TEST"),
@@ -195,13 +192,40 @@ class FootballTabUiInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("TEST").performScrollTo().performClick()
+        composeRule.onNodeWithText("TEST").performClick()
         composeRule.onNodeWithText("Рассчитать walk-forward").performScrollTo().performClick()
-        composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
-        composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertIsDisplayed()
 
         assertEquals("TEST", selectedCompetition)
         assertEquals("TEST", requestedBacktest)
+    }
+
+    @Test
+    fun backtestShowsCompetitionSeasonEloDiagnostics() {
+        composeRule.setContent {
+            MaterialTheme {
+                FootballBacktestTabContent(
+                    automaticBacktestRunning = false,
+                    automaticBacktestMessage = "",
+                    automaticBacktestReport = EloWalkForwardReport(1,1,0,0.5,1.0,emptyList()),
+                    automaticEloByCompetitionSeason = listOf(
+                        CompetitionSeasonWalkForwardMetrics("League A","2024-25",20,18,2,0.51,1.04),
+                    ),
+                    automaticEloExperiment = null,
+                    automaticGoalComparison = null,
+                    importedCompetitionCodes = emptyList(),
+                    activeBacktestCode = "",
+                    onSelectBacktestCode = {},
+                    onRunImportedBacktest = {},
+                    backtestRunning = false,
+                    backtestMessage = "",
+                    backtestReportCode = "",
+                    backtestReport = null,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
+        composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertIsDisplayed()
     }
 
     @Test
