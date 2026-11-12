@@ -4,7 +4,7 @@
 
 - Explain which Elo-minus-market signs indicate lower Brier/Log Loss or higher top-1 accuracy, and keep the repeated-team/round independence limitation visible.
 - Add Compose instrumentation coverage for interval values at the 30-match gate and the explicit unavailable message at 29 settled fixtures.
-- The grouped local command passed 157 JVM tests, Android-test Kotlin compilation and both APK assemblies. GitHub Actions API 26/34 instrumentation and artifact checks are pending.
+- The grouped local command passed 157 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. Commit `7500457` passed Actions [43216630036](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43216630036): 44 API 34 tests, API 26 with 44/44 complete and one existing radio-dependent skip, zero failures, keyless builds and stable signing. Debug artifact `13943294870` has APK SHA-256 `f6d7fd7c458a7ec51ce2e69bba2da11ce15aea6f73f7b540dc07e8ff8ff06254` and signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; inspection confirmed it contains no personal key. No APK was installed.
 
 ## Unreleased — add uncertainty intervals to paired international market comparison
 
