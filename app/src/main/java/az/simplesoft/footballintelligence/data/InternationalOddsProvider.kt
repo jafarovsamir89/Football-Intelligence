@@ -39,6 +39,13 @@ data class InternationalOddsSyncState(
     val qualityCounts: InternationalOddsQualityCounts? = null,
 )
 
+data class InternationalOddsSyncAttempt(
+    val checkedAtMillis: Long,
+    val status: InternationalOddsStatus,
+    val qualityCounts: InternationalOddsQualityCounts?,
+    val detail: String?,
+)
+
 /**
  * A complete prematch 1X2 observation. `bookmakerId` names the bookmaker whose price the
  * intermediary reports; `providerId` records the intermediary and is never inferred from a quote.

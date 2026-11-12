@@ -1,5 +1,11 @@
 # Testing
 
+## In-progress international source-attempt history (verification pending)
+
+- Add a 30-day SQLite v15→v16 attempt ledger for every persisted MoviOdds result (including blocked/error responses) and show the five latest status/count observations on World Market. Failed or unparsed requests must retain null quality counts rather than synthetic zeroes.
+- Cover the v15 migration while preserving existing sync state, Worker write/readback, attempt ordering and counts-null-on-error. Keep persistent emulator `5558` untouched.
+- The first grouped run found a migration-test scope error; after fixing it, the combined local cycle passed 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed. CI runtime verification is pending.
+
 ## International quality-gate counters (local and CI passed)
 
 - Assert each parsed MoviOdds event is classified exactly once as accepted, rejected, stale, duplicate or unverified; persist the latest breakdown in the v14→v15 migration and show it in World Market without turning counts into a reliability score.

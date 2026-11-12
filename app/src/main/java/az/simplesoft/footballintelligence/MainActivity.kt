@@ -105,6 +105,7 @@ import az.simplesoft.footballintelligence.data.ForegroundBookmakerCaptureGate
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
+import az.simplesoft.footballintelligence.data.InternationalOddsSyncAttempt
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
 import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
 import az.simplesoft.footballintelligence.data.MOVIODDS_PROVIDER_ID
@@ -209,7 +210,7 @@ internal object StoreWriteCoordinator {
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 15) {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 16) {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -271,6 +272,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<13) createInternationalOddsTables(db)
         if(oldVersion<14) ensureAccumulatorComparisonColumns(db)
         if(oldVersion<15) ensureInternationalOddsQualityColumns(db)
+        if(oldVersion<16) ensureInternationalOddsSyncAttemptsTable(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -348,6 +350,11 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_match_idx ON international_odds_snapshots(match_id,bookmaker_id,provider_polled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_current_match_idx ON international_odds_current(match_id,bookmaker_id,provider_polled_at)")
         db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_history_idx ON international_odds_snapshots(bookmaker_id,event_id,captured_at)")
+        ensureInternationalOddsSyncAttemptsTable(db)
+    }
+    private fun ensureInternationalOddsSyncAttemptsTable(db:SQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS international_odds_sync_attempts (id INTEGER PRIMARY KEY AUTOINCREMENT, provider_id TEXT NOT NULL, checked_at INTEGER NOT NULL, status TEXT NOT NULL, quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, quality_duplicates INTEGER, quality_unverified INTEGER, detail TEXT)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS international_odds_attempts_time_idx ON international_odds_sync_attempts(provider_id,checked_at DESC,id DESC)")
     }
     private fun ensureInternationalOddsQualityColumns(db:SQLiteDatabase) {
         val tableExists=db.rawQuery(
@@ -1030,6 +1037,29 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
             )
         }
     }
+    fun internationalOddsSyncHistory(limit:Int=50):List<InternationalOddsSyncAttempt> = readableDatabase.rawQuery(
+        "SELECT checked_at,status,quality_received,quality_accepted,quality_rejected,quality_stale,quality_duplicates,quality_unverified,detail FROM international_odds_sync_attempts WHERE provider_id=? ORDER BY checked_at DESC,id DESC LIMIT ?",
+        arrayOf(MOVIODDS_PROVIDER_ID,limit.coerceIn(1,500).toString()),
+    ).use { c ->
+        buildList {
+            while(c.moveToNext()) {
+                val qualityCounts=if((2..7).all { !c.isNull(it) }) runCatching {
+                    InternationalOddsQualityCounts(
+                        receivedMatches=c.getInt(2),acceptedMatches=c.getInt(3),rejectedMatches=c.getInt(4),
+                        staleMatches=c.getInt(5),duplicateMatches=c.getInt(6),unverifiedMatches=c.getInt(7),
+                    )
+                }.getOrNull() else null
+                add(
+                    InternationalOddsSyncAttempt(
+                        checkedAtMillis=c.getLong(0),
+                        status=runCatching { InternationalOddsStatus.valueOf(c.getString(1)) }.getOrDefault(InternationalOddsStatus.ERROR),
+                        qualityCounts=qualityCounts,
+                        detail=if(c.isNull(8)) null else c.getString(8),
+                    ),
+                )
+            }
+        }
+    }
     fun saveInternationalOddsCapture(
         checkedAtMillis:Long,
         status:InternationalOddsStatus,
@@ -1094,8 +1124,22 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 }
             }
             db.insertWithOnConflict("international_odds_sync_state",null,state,SQLiteDatabase.CONFLICT_REPLACE)
+            val attempt=ContentValues().apply {
+                put("provider_id",MOVIODDS_PROVIDER_ID);put("checked_at",checkedAtMillis);put("status",status.name)
+                if(qualityCounts==null) {
+                    listOf("quality_received","quality_accepted","quality_rejected","quality_stale","quality_duplicates","quality_unverified")
+                        .forEach { putNull(it) }
+                } else {
+                    put("quality_received",qualityCounts.receivedMatches);put("quality_accepted",qualityCounts.acceptedMatches)
+                    put("quality_rejected",qualityCounts.rejectedMatches);put("quality_stale",qualityCounts.staleMatches)
+                    put("quality_duplicates",qualityCounts.duplicateMatches);put("quality_unverified",qualityCounts.unverifiedMatches)
+                }
+                if(detail==null) putNull("detail") else put("detail",detail.take(500))
+            }
+            db.insert("international_odds_sync_attempts",null,attempt)
             db.delete("international_odds_snapshots","captured_at<?",arrayOf((checkedAtMillis-30L*24*60*60*1000).toString()))
             db.delete("international_odds_current","kickoff<=? OR captured_at<?",arrayOf(checkedAtMillis.toString(),(checkedAtMillis-7L*24*60*60*1000).toString()))
+            db.delete("international_odds_sync_attempts","checked_at<?",arrayOf((checkedAtMillis-30L*24*60*60*1000).toString()))
             db.setTransactionSuccessful()
         } finally { endWriteTransaction(db) }
     }
@@ -1711,6 +1755,7 @@ class MainActivity:ComponentActivity() {
     val topazSyncState=remember(revision) { store.bookmakerSyncState("topaz") }
     val topazOdds=remember(revision) { store.freshBookmakerOdds("topaz") }
     val internationalOddsSyncState=remember(revision) { store.internationalOddsSyncState() }
+    val internationalOddsSyncHistory=remember(revision) { store.internationalOddsSyncHistory(50) }
     val internationalOdds=remember(revision) { store.freshInternationalOdds() }
     val internationalOddsHistory=remember(revision) { store.internationalOddsHistory(700) }
     val marketReferenceSyncState=remember(revision) { store.marketReferenceSyncState() }
@@ -2357,6 +2402,16 @@ class MainActivity:ComponentActivity() {
                             "Quality gate последнего ответа: принято ${quality.acceptedMatches}/${quality.receivedMatches}, отклонено ${quality.rejectedMatches}, устарело ${quality.staleMatches}, дубликаты ${quality.duplicateMatches}, не подтверждено ${quality.unverifiedMatches}. Это счётчики разбора, не рейтинг точности.",
                             style=MaterialTheme.typography.bodySmall,
                         )
+                    }
+                    if(internationalOddsSyncHistory.isNotEmpty()) {
+                        Text("История проверок источника · последние ${internationalOddsSyncHistory.size} попыток за 30 дней",fontWeight=FontWeight.SemiBold)
+                        internationalOddsSyncHistory.take(5).forEach { attempt ->
+                            val attemptTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
+                            val attemptCounts=attempt.qualityCounts?.let { " · принято ${it.acceptedMatches}/${it.receivedMatches}, отклонено ${it.rejectedMatches}, устарело ${it.staleMatches}, дубликаты ${it.duplicateMatches}, не подтверждено ${it.unverifiedMatches}" }
+                                ?: " · разбор ответа недоступен"
+                            Text("$attemptTime · ${attempt.status}$attemptCounts",style=MaterialTheme.typography.bodySmall)
+                        }
+                        Text("Это журнал наблюдений, а не процент доступности или гарантия будущей работы источника.",style=MaterialTheme.typography.bodySmall)
                     }
                     Text("Котировка считается свежей только при недавнем времени опроса рынка у источника (до 15 минут), независимо от того, когда изменился коэффициент. Приложение и источник сохраняются с разными отметками времени.",style=MaterialTheme.typography.bodySmall)
                     Text("Данные bet365 поступают через MoviOdds, который не аффилирован с bet365. Условия MoviOdds требуют возраст 18+ и разрешают использование в собственных приложениях; точная доступность в Азербайджане на физическом телефоне ещё не проверена. Источник может быть неполным или недоступным.",style=MaterialTheme.typography.bodySmall)

@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-12 — retain international source-attempt history (local passed; CI pending)
+
+- Extended the prior response-level quality counters into a 30-day local attempt ledger, covering parsed success/stale/unavailable responses and transport or access failures. The World Market shows five most recent statuses with real parse counts when present; no reliability percentage is inferred.
+- Added the SQLite v15→v16 migration and regression coverage for migration preservation, order, Worker persistence and counts remaining null on failed requests. The first grouped run found a test-scoping error in the migration fixture; after fixing it, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed: 128 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. APK SHA-256: `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`; `git diff --check` passed. The CI runtime suite is pending. Do not touch emulator `5558` or phone data.
+- Next: commit/push this grouped code/docs milestone and verify the v15→v16 migration, Worker history persistence, all API 34 instrumentation tests and signed artifact in Actions.
+
 ## 2026-11-12 — persist international quality-gate counts (local and CI verification passed)
 
 - Researched additional free international odds candidates. The Odds Gap documents no-key board endpoints but explicitly forbids repackaging them as another product; UK Odds API and The Odds API free tiers require account/key setup. No second permitted no-account feed was found; no adapter was added.

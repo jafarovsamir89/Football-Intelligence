@@ -169,7 +169,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val db = store.writableDatabase
-                assertEquals(15, db.version)
+                assertEquals(16, db.version)
                 assertTrue(tableExists(db, "historical_results"))
                 assertTrue(tableExists(db, "provider_sync_state"))
                 assertTrue(tableExists(db, "bookmaker_odds_snapshots"))
@@ -182,6 +182,7 @@ class StoreMigrationInstrumentedTest {
                 assertTrue(columnExists(db, "virtual_accumulator_legs", "model_minus_market"))
                 assertTrue(columnExists(db, "international_odds_sync_state", "quality_received"))
                 assertTrue(columnExists(db, "international_odds_sync_state", "quality_unverified"))
+                assertTrue(tableExists(db, "international_odds_sync_attempts"))
                 assertTrue(columnExists(db, "matches", "source_key"))
                 assertTrue(columnExists(db, "matches", "captured_at"))
 
@@ -247,7 +248,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(15, upgraded.version)
+                assertEquals(16, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulators", "selection_basis"))
                 upgraded.rawQuery(
                     "SELECT provider_id,leg_count,snapshot_key,selection_basis FROM virtual_accumulators",
@@ -290,7 +291,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(15, upgraded.version)
+                assertEquals(16, upgraded.version)
                 assertTrue(tableExists(upgraded, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(upgraded, "prospective_forecast_settlements"))
                 upgraded.rawQuery(
@@ -323,7 +324,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val upgraded=store.writableDatabase
-                assertEquals(15,upgraded.version)
+                assertEquals(16,upgraded.version)
                 assertTrue(tableExists(upgraded,"market_reference_snapshots"))
                 assertTrue(tableExists(upgraded,"market_reference_sync_state"))
                 val match=store.matches().single()
@@ -360,7 +361,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(15, upgraded.version)
+                assertEquals(16, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "market_fair_probability"))
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "model_minus_market"))
                 upgraded.rawQuery(
@@ -406,13 +407,14 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val db=store.writableDatabase
-                assertEquals(15,db.version)
+                assertEquals(16,db.version)
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_received"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_accepted"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_rejected"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_stale"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_duplicates"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_unverified"))
+                assertTrue(tableExists(db,"international_odds_sync_attempts"))
                 val prior=store.internationalOddsSyncState()!!
                 assertEquals(InternationalOddsStatus.LIVE,prior.status)
                 assertEquals(1000L,prior.lastCheckedAtMillis)
@@ -426,6 +428,62 @@ class StoreMigrationInstrumentedTest {
                         "quality_stale=1,quality_duplicates=1,quality_unverified=0 WHERE provider_id='moviodds_bet365'",
                 )
                 assertEquals(InternationalOddsQualityCounts(8,5,1,1,1,0),store.internationalOddsSyncState()!!.qualityCounts)
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun versionFifteenUpgradeAddsInternationalAttemptHistoryAndPreservesSyncState() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName="fi-v15-odds-attempts-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val firstCheck=System.currentTimeMillis()
+        try {
+            context.openOrCreateDatabase(databaseName,Context.MODE_PRIVATE,null).use { db ->
+                db.execSQL(
+                    "CREATE TABLE international_odds_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, " +
+                        "last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, detail TEXT, " +
+                        "quality_received INTEGER, quality_accepted INTEGER, quality_rejected INTEGER, quality_stale INTEGER, " +
+                        "quality_duplicates INTEGER, quality_unverified INTEGER)",
+                )
+                db.execSQL(
+                    "INSERT INTO international_odds_sync_state(provider_id,status,last_checked,last_success,fresh_records_stored,detail, " +
+                        "quality_received,quality_accepted,quality_rejected,quality_stale,quality_duplicates,quality_unverified) " +
+                        "VALUES('moviodds_bet365','LIVE',?, ?,2,'saved v15 state',2,2,0,0,0,0)",
+                    arrayOf(firstCheck,firstCheck-1),
+                )
+                db.version=15
+            }
+
+            Store(context,databaseName).use { store ->
+                val db=store.writableDatabase
+                assertEquals(16,db.version)
+                val preserved=store.internationalOddsSyncState()!!
+                assertEquals(InternationalOddsStatus.LIVE,preserved.status)
+                assertEquals(firstCheck,preserved.lastCheckedAtMillis)
+                assertEquals(2,preserved.freshRecordsStored)
+                assertEquals("saved v15 state",preserved.detail)
+                assertEquals(InternationalOddsQualityCounts(2,2,0,0,0,0),preserved.qualityCounts)
+
+                val parsedCounts=InternationalOddsQualityCounts(2,0,1,1,0,0)
+                db.execSQL(
+                    "INSERT INTO international_odds_sync_attempts(provider_id,checked_at,status, " +
+                        "quality_received,quality_accepted,quality_rejected,quality_stale,quality_duplicates,quality_unverified,detail) " +
+                        "VALUES('moviodds_bet365',?,'STALE',2,0,1,1,0,0,'stale response')",
+                    arrayOf(firstCheck+1),
+                )
+                db.execSQL(
+                    "INSERT INTO international_odds_sync_attempts(provider_id,checked_at,status,detail) " +
+                        "VALUES('moviodds_bet365',?,'ERROR','request failed')",
+                    arrayOf(firstCheck+2),
+                )
+                val attempts=store.internationalOddsSyncHistory(10)
+                assertEquals(2,attempts.size)
+                assertEquals(InternationalOddsStatus.ERROR,attempts[0].status)
+                assertNull(attempts[0].qualityCounts)
+                assertEquals(InternationalOddsStatus.STALE,attempts[1].status)
+                assertEquals(parsedCounts,attempts[1].qualityCounts)
             }
         } finally {
             context.deleteDatabase(databaseName)

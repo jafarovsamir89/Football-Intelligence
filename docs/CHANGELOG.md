@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — retain international source-attempt history
+
+- Save MoviOdds request status, safe detail and available parser quality counts for 30 days. Show the five latest attempts on World Market; do not calculate an uptime/reliability percentage from this short, device-local sample.
+- Add SQLite v15→v16 migration and coverage for preserving existing sync state, status ordering and absent counts on request failure. The first grouped run found and fixed a migration-test scope error. The successful combined local cycle passed 128 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `50dd310c5a37337275484af6fb127ac30b10720d726a36258080c08f61387cae`. CI runtime verification is pending.
+
 ## Unreleased — expose the latest international quality-gate counts
 
 - Persist received, accepted, rejected, stale, duplicate and unverified match counts from each parsed MoviOdds board and show them on the World Market screen. The counters describe only the latest JSON response; they are not a source reliability score.
