@@ -4,7 +4,7 @@
 
 - Calculate international consensus, paired market evaluation, and prospective forecast metrics together from one immutable screen snapshot on `Dispatchers.Default`.
 - Keep the full prospective evaluation ledger as the scoring input while the recent-history panel stays capped at 100 rows. Add a regression test for that boundary and document that the previous completed report may remain visible while a new snapshot is evaluated.
-- No database schema, scoring rule, forecast input, or cutoff changes.
+- No database schema, scoring rule, forecast input, or cutoff changes. The grouped local cycle passed 161 JVM tests, Android-test Kotlin compilation, and both APK builds. Actions [43231061329](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43231061329) passed its unit-test task, all 46 API 34 instrumentation tests, and API 26 with 46/46 complete, one existing radio-dependent skip and zero failures; it built and stable-signed both variants and uploaded only keyless artifact `13950613415`. The API 26 runner printed “Finished 47 tests” after the 46/46 count, while Gradle succeeded. No APK was installed.
 
 ## Distribute free Odds API refreshes across the day (CI/API 26/API 34 passed)
 

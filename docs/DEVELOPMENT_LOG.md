@@ -1,14 +1,15 @@
 # Development log
 
-## 2026-11-12 — compute full-screen market diagnostics off the UI thread (local verification passed; CI pending)
+## 2026-11-12 — compute full-screen market diagnostics off the UI thread (local and CI verification passed)
 
 - Found that SQLite reads already ran on `Dispatchers.IO`, but international consensus and prospective forecast scoring still ran synchronously during Compose recomposition. Paired international-market evaluation was already dispatched in the background.
 - Added one screen analytics aggregator that calculates consensus, paired-market diagnostics, and the full-ledger prospective report from a single immutable screen snapshot on `Dispatchers.Default`. The recent-history display remains capped at 100 rows; the report still consumes the complete saved evaluation ledger.
 - Added a regression test with a settled forecast present only in the full evaluation ledger and absent from the visible-history list. It checks that the report includes that fixture and its Brier score, and that the other snapshot-derived summaries remain valid.
 - This is a scheduling-only change: no model inputs, cutoff rules, stored records, schema, or scoring semantics changed.
 - The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed locally: 161 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `6d22de3da46e65299d95b4fbd24b3966aa258bc604032f3e9237bd9f6e506cbc`; private personal APK SHA-256 `96b815a0e278f3be73c83eb0355d6cce72a571ca7a66b86a4dd6d46e8da271f6`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36cbbeca06c353e4604abca671e2207ef88f7370`. DEX inspection confirmed the personal key is absent from debug and present only in the owner-only personal APK; that APK remains private.
-- No Android instrumentation execution or device install was done. No live API request/credit was used. ADB sees only unrelated emulator `5558`; it and its stored data remain untouched. CI verification is pending.
-- Next: commit/push this milestone and inspect GitHub Actions. Do not install an APK until a specific runtime acceptance check requires it and a suitable device is connected.
+- Actions [43231061329](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43231061329) passed the unit-test task, API 34 instrumentation 46/46, and API 26 instrumentation 46/46 with one existing radio-dependent skip and zero failures. The API 26 runner printed “Finished 47 tests” after the 46/46 completion count; Gradle succeeded. CI built both variants without the local credential, signed and uploaded only the keyless debug APK, artifact `13950613415` (archive SHA-256 `d9f65a1ed873b25304aaf8dc5ee2fc8b72e48c6e2c9d74c8fa8eccce62750808`). Downloaded APK SHA-256 `ab5caddee44ab3302746c2745f32d196bfb22e63f2c3b927cd185fe6a45f6b7d`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. DEX inspection confirmed the local personal credential is absent from the CI artifact.
+- No Android instrumentation execution or device install was done locally. No live API request/credit was used. ADB sees only unrelated emulator `5558`; it and its stored data remain untouched. Commit `46fdb65` is pushed to `main`.
+- Next: continue collecting settled prospective market/Elo pairs, and verify on the physical phone only when it becomes available. Do not install an APK until a specific runtime acceptance check requires it and a suitable device is connected.
 
 ## 2026-11-12 — spread Odds API refreshes across the free quota window (local and CI/API 26/API 34 passed)
 
