@@ -1,11 +1,13 @@
 # Development log
 
-## 2026-11-12 — use structured background work for CSV and backtests (local checks passed; CI pending)
+## 2026-11-12 — use structured background work for CSV and backtests (local and CI checks passed)
 
 - Replaced the raw `Thread` + `runOnUiThread` pairs used by the advanced CSV import, imported-league walk-forward, and automatic-history backtest with the lifecycle-bound Compose coroutine scope. The CSV content resolver read and database import run on `Dispatchers.IO`; decoding/parsing and imported walk-forward evaluation use `Dispatchers.Default`; automatic report generation stays on `Dispatchers.IO` so its SQLite reads never run on the UI thread.
 - Cancellation exceptions are rethrown and normal failures update Compose state on the main dispatcher. The CSV byte limit, importer validation, historical cutoff, model evaluation, and database schema are unchanged.
 - The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and debug APK assembly. Local APK SHA-256: `8b32ae432d31828d0639bc9c6ee47b5e2f21e375805cdd207cc23fb656571244`; `git diff --check` passed.
-- Next: run the established CI matrix on API 34/API 26, inspect the signed artifact, then update the continuation point. No local install or emulator data modification was performed.
+- Commit `8391f3d` passed Actions [43160327709](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43160327709): all 31 API 34 instrumentation tests (0 skipped/failed), 30 API 26 tests passed with only the emulator-radio test skipped, APK build, stable signing and artifact upload `13917683770` (16,881,774 bytes).
+- Downloaded APK SHA-256: `f08b12dc23ffd0ec04b85e8713086c933843716bd978f93f886a1fc8c8d8ad2c`; `apksigner verify` succeeded with the stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. APK was not installed; the persistent API 34 emulator database was untouched. The API 26 radio-off behavior remains unverified.
+- Next: migrate remaining screen `Store` reads out of Compose's main-thread recomposition and surface read failures; preserve the existing SQLite schema and user data. Keep waiting for prospective outcomes and physical-device/regional acceptance evidence without making those claims prematurely.
 
 ## 2026-11-12 — complete API 26/API 34 verification matrix (CI passed)
 

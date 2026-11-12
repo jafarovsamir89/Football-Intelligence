@@ -1,10 +1,11 @@
 # Testing
 
-## Structured CSV/backtest background execution (CI pending)
+## Structured CSV/backtest background execution (CI passed)
 
 - The CSV picker, imported walk-forward, and automatic walk-forward now run in the screen's Compose coroutine scope; blocking file/SQLite work and CPU-heavy parsing or model evaluation are kept off the main thread. Cancellation is not reported as a processing failure.
 - The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests (0 failures/errors/skips), compiled Android tests, and assembled the debug APK. Local APK SHA-256: `8b32ae432d31828d0639bc9c6ee47b5e2f21e375805cdd207cc23fb656571244`. `git diff --check` passed.
-- API 26/API 34 instrumentation, stable CI signing and artifact upload are pending. No local APK install was performed.
+- Actions [43160327709](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43160327709) passed all 31 API 34 instrumentation tests (0 skipped/failed) and API 26 with 30 passed, 1 emulator-radio test skipped and 0 failed; APK build, stable signing and artifact upload `13917683770` passed. Downloaded APK SHA-256 `f08b12dc23ffd0ec04b85e8713086c933843716bd978f93f886a1fc8c8d8ad2c`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- The API 26 radio-off test remains skipped because the hosted emulator retains an active network after shell controls; the actual offline test passed on API 34. No local APK install was performed and persistent emulator data remains untouched.
 
 ## Repair API 26 instrumentation compatibility (CI passed)
 

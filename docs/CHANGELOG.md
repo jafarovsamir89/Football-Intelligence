@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — keep CSV import and backtests within the screen coroutine scope
+## Keep CSV import and backtests within the screen coroutine scope (CI verified)
 
 - Replace the CSV import, imported walk-forward, and automatic walk-forward raw threads with Compose-scoped coroutines. CSV file I/O and database operations run on `Dispatchers.IO`; parsing and imported walk-forward calculation run on `Dispatchers.Default`. UI state updates stay on the main coroutine, and cancellation is rethrown instead of being shown as an import/backtest error.
-- This changes execution/lifecycle handling only; SQLite schema, import validation, model cutoff rules, and stored results are unchanged. Local grouped verification passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly; API 26/API 34 CI verification is pending.
+- This changes execution/lifecycle handling only; SQLite schema, import validation, model cutoff rules, and stored results are unchanged. Local verification passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly. Actions [43160327709](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43160327709) passed all 31 API 34 tests, API 26 with 30 passed/1 radio-control skip, APK build and stable signing. Artifact `13917683770`; APK SHA-256 `f08b12dc23ffd0ec04b85e8713086c933843716bd978f93f886a1fc8c8d8ad2c`.
 
 ## API 26 instrumentation compatibility and CI matrix (verified)
 
