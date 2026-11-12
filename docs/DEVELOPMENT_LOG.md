@@ -1,12 +1,14 @@
 # Development log
 
-## 2026-11-11 — public odds source review and respectful Retry-After handling (local verification passed; CI pending)
+## 2026-11-11 — public odds source review and respectful Retry-After handling (local and CI verification passed)
 
 - Rechecked the requested Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker pages and current terms. Public 1X2 content is visible on some pages, but the source terms prohibit automated extraction/reproduction or leave geography/robot access restricted. No app WebView collector, page parser, hidden-route probing, or JavaScript reverse engineering was added. Page rendering and accessibility from an Azerbaijan handset remain unverified.
 - The already integrated MoviOdds no-key group-40 feed remains the one international bookmaker source with documented own-app use, subject to its 18+ gate. Its prior POC is historical; this turn did not trigger a feed request or change the consent flag.
 - Implemented `Retry-After` parsing for delta-seconds and RFC 1123 dates. On 429/503, OpenFootball/OpenLigaDB stop the affected source's remaining requests; their worker queues one network-constrained retry after the longest valid delay. TipsAudit and MoviOdds workers use their own delayed one-time work chain for the same response. Invalid/missing delay retains WorkManager exponential backoff.
 - Added unit coverage for both header formats and malformed values, a loopback HTTP 429 response, and API 34 worker coverage for request stopping, longest-delay selection, connected constraint, and clearing the provider lock.
-- The single grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 122 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `6c3c23928250ebc6e8a93858667c4798d2cb5addc4997251509b7a8da9a94ed6`; `git diff --check` passed. GitHub Actions is pending. No APK has been installed and no persistent emulator database has been modified.
+- The single grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 122 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `6c3c23928250ebc6e8a93858667c4798d2cb5addc4997251509b7a8da9a94ed6`; `git diff --check` passed.
+- Commit `0256784` passed Actions [43141086329](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43141086329): unit tests, all 26 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and artifact upload `13909553166` (16,858,416 bytes). Downloaded APK SHA-256: `e57ec8b17d98a5e14adbdae6e558caeccbe0c8cbd5195f5d009e699376048df0`; signer SHA-256: `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- No APK was installed. The physical Xiaomi remains disconnected and the API 34 emulator data was not modified. Next: continue the engineering roadmap; repeat source/runtime acceptance on the physical handset only when it is available, without claiming Azerbaijan access before that check.
 
 ## 2026-11-12 — cover conditional HTTP cache revalidation (local and CI verification passed)
 

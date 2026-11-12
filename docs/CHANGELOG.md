@@ -3,7 +3,7 @@
 ## Unreleased — respect source `Retry-After` limits
 
 - Parse HTTP `Retry-After` delta-seconds and RFC 1123 dates for provider 429/503 responses. Stop further catalog/file requests to that provider and queue one network-constrained retry after the longest supplied delay; invalid or absent headers keep WorkManager exponential backoff.
-- Apply the same delayed retry behavior to the independent TipsAudit and MoviOdds workers. Add unit and API 34 instrumentation coverage for header parsing, real local HTTP 429 response metadata, request stopping, combined delays and queued WorkManager timing. The combined local cycle passed 122 JVM tests, Android-test Kotlin compilation and APK assembly; Actions is pending.
+- Apply the same delayed retry behavior to the independent TipsAudit and MoviOdds workers. Add unit and API 34 instrumentation coverage for header parsing, real local HTTP 429 response metadata, request stopping, combined delays and queued WorkManager timing. The combined local cycle passed 122 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43141086329](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43141086329) passed all 26 API 34 instrumentation tests, APK build, stable signing and artifact upload `13909553166` (16,858,416 bytes).
 - Recheck the requested public odds pages and terms. Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker still fail the app's automated-reuse or regional-access gate; existing MoviOdds remains the permitted integrated source.
 
 ## Unreleased — verify conditional football-source cache reuse

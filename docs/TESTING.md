@@ -1,10 +1,12 @@
 # Testing
 
-## Current grouped Retry-After milestone (local verification passed; Actions pending)
+## Completed grouped Retry-After milestone (local and Actions verification passed)
 
 - Added strict parsing for both HTTP `Retry-After` forms, a local HTTP 429 regression, and an API 34 worker test checking that OpenFootball/OpenLigaDB stop after their first 429 and enqueue one CONNECTED retry after the longest valid server delay.
 - Before the combined verification/build, the requested public Odds sources were rechecked against their public pages and terms. No prohibited WebView/parser path was added. The existing MoviOdds adapter already has its own historical public-feed POC and app quality tests; current access from Azerbaijan is still unverified.
-- One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 122 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `6c3c23928250ebc6e8a93858667c4798d2cb5addc4997251509b7a8da9a94ed6`; `git diff --check` passed. GitHub Actions is pending. No APK installation or persistent emulator database changes are part of this check.
+- One combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 122 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug APK assembly. Local APK SHA-256: `6c3c23928250ebc6e8a93858667c4798d2cb5addc4997251509b7a8da9a94ed6`; `git diff --check` passed.
+- Commit `0256784` passed Actions [43141086329](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43141086329): 26 API 34 instrumentation tests (0 skipped/failed), APK build, stable signing and upload `13909553166` (16,858,416 bytes). The downloaded APK SHA-256 is `e57ec8b17d98a5e14adbdae6e558caeccbe0c8cbd5195f5d009e699376048df0`; signer SHA-256 is `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- No APK was installed on the local emulator or phone; their databases were left untouched. Physical-device access from Azerbaijan is still unverified.
 
 ## Latest completed milestone (2026-11-12; international feed CI passed)
 
