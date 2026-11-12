@@ -3,7 +3,7 @@
 ## Unreleased — validate OpenLigaDB final-score semantics
 
 - Settle imported 1X2 results only from matches marked finished and the semantic `After90Minutes` row. Do not treat extra-time, penalty-only or unfinished results as settled; retain result type ID 2 only for older payloads with no semantic-kind fields. Added regression coverage for mixed score rows, unfinished matches and legacy payloads. Cancellation remains unknown because the source schema has no cancellation field.
-- Local grouped verification passed 181 JVM tests (zero failures/errors/skips), Android-test Kotlin compilation, debug/personal APK assembly, signature verification and DEX credential audit. GitHub Actions is pending; the private APK was not installed and no odds quota was used.
+- Local grouped verification passed 181 JVM tests (zero failures/errors/skips), Android-test Kotlin compilation, debug/personal APK assembly, signature verification and DEX credential audit. Actions [43327716809](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43327716809) passed unit tests, API 34 57/57, API 26 with one offline-only skip and zero failures, both keyless builds, signing and artifact upload `13993088983`. No APK was installed and no odds quota was used.
 
 ## Unreleased — разбить Elo walk-forward по лигам и сезонам
 
