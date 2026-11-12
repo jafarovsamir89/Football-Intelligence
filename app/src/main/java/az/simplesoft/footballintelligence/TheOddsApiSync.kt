@@ -14,6 +14,7 @@ import az.simplesoft.footballintelligence.data.InternationalOddsQualityCounts
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_DAILY_LEAGUE_LIMIT
+import az.simplesoft.footballintelligence.data.THE_ODDS_API_LEAGUES_PER_BATCH
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_MINIMUM_CREDIT_RESERVE
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_REFRESH_INTERVAL_HOURS
@@ -24,6 +25,9 @@ import az.simplesoft.footballintelligence.data.theOddsApiAuthHeaders
 import az.simplesoft.footballintelligence.data.theOddsApiOddsUrl
 import az.simplesoft.footballintelligence.data.theOddsApiSportsUrl
 import java.io.IOException
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneOffset
 import java.util.concurrent.TimeUnit
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,23 +41,77 @@ private const val SPORTS_CACHE_KEY = "active_soccer_sports"
 private const val SPORTS_CACHE_AT_KEY = "active_soccer_sports_at"
 private const val ROTATION_CURSOR_KEY = "league_rotation_cursor"
 private const val LAST_BATCH_ATTEMPT_KEY = "last_batch_attempt_at"
+private const val RECENT_BATCH_ATTEMPTS_KEY = "recent_batch_attempts"
+private const val RETRY_AFTER_UNTIL_KEY = "retry_after_until"
+private const val QUOTA_REMAINING_KEY = "quota_remaining"
+private const val QUOTA_OBSERVED_AT_KEY = "quota_observed_at"
 private val THE_ODDS_API_STALE_WINDOW_MILLIS = TimeUnit.HOURS.toMillis(THE_ODDS_API_REFRESH_INTERVAL_HOURS)
+private val THE_ODDS_API_ATTEMPT_WINDOW_MILLIS = TimeUnit.HOURS.toMillis(24)
+private val THE_ODDS_API_CLOCK_SKEW_TOLERANCE_MILLIS = TimeUnit.MINUTES.toMillis(1)
 
 internal fun isTheOddsApiSyncStale(lastCheckedAtMillis: Long?, nowMillis: Long): Boolean =
     lastCheckedAtMillis == null || lastCheckedAtMillis <= 0L ||
         lastCheckedAtMillis > nowMillis + 60_000L ||
         nowMillis - lastCheckedAtMillis >= THE_ODDS_API_STALE_WINDOW_MILLIS
 
+internal fun canStartTheOddsApiBatch(
+    recentAttemptsMillis: Collection<Long>,
+    nowMillis: Long,
+    retryAfterUntilMillis: Long = 0L,
+): Boolean {
+    if (retryAfterUntilMillis > nowMillis) return false
+    val attempts = recentAttemptsMillis.filter { it > 0L }
+    if (attempts.any { it - nowMillis > THE_ODDS_API_CLOCK_SKEW_TOLERANCE_MILLIS }) return false
+    val inWindow = attempts.filter { it > nowMillis - THE_ODDS_API_ATTEMPT_WINDOW_MILLIS }
+    if (inWindow.size >= THE_ODDS_API_DAILY_LEAGUE_LIMIT) return false
+    val latestAttempt = inWindow.maxOrNull() ?: return true
+    return nowMillis - latestAttempt >= THE_ODDS_API_STALE_WINDOW_MILLIS
+}
+
+internal fun hasTheOddsApiCreditReserve(
+    remainingCredits: Int?,
+    quotaObservedAtMillis: Long?,
+    nowMillis: Long,
+): Boolean {
+    if (remainingCredits == null || remainingCredits > THE_ODDS_API_MINIMUM_CREDIT_RESERVE) return true
+    val observedAt = quotaObservedAtMillis ?: return false
+    if (observedAt <= 0L || observedAt > nowMillis + THE_ODDS_API_CLOCK_SKEW_TOLERANCE_MILLIS) return false
+    val observedMonth = YearMonth.from(Instant.ofEpochMilli(observedAt).atZone(ZoneOffset.UTC))
+    val currentDate = Instant.ofEpochMilli(nowMillis).atZone(ZoneOffset.UTC)
+    val currentMonth = YearMonth.from(currentDate)
+    // The quota resets monthly. Wait through the first UTC day before trusting the new allowance.
+    return currentMonth.isAfter(observedMonth) && currentDate.dayOfMonth > 1
+}
+
 internal object TheOddsApiBatchGate {
     @Synchronized
     fun tryBegin(prefs: android.content.SharedPreferences, nowMillis: Long): Boolean {
-        val lastAttempt = prefs.getLong(LAST_BATCH_ATTEMPT_KEY, 0L)
-        if (lastAttempt > 0L && nowMillis - lastAttempt < THE_ODDS_API_STALE_WINDOW_MILLIS) return false
-        return prefs.edit().putLong(LAST_BATCH_ATTEMPT_KEY, nowMillis).commit()
+        val savedAttempts = prefs.getString(RECENT_BATCH_ATTEMPTS_KEY, null)
+            ?.split(',')
+            ?.mapNotNull(String::toLongOrNull)
+            .orEmpty()
+        val legacyAttempt = prefs.getLong(LAST_BATCH_ATTEMPT_KEY, 0L)
+        if (!prefs.contains(RECENT_BATCH_ATTEMPTS_KEY) && legacyAttempt > 0L &&
+            nowMillis - legacyAttempt < THE_ODDS_API_ATTEMPT_WINDOW_MILLIS
+        ) {
+            // The previous app version could issue a 12-league batch but stored only its start time.
+            return false
+        }
+        val attempts = (savedAttempts + legacyAttempt).distinct()
+        val retryAfterUntil = prefs.getLong(RETRY_AFTER_UNTIL_KEY, 0L)
+        val quotaRemaining = if (prefs.contains(QUOTA_REMAINING_KEY)) prefs.getInt(QUOTA_REMAINING_KEY, 0) else null
+        val quotaObservedAt = prefs.getLong(QUOTA_OBSERVED_AT_KEY, 0L).takeIf { it > 0L }
+        if (!hasTheOddsApiCreditReserve(quotaRemaining, quotaObservedAt, nowMillis)) return false
+        if (!canStartTheOddsApiBatch(attempts, nowMillis, retryAfterUntil)) return false
+        val retained = attempts.filter { it > nowMillis - THE_ODDS_API_ATTEMPT_WINDOW_MILLIS } + nowMillis
+        return prefs.edit()
+            .putLong(LAST_BATCH_ATTEMPT_KEY, nowMillis)
+            .putString(RECENT_BATCH_ATTEMPTS_KEY, retained.distinct().sorted().joinToString(","))
+            .commit()
     }
 }
 
-/** Key-enabled personal builds get a network-constrained daily batch; public CI APKs remain keyless. */
+/** Key-enabled personal builds get quota-limited network refreshes; public CI APKs remain keyless. */
 object TheOddsApiScheduler {
     fun scheduleOnAppOpen(context: Context) {
         val appContext = context.applicationContext
@@ -95,7 +153,7 @@ object TheOddsApiScheduler {
                 .setInitialDelay(refreshMillis, TimeUnit.MILLISECONDS)
                 .setConstraints(constraints),
         ).build()
-        manager.enqueueUniquePeriodicWork(THE_ODDS_API_PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, periodic)
+        manager.enqueueUniquePeriodicWork(THE_ODDS_API_PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic)
         if (isTheOddsApiSyncStale(lastCheckedAtMillis, nowMillis)) {
             val onceBuilder = withAutomaticSyncRetryBackoff(
                 OneTimeWorkRequestBuilder<TheOddsApiOddsWorker>().setConstraints(constraints),
@@ -154,7 +212,7 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
             }
 
             val cursor = prefs.getInt(ROTATION_CURSOR_KEY, 0)
-            val selected = provider.nextSports(sports, cursor, THE_ODDS_API_DAILY_LEAGUE_LIMIT)
+            val selected = provider.nextSports(sports, cursor, THE_ODDS_API_LEAGUES_PER_BATCH)
             val fixtures = store.matchIdentities()
             val snapshots = mutableListOf<InternationalOddsSnapshot>()
             val counts = QualityCountAccumulator()
@@ -178,14 +236,18 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
                         break
                     }
                     if (response.statusCode == 429 || response.statusCode == 503) {
-                        requestError = "The Odds API временно ограничил запросы (HTTP ${response.statusCode}); следующий плановый проход будет не раньше чем через 24 часа."
+                        rememberTheOddsApiRetryAfter(prefs, checkedAt, response.retryAfterDelayMillis)
+                        requestError = "The Odds API временно ограничил запросы (HTTP ${response.statusCode}); повторный запрос отложен согласно Retry-After и лимиту квоты."
                         break
                     }
                     if (response.statusCode !in 200..299) {
                         requestError = "The Odds API вернул HTTP ${response.statusCode} для ${sport.key}."
                         continue
                     }
-                    remainingCredits = response.oddsApiRequestsRemaining ?: remainingCredits
+                    response.oddsApiRequestsRemaining?.let { remaining ->
+                        remainingCredits = remaining
+                        rememberTheOddsApiQuota(prefs, remaining, response.serverDateMillis ?: System.currentTimeMillis())
+                    }
                     usedCredits = response.oddsApiRequestsUsed ?: usedCredits
                     lastRequestCost = response.oddsApiRequestCost ?: lastRequestCost
                     val parsed = provider.parseOdds(
@@ -200,8 +262,11 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
                     if (remainingCredits != null && remainingCredits <= THE_ODDS_API_MINIMUM_CREDIT_RESERVE) break
                 } catch (error: ProviderHttpException) {
                     if (error.statusCode in setOf(401, 403, 451)) blocked = true
+                    if (error.statusCode == 429 || error.statusCode == 503) {
+                        rememberTheOddsApiRetryAfter(prefs, checkedAt, error.retryAfterDelayMillis)
+                    }
                     requestError = if (error.statusCode == 429 || error.statusCode == 503) {
-                        "The Odds API временно ограничил запросы (HTTP ${error.statusCode}); следующий плановый проход будет не раньше чем через 24 часа."
+                        "The Odds API временно ограничил запросы (HTTP ${error.statusCode}); повторный запрос отложен согласно Retry-After и лимиту квоты."
                     } else {
                         "The Odds API отказал запросу для ${sport.key} (HTTP ${error.statusCode})."
                     }
@@ -231,6 +296,9 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
                 append("Проверено лиг: $requested/${selected.size} из ${sports.size} активных футбольных лиг.")
                 if (qualityCounts != null) append(" Принято линий: ${qualityCounts.acceptedMatches}/${qualityCounts.receivedMatches}.")
                 append(quotaText)
+                if (remainingCredits != null && remainingCredits!! <= THE_ODDS_API_MINIMUM_CREDIT_RESERVE) {
+                    append(" Запросы приостановлены до следующего месячного сброса квоты.")
+                }
                 requestError?.let { append(" Ошибка/ограничение: $it") }
             }
             store.saveInternationalOddsCapture(
@@ -246,6 +314,9 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
             Result.success()
         } catch (error: ProviderHttpException) {
             val blocked = error.statusCode in setOf(401, 403, 451)
+            if (error.statusCode == 429 || error.statusCode == 503) {
+                rememberTheOddsApiRetryAfter(prefs, checkedAt, error.retryAfterDelayMillis)
+            }
             store.saveInternationalOddsCapture(
                 checkedAt,
                 if (blocked) InternationalOddsStatus.BLOCKED else InternationalOddsStatus.ERROR,
@@ -282,7 +353,10 @@ class TheOddsApiOddsWorker(context: Context, params: WorkerParameters) : Corouti
 
         val response = providerHttpClient.getWithHeaders(theOddsApiSportsUrl(), theOddsApiAuthHeaders(apiKey))
         if (response.statusCode in setOf(401, 403, 451)) throw ProviderHttpException(response.statusCode)
-        if (response.statusCode == 429 || response.statusCode == 503) throw ProviderHttpException(response.statusCode, response.retryAfterDelayMillis)
+        if (response.statusCode == 429 || response.statusCode == 503) {
+            rememberTheOddsApiRetryAfter(prefs, now, response.retryAfterDelayMillis)
+            throw ProviderHttpException(response.statusCode, response.retryAfterDelayMillis)
+        }
         if (response.statusCode !in 200..299) throw IOException("The Odds API returned HTTP ${response.statusCode} for its sports catalog.")
         val sports = provider.parseActiveSoccerSports(response.body)
         val cachedJson = JSONArray().apply {
@@ -318,3 +392,24 @@ private fun safeTheOddsApiError(error: Throwable, apiKey: String): String =
     (error.message ?: error.javaClass.simpleName)
         .let { if (apiKey.isBlank()) it else it.replace(apiKey, "[ключ скрыт]") }
         .take(240)
+
+private fun rememberTheOddsApiRetryAfter(
+    prefs: android.content.SharedPreferences,
+    nowMillis: Long,
+    delayMillis: Long?,
+) {
+    if (delayMillis == null || delayMillis <= 0L) return
+    val until = if (Long.MAX_VALUE - nowMillis < delayMillis) Long.MAX_VALUE else nowMillis + delayMillis
+    prefs.edit().putLong(RETRY_AFTER_UNTIL_KEY, until).commit()
+}
+
+private fun rememberTheOddsApiQuota(
+    prefs: android.content.SharedPreferences,
+    remainingCredits: Int,
+    observedAtMillis: Long,
+) {
+    prefs.edit()
+        .putInt(QUOTA_REMAINING_KEY, remainingCredits)
+        .putLong(QUOTA_OBSERVED_AT_KEY, observedAtMillis)
+        .commit()
+}

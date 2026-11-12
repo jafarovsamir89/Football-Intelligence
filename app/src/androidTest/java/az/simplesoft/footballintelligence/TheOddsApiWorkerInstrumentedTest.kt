@@ -7,9 +7,11 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.work.ListenableWorker
+import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.testing.TestListenableWorkerBuilder
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsStatus
@@ -56,7 +58,13 @@ class TheOddsApiWorkerInstrumentedTest {
                     return when {
                         url.endsWith("/sports/") -> {
                             catalogRequests++
-                            ProviderHttpResult(200, """[{"key":"soccer_epl","title":"EPL","active":true}]""", null, null, serverDateMillis = System.currentTimeMillis())
+                            ProviderHttpResult(
+                                200,
+                                """[{"key":"soccer_epl","title":"EPL","active":true},{"key":"soccer_spain_la_liga","title":"La Liga","active":true},{"key":"soccer_germany_bundesliga","title":"Bundesliga","active":true}]""",
+                                null,
+                                null,
+                                serverDateMillis = System.currentTimeMillis(),
+                            )
                         }
                         url.contains("/sports/soccer_epl/odds/") -> {
                             oddsRequests++
@@ -84,8 +92,11 @@ class TheOddsApiWorkerInstrumentedTest {
                 val state = store.internationalOddsSyncState(THE_ODDS_API_PROVIDER_ID)!!
                 assertEquals(InternationalOddsStatus.LIVE, state.status)
                 assertEquals(1, state.freshRecordsStored)
+                assertTrue(state.detail!!.contains("Проверено лиг: 1/1 из 3 активных футбольных лиг."))
                 assertTrue(state.detail!!.contains("Квота: последний запрос 1 кредитов, использовано 1, осталось 499."))
                 assertFalse(state.detail!!.contains("test-private-key"))
+                assertEquals(499, prefs.getInt("quota_remaining", -1))
+                assertTrue(prefs.getLong("quota_observed_at", 0L) > 0L)
                 val saved = store.freshInternationalOdds(System.currentTimeMillis(), THE_ODDS_API_PROVIDER_ID).single()
                 assertEquals("unibet_fr", saved.bookmakerId)
                 assertEquals("api-event-1", saved.eventId)
@@ -113,12 +124,12 @@ class TheOddsApiWorkerInstrumentedTest {
                 assertEquals(InternationalOddsStatus.LIVE, store.internationalOddsSyncState("moviodds_bet365")!!.status)
             }
 
-            // A second app-open or periodic enqueue within the daily window cannot spend credits twice.
+            // A second app-open or periodic enqueue within the two-hour cooldown cannot spend credits twice.
             val second = TestListenableWorkerBuilder<TheOddsApiOddsWorker>(isolated).build()
             second.apiKeyProvider = { "test-private-key" }
             second.providerHttpClient = object : ProviderHttpClient {
                 override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult {
-                    throw AssertionError("Daily API batch gate should prevent a second request.")
+                    throw AssertionError("The API request gate should prevent a second request in the same window.")
                 }
             }
             assertEquals(ListenableWorker.Result.success().javaClass, second.doWork().javaClass)
@@ -154,7 +165,38 @@ class TheOddsApiWorkerInstrumentedTest {
         }
     }
 
-    @Test fun schedulerIsKeyGatedAndUsesAConnectedDailyWindow() {
+    @Test fun workerHonorsRetryAfterBeforeSpendingAnotherOddsRequest() = runBlocking {
+        val base = InstrumentationRegistry.getInstrumentation().targetContext
+        val name = "fi-the-odds-retry-after-${UUID.randomUUID()}.db"
+        val isolated = IsolatedDatabaseContext(base, name)
+        val prefs = base.getSharedPreferences("football_intelligence_the_odds_api", Context.MODE_PRIVATE)
+        val now = System.currentTimeMillis()
+        val retryDelay = TimeUnit.HOURS.toMillis(6)
+        base.deleteDatabase(name)
+        prefs.edit().clear().commit()
+        try {
+            val worker = TestListenableWorkerBuilder<TheOddsApiOddsWorker>(isolated).build()
+            worker.apiKeyProvider = { "test-private-key" }
+            worker.providerHttpClient = object : ProviderHttpClient {
+                override fun get(url: String, cache: ProviderFileCache?): ProviderHttpResult =
+                    throw AssertionError("The Odds API must send its key in the x-api-key header.")
+
+                override fun getWithHeaders(url: String, headers: Map<String, String>): ProviderHttpResult {
+                    assertEquals("test-private-key", headers["x-api-key"])
+                    throw ProviderHttpException(429, retryDelay)
+                }
+            }
+
+            assertEquals(ListenableWorker.Result.success().javaClass, worker.doWork().javaClass)
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, now + TimeUnit.HOURS.toMillis(4)))
+            assertTrue(TheOddsApiBatchGate.tryBegin(prefs, now + TimeUnit.HOURS.toMillis(8)))
+        } finally {
+            prefs.edit().clear().commit()
+            base.deleteDatabase(name)
+        }
+    }
+
+    @Test fun schedulerIsKeyGatedAndUsesAConnectedTwoHourWindow() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val manager = WorkManager.getInstance(context)
         clearWork(manager)
@@ -163,16 +205,58 @@ class TheOddsApiWorkerInstrumentedTest {
             assertTrue(activeWork(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME).isEmpty())
             assertTrue(activeWork(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME).isEmpty())
 
+            manager.enqueueUniquePeriodicWork(
+                TheOddsApiScheduler.UNIQUE_PERIODIC_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                PeriodicWorkRequestBuilder<TheOddsApiOddsWorker>(24, TimeUnit.HOURS).build(),
+            ).result.get(10, TimeUnit.SECONDS)
+            assertEquals(TimeUnit.HOURS.toMillis(24), awaitOne(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME).periodicityInfo?.repeatIntervalMillis)
+
             TheOddsApiScheduler.enqueueForFreshness(context, null, System.currentTimeMillis(), apiKeyAvailable = true)
             val once = awaitOne(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME)
-            val periodic = awaitOne(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME)
+            val periodic = awaitPeriodicInterval(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME, TimeUnit.HOURS.toMillis(2))
             assertEquals(WorkInfo.State.ENQUEUED, once.state)
             assertEquals(WorkInfo.State.ENQUEUED, periodic.state)
             assertEquals(NetworkType.CONNECTED, once.constraints.requiredNetworkType)
             assertEquals(NetworkType.CONNECTED, periodic.constraints.requiredNetworkType)
-            assertEquals(TimeUnit.HOURS.toMillis(24), periodic.periodicityInfo?.repeatIntervalMillis)
+            assertEquals(TimeUnit.HOURS.toMillis(2), periodic.periodicityInfo?.repeatIntervalMillis)
         } finally {
             clearWork(manager)
+        }
+    }
+
+    @Test fun persistedOddsRequestBudgetCapsTwelveRunsPerRollingDay() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val prefs = context.getSharedPreferences("fi-odds-budget-${UUID.randomUUID()}", Context.MODE_PRIVATE)
+        val start = 1_800_000_000_000L
+        val twoHours = TimeUnit.HOURS.toMillis(2)
+        try {
+            prefs.edit().clear().commit()
+            prefs.edit().putLong("last_batch_attempt_at", start).commit()
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, start + twoHours))
+            assertTrue(TheOddsApiBatchGate.tryBegin(prefs, start + TimeUnit.HOURS.toMillis(24)))
+
+            prefs.edit().clear().commit()
+            assertTrue(TheOddsApiBatchGate.tryBegin(prefs, start))
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, start + TimeUnit.HOURS.toMillis(1)))
+            for (index in 1..11) {
+                assertTrue("request $index should fit the rolling 24-hour budget", TheOddsApiBatchGate.tryBegin(prefs, start + index * twoHours))
+            }
+            assertEquals(12, prefs.getString("recent_batch_attempts", null)!!.split(',').size)
+            val rollingDay = TimeUnit.HOURS.toMillis(24)
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, start + rollingDay - 1L))
+            assertTrue(TheOddsApiBatchGate.tryBegin(prefs, start + rollingDay))
+            assertEquals(12, prefs.getString("recent_batch_attempts", null)!!.split(',').size)
+
+            prefs.edit().clear()
+                .putInt("quota_remaining", 20)
+                .putLong("quota_observed_at", Instant.parse("2026-11-12T12:00:00Z").toEpochMilli())
+                .commit()
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, Instant.parse("2026-11-30T12:00:00Z").toEpochMilli()))
+            assertFalse(TheOddsApiBatchGate.tryBegin(prefs, Instant.parse("2026-12-01T23:59:59Z").toEpochMilli()))
+            assertTrue(TheOddsApiBatchGate.tryBegin(prefs, Instant.parse("2026-12-02T00:00:00Z").toEpochMilli()))
+        } finally {
+            prefs.edit().clear().commit()
         }
     }
 
@@ -197,6 +281,18 @@ class TheOddsApiWorkerInstrumentedTest {
             Thread.sleep(100)
         }
         throw AssertionError("Timed out waiting for $name.")
+    }
+
+    private fun awaitPeriodicInterval(manager: WorkManager, name: String, expectedMillis: Long): WorkInfo {
+        val deadline = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(30)
+        while (System.currentTimeMillis() < deadline) {
+            val active = activeWork(manager, name)
+            check(active.size <= 1) { "Expected at most one active request for $name; got ${active.size}." }
+            val work = active.singleOrNull()
+            if (work?.periodicityInfo?.repeatIntervalMillis == expectedMillis) return work
+            Thread.sleep(100)
+        }
+        throw AssertionError("Timed out waiting for $name periodic interval $expectedMillis.")
     }
 
     private fun clearWork(manager: WorkManager) {

@@ -10,9 +10,10 @@ const val THE_ODDS_API_BASE_URL = "https://api.the-odds-api.com/v4"
 const val THE_ODDS_API_REGION = "eu"
 const val THE_ODDS_API_MARKET = "h2h"
 const val THE_ODDS_API_DAILY_LEAGUE_LIMIT = 12
+const val THE_ODDS_API_LEAGUES_PER_BATCH = 1
 const val THE_ODDS_API_MINIMUM_CREDIT_RESERVE = 20
 const val THE_ODDS_API_CATALOG_TTL_MILLIS = 7L * 24L * 60L * 60L * 1_000L
-const val THE_ODDS_API_REFRESH_INTERVAL_HOURS = 24L
+const val THE_ODDS_API_REFRESH_INTERVAL_HOURS = 2L
 
 internal fun isTheOddsApiCatalogCacheFresh(cachedAtMillis: Long, nowMillis: Long): Boolean =
     cachedAtMillis > 0L && cachedAtMillis <= nowMillis &&
