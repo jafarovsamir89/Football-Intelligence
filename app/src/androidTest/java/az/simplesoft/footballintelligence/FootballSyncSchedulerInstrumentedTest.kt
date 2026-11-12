@@ -204,13 +204,21 @@ class FootballSyncSchedulerInstrumentedTest {
     }
 
     private fun setAirplaneModeEnabled(enabled: Boolean) {
-        val value = if (enabled) 1 else 0
-        runShellCommand("settings put global airplane_mode_on $value")
-        runShellCommand("am broadcast -a android.intent.action.AIRPLANE_MODE --ez state $enabled")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runShellCommand("cmd connectivity airplane-mode ${if (enabled) "enable" else "disable"}")
+        } else {
+            val value = if (enabled) 1 else 0
+            runShellCommand("settings put global airplane_mode_on $value")
+            runShellCommand("am broadcast -a android.intent.action.AIRPLANE_MODE --ez state $enabled")
+        }
     }
 
     private fun setWifiEnabled(enabled: Boolean) {
-        runShellCommand("svc wifi ${if (enabled) "enable" else "disable"}")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            runShellCommand("cmd wifi set-wifi-enabled ${if (enabled) "enabled" else "disabled"}")
+        } else {
+            runShellCommand("svc wifi ${if (enabled) "enable" else "disable"}")
+        }
     }
 
     private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean) {

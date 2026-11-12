@@ -2,8 +2,8 @@
 
 ## Unreleased — repair minimum-API instrumentation compatibility (CI rerun pending)
 
-- Add API 26 instrumentation alongside API 34 with one APK build/sign/upload stage. The first run exposed `AutoCloseable`/`Store` test compatibility; the second passed 30/31 API 26 tests after adding `Closeable`, with the remaining failure caused by the API 26 emulator retaining Wi-Fi and an active network.
-- Skip only that radio-dependent emulator check on API 26 with an explicit reason; retain the connected-constraint queue test there and exercise actual radio-off behavior on API 34. Local verification passed 131 JVM tests and Android-test compilation; the corrected CI matrix/build is pending.
+- Add API 26 instrumentation alongside API 34 with one APK build/sign/upload stage. The first run exposed `AutoCloseable`/`Store` test compatibility; the second passed 30/31 API 26 tests after adding `Closeable`, with the remaining failure caused by the API 26 emulator retaining Wi-Fi and an active network. A third run then showed the API 34 offline test also requires its modern shell radio controls.
+- Skip only the uncontrollable radio-dependent check on API 26, retain connected-constraint assertions at both APIs, and use `cmd connectivity` / `cmd wifi` on API 30+ where the offline check was verified. Local verification passed 131 JVM tests and Android-test compilation; the corrected CI matrix/build is pending.
 
 ## Unreleased — recheck free international odds pages
 
