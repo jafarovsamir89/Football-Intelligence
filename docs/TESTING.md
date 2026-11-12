@@ -1,9 +1,9 @@
 # Testing
 
-## Compose tab interaction coverage (GitHub Actions pending)
+## Compose tab interaction coverage (Actions passed)
 
 - `FootballTabUiInstrumentedTest.kt` checks all five extracted tabs with Compose semantics: Matches displays a fixture and calls the selection callback; Coupons expands public prices and keeps Misli/TOPAZ sections distinct; Results renders a saved score; Backtest returns competition selection and run actions; Settings returns CSV text and launch actions.
-- The tests use `createComposeRule()` and a static `MaterialTheme` content tree. Added `ui-test-junit4` and the debug `ui-test-manifest` using the existing Compose BOM. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (local APK SHA-256 `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`). No connected local emulator was used; GitHub Actions will run instrumentation on fresh API 34 and API 26 emulators.
+- The tests use `createComposeRule()` and a static `MaterialTheme` content tree. Added `ui-test-junit4` and the debug `ui-test-manifest` using the existing Compose BOM. The grouped local command passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly (local APK SHA-256 `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`). Actions [43176696898](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43176696898) passed all 37 API 34 instrumentation tests and 37/37 declared API 26 tests with one radio-dependent skip and zero failures. API 26 emitted “Finished 38 tests” after its 37/37 runner summary; Gradle succeeded. A transient `adb: device offline` occurred during API 34 emulator boot; it recovered before tests ran. APK build, signing and artifact upload `13924782235` passed; downloaded APK SHA-256 `2cff5e10a82f27f579a65d1c1560b28d7f3a93147d53e1a874ec6d37d5c39e87`, signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No connected local emulator was used; its app data was not modified.
 
 ## Extract selected-match and World Market panels (Actions passed)
 

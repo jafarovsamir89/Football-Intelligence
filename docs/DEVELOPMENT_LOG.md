@@ -1,10 +1,12 @@
 # Development log
 
-## 2026-11-12 — direct UI coverage for extracted Compose tabs (in progress)
+## 2026-11-12 — direct UI coverage for extracted Compose tabs (CI passed)
 
 - The five extracted tab panels passed local compilation and the prior grouped CI instrumentation, but existing Android tests did not exercise Compose nodes or callbacks. Added `FootballTabUiInstrumentedTest.kt` with five focused tests for Matches, Coupons, Results, Backtest and Settings, using static inputs and asserting rendered content and selection/import/backtest/toggle callbacks. Added Compose UI test rules and the manifest dependency.
-- The only currently connected ADB target is emulator `5558`; the app package is not installed, so its saved forecast ledger cannot be inspected without an install. Avoid installing or altering its data for this stage. Run one grouped local test/build and one CI cycle after the test dependencies and cases are complete.
-- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`. `git diff --check` passed. The fresh-emulator UI test run in GitHub Actions is the remaining verification for this stage.
+- The only currently connected ADB target is emulator `5558`; the app package is not installed, so its saved forecast ledger cannot be inspected without an install. Avoid installing or altering its data for this stage; the local batch used compile/build tasks only and the CI instrumentation ran on disposable emulators.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation and APK assembly; local APK SHA-256 `db2759effbbc53a8496e842e743b1249632409d7742c7e9ccd8335edeac3dfc6`. `git diff --check` passed.
+- Commit `0ef0539` passed Actions [43176696898](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43176696898). API 34 ran 37/37 instrumentation tests with zero skips/failures. API 26 ran 37/37 with one existing radio-dependent skip and zero failures; the emulator runner printed “Finished 38 tests,” and Gradle succeeded. Its first adb check saw `device offline` during emulator boot, then the emulator came online and the test command passed. APK build, stable signing and upload `13924782235` (16,905,228 bytes) passed. Downloaded APK SHA-256: `2cff5e10a82f27f579a65d1c1560b28d7f3a93147d53e1a874ec6d37d5c39e87`; `apksigner verify` passed with signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No local emulator install or persistent database change occurred.
+- Next: resume prospective-forecast settlement and physical-device acceptance when settled source data or a handset is available.
 
 ## 2026-11-12 — extract the remaining Compose panels (CI passed)
 
