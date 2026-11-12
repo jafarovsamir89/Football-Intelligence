@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — repair partially present v17 international odds tables (Actions pending)
+## Unreleased — repair partially present v17 international odds tables (CI/API 26/API 34 passed)
 
 - When upgrading a partial v17 database with history rows but no current-quote table, create the absent table, continue migrating existing history rows to the v18 Back/Lay schema, and rehydrate current quotes from the newest saved row per market/side. Add an API instrumentation regression that verifies row identity, source market, fixture link, new schema columns, current-row recovery and reads after migration.
-- Local batch passed 163 JVM tests, Android-test Kotlin compilation and both APK builds. API 26/API 34 instrumentation and keyless CI artifact verification are pending.
+- Local batch passed 163 JVM tests, Android-test Kotlin compilation and both APK builds. Actions [43252033127](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43252033127) passed 51/51 API 34 tests and 51 completed API 26 tests with one network-dependent skip and zero failures. Keyless CI builds succeeded; only stable-signed debug artifact `13959732145` was uploaded. APK SHA-256 `a6fd4f6dfcdba5059e85d968f1056c19a4c574c0294f29b3b2ddba2515510844`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; personal key absent. No APK installation occurred.
 
 ## Unreleased — retain The Odds API exchange Back/Lay markets (CI/API 26/API 34 passed)
 
