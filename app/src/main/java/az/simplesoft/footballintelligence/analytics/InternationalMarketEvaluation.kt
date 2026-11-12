@@ -3,7 +3,15 @@ package az.simplesoft.footballintelligence.analytics
 import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import java.util.Locale
+import java.util.Random
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
+
+data class MetricConfidenceInterval95(
+    val lower: Double,
+    val upper: Double,
+)
 
 /** Paired, prospective score report for one underlying bookmaker. */
 data class InternationalBookmakerEvaluationReport(
@@ -20,6 +28,11 @@ data class InternationalBookmakerEvaluationReport(
     val modelBrierScore: Double?,
     val modelLogLoss: Double?,
     val modelTopOutcomeAccuracy: Double?,
+    /** Paired Elo-minus-market differences; negative loss differences favor Elo. */
+    val eloMinusMarketBrier95: MetricConfidenceInterval95?,
+    val eloMinusMarketLogLoss95: MetricConfidenceInterval95?,
+    /** Positive accuracy differences favor Elo. */
+    val eloMinusMarketTopAccuracy95: MetricConfidenceInterval95?,
 )
 
 data class InternationalMarketEvaluationReport(
@@ -41,6 +54,14 @@ data class InternationalMarketEvaluationReport(
  */
 object InternationalMarketEvaluationEngine {
     private const val FUTURE_PROVIDER_TIME_TOLERANCE_MILLIS = 2L * 60_000L
+    const val MIN_SETTLED_FIXTURES_FOR_INTERVALS = 30
+    private const val BOOTSTRAP_RESAMPLES = 2_000
+
+    private data class PairedMetricDifference(
+        val brier: Double,
+        val logLoss: Double,
+        val topAccuracy: Double,
+    )
 
     private data class FixtureKey(val matchId: Int, val kickoffMillis: Long)
     private data class QuoteKey(val fixture: FixtureKey, val bookmakerId: String)
@@ -108,6 +129,7 @@ object InternationalMarketEvaluationEngine {
         val reports = quoteCountByBook.keys.sorted().mapNotNull { bookmaker ->
             val rows = finalized[bookmaker].orEmpty()
             val settled = rows.filter { it.outcome != null }
+            val intervals = pairedBootstrapIntervals(bookmaker, settled)
             InternationalBookmakerEvaluationReport(
                 bookmakerId = bookmaker,
                 sourceProviderIds = sourceIdsByBook[bookmaker].orEmpty(),
@@ -122,6 +144,9 @@ object InternationalMarketEvaluationEngine {
                 modelBrierScore = settled.map { ForecastMetrics.brierScore(it.model, requireNotNull(it.outcome)) }.averageOrNull(),
                 modelLogLoss = settled.map { ForecastMetrics.logLoss(it.model, requireNotNull(it.outcome)) }.averageOrNull(),
                 modelTopOutcomeAccuracy = settled.map { topOutcomeCorrect(it.model, requireNotNull(it.outcome)) }.averageOrNull(),
+                eloMinusMarketBrier95 = intervals?.first,
+                eloMinusMarketLogLoss95 = intervals?.second,
+                eloMinusMarketTopAccuracy95 = intervals?.third,
             )
         }.sortedWith(compareByDescending<InternationalBookmakerEvaluationReport> { it.settledFixtureCount }
             .thenByDescending { it.pairedFixtureCount }
@@ -187,6 +212,70 @@ object InternationalMarketEvaluationEngine {
 
     private fun topOutcomeCorrect(prediction: OutcomeProbabilities, outcome: OutcomeProbabilities): Double =
         if (prediction.values().indexOf(prediction.values().maxOrNull()) == outcome.values().indexOf(1.0)) 1.0 else 0.0
+
+    /**
+     * Percentile bootstrap over the same fixture pairs for market and Elo. Fixtures are sampled
+     * independently with replacement; repeated teams or competition rounds can violate that
+     * assumption, so intervals are descriptive and may be too narrow for clustered schedules.
+     */
+    private fun pairedBootstrapIntervals(
+        bookmakerId: String,
+        settled: List<ScoredPair>,
+    ): Triple<MetricConfidenceInterval95, MetricConfidenceInterval95, MetricConfidenceInterval95>? {
+        if (settled.size < MIN_SETTLED_FIXTURES_FOR_INTERVALS) return null
+        val differences = settled.map { row ->
+            val outcome = requireNotNull(row.outcome)
+            PairedMetricDifference(
+                brier = ForecastMetrics.brierScore(row.model, outcome) - ForecastMetrics.brierScore(row.market, outcome),
+                logLoss = ForecastMetrics.logLoss(row.model, outcome) - ForecastMetrics.logLoss(row.market, outcome),
+                topAccuracy = topOutcomeCorrect(row.model, outcome) - topOutcomeCorrect(row.market, outcome),
+            )
+        }
+        val random = Random(stableSeed(bookmakerId, settled.size))
+        val brierSamples = DoubleArray(BOOTSTRAP_RESAMPLES)
+        val logLossSamples = DoubleArray(BOOTSTRAP_RESAMPLES)
+        val accuracySamples = DoubleArray(BOOTSTRAP_RESAMPLES)
+        repeat(BOOTSTRAP_RESAMPLES) { sampleIndex ->
+            var brier = 0.0
+            var logLoss = 0.0
+            var accuracy = 0.0
+            repeat(differences.size) {
+                val selected = differences[random.nextInt(differences.size)]
+                brier += selected.brier
+                logLoss += selected.logLoss
+                accuracy += selected.topAccuracy
+            }
+            val divisor = differences.size.toDouble()
+            brierSamples[sampleIndex] = brier / divisor
+            logLossSamples[sampleIndex] = logLoss / divisor
+            accuracySamples[sampleIndex] = accuracy / divisor
+        }
+        return Triple(
+            percentileInterval95(brierSamples),
+            percentileInterval95(logLossSamples),
+            percentileInterval95(accuracySamples),
+        )
+    }
+
+    private fun stableSeed(bookmakerId: String, sampleSize: Int): Long {
+        var hash = -0x340d631b7bdddcdbL // FNV-1a 64-bit offset basis
+        (bookmakerId + ":" + sampleSize).forEach { character ->
+            hash = (hash xor character.code.toLong()) * 0x100000001b3L
+        }
+        return hash
+    }
+
+    private fun percentileInterval95(samples: DoubleArray): MetricConfidenceInterval95 {
+        samples.sort()
+        fun percentile(probability: Double): Double {
+            val position = probability * (samples.lastIndex)
+            val lowerIndex = floor(position).toInt()
+            val upperIndex = ceil(position).toInt()
+            val fraction = position - lowerIndex
+            return samples[lowerIndex] * (1.0 - fraction) + samples[upperIndex] * fraction
+        }
+        return MetricConfidenceInterval95(percentile(0.025), percentile(0.975))
+    }
 
     private fun List<Double>.averageOrNull(): Double? = average().takeIf { isNotEmpty() }
 

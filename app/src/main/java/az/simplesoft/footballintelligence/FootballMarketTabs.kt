@@ -16,7 +16,9 @@ import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.InternationalMarketConsensus
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
+import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationEngine
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
+import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
 import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
@@ -199,10 +201,16 @@ internal fun InternationalMarketTabContent(
                             }
                             val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
                             Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
+                            val confidenceText = if(report.settledFixtureCount >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS) {
+                                "95% парный bootstrap, Δ Elo−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
+                            } else {
+                                "95% интервалы пока недоступны: нужно ≥${InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS} завершённых матчей, сейчас ${report.settledFixtureCount}."
+                            }
+                            Text(confidenceText,style=MaterialTheme.typography.bodySmall)
                         }
                     }
                     Text(
-                        "Метрики описывают эту сохранённую выборку, не означают прибыль и не подтверждают превосходство источника или модели. Текущая история цен ограничена хранением источника.",
+                        "Интервалы — парная выборка матчей bootstrap, предполагающая независимость матчей; повторяющиеся команды и туры могут занижать неопределённость. Эти описательные метрики не означают прибыль и не подтверждают превосходство модели. История цен ограничена хранением источника.",
                         style=MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -300,6 +308,10 @@ private fun internationalBookmakerName(providerId:String,bookmakerId:String):Str
 
 private fun Double.formatScore():String = String.format(Locale.ROOT,"%.3f",this)
 private fun Double.formatPercent():String = String.format(Locale.ROOT,"%.1f%%",this*100.0)
+private fun MetricConfidenceInterval95.formatScoreInterval():String =
+    String.format(Locale.ROOT,"[%+.3f; %+.3f]",lower,upper)
+private fun MetricConfidenceInterval95.formatPercentInterval():String =
+    String.format(Locale.ROOT,"[%+.1f; %+.1f] п.п.",lower*100.0,upper*100.0)
 private fun Double.formatLeadTime():String = when {
     this < 1.0/60.0 -> "<1 мин"
     this < 1.0 -> String.format(Locale.ROOT,"%.0f мин",this*60.0)

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — add uncertainty intervals to paired international market comparison
+
+- Calculate paired Elo-minus-market differences for Brier score, Log Loss and top-1 accuracy on the exact same settled fixture cohort. Run 2,000 deterministic percentile-bootstrap resamples per bookmaker and show 95% intervals only after 30 verified settled fixtures.
+- Label the deltas as Elo minus market and disclose the independent-fixture assumption in the UI; repeated teams/competition rounds may make the interval optimistic. Keep the metrics descriptive, without a value, ROI or profit claim.
+- Add unit coverage for determinism, expected sign/direction, finite ordered bounds and the minimum-sample gate. No database schema or migration change.
+- The grouped local command passed 157 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. Debug APK SHA-256 `9c36f437d6cec419db11a1ac934048f0409c5098efa0750b79e44864472bea56`; private personal APK SHA-256 `c423fa0dc24b68c4c2691cc732a64a476aab71d4692975c4234855fd50dcbe96`. Both local APK signatures verified. CI/API 26/API 34 and uploaded artifact inspection are pending.
+
 ## Fix compact-screen World Market scrolling and add paired market scoring (CI verified)
 
 - Compare the last retained fresh pre-kickoff international 1X2 quote per linked fixture and bookmaker with a saved current-Elo forecast available by quote capture. Keep bookmakers separate and show only Brier, log loss and top-outcome accuracy for a shared settled cohort.

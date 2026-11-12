@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-12 — add paired-bootstrap uncertainty to market/Elo comparison (local passed; Actions pending)
+
+- Added deterministic 95% percentile-bootstrap intervals for paired Elo-minus-market differences in Brier, Log Loss and top-1 accuracy. The same settled fixture pairs are resampled together for all metrics; 2,000 resamples are used per bookmaker. Intervals are withheld until at least 30 verified settled matches are present. There is no schema migration.
+- World Market labels the comparison as Elo-minus-market, shows the intervals and a minimum-sample message, and states the independent-match assumption; recurring teams/rounds may make uncertainty too small. By definition, negative loss deltas favor Elo and positive top-1 accuracy deltas favor Elo. No EV, ROI or profit claim is made.
+- Added synthetic 60-pair tests for deterministic finite ordered bounds and expected signs, plus a 29-pair minimum-gate test. These fixtures test the calculation only and are not real or prospective match results.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 157 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `9c36f437d6cec419db11a1ac934048f0409c5098efa0750b79e44864472bea56`; private personal APK SHA-256 `c423fa0dc24b68c4c2691cc732a64a476aab71d4692975c4234855fd50dcbe96`. Both local debug signatures verified. The key-enabled personal APK stays private; CI is expected to build keyless variants and upload only the debug APK.
+- No APK was installed, no existing emulator database was changed, and no live API credits were used. Next: commit/push this grouped feature and inspect one Actions run, API 26/34 results, stable signature and uploaded APK key absence.
+
 ## 2026-11-12 — make the international market screen scroll on compact displays (CI/API 26/API 34 passed)
 
 - Actions run [43206307429](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43206307429) passed all 155 JVM tests and 43/43 API 34 instrumentation tests. API 26 completed 43 tests with 41 passed, the existing radio-dependent test skipped, and `worldMarketShowsTheOddsApiProviderAndFreshNamedBookLines` failed: the static source/status header consumed the short viewport, leaving its nested quote `LazyColumn` with no composed quote item for the scroll assertion. The APK build, signing and artifact upload were correctly skipped.

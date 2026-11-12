@@ -103,6 +103,71 @@ class InternationalMarketEvaluationTest {
         assertNull(report.bookmakerReports.single().marketLogLoss)
     }
 
+    @Test fun pairedBootstrapIntervalsAreDeterministicAndUseEloMinusMarketDirection() {
+        val fixtures = settledFixtures(60)
+        val first = InternationalMarketEvaluationEngine.evaluate(fixtures.first, fixtures.second)
+            .bookmakerReports.single()
+        val repeated = InternationalMarketEvaluationEngine.evaluate(fixtures.first, fixtures.second)
+            .bookmakerReports.single()
+
+        assertEquals(first.eloMinusMarketBrier95, repeated.eloMinusMarketBrier95)
+        assertEquals(first.eloMinusMarketLogLoss95, repeated.eloMinusMarketLogLoss95)
+        assertEquals(first.eloMinusMarketTopAccuracy95, repeated.eloMinusMarketTopAccuracy95)
+        assertTrue(first.eloMinusMarketBrier95!!.upper < 0.0)
+        assertTrue(first.eloMinusMarketLogLoss95!!.upper < 0.0)
+        assertTrue(first.eloMinusMarketTopAccuracy95!!.lower > 0.0)
+        listOf(first.eloMinusMarketBrier95, first.eloMinusMarketLogLoss95, first.eloMinusMarketTopAccuracy95)
+            .forEach { interval ->
+                assertTrue(interval!!.lower <= interval.upper)
+                assertTrue(interval.lower.isFinite() && interval.upper.isFinite())
+            }
+    }
+
+    @Test fun pairedBootstrapIntervalsStayUnavailableBelowMinimumSettledSample() {
+        val fixtures = settledFixtures(InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS - 1)
+        val report = InternationalMarketEvaluationEngine.evaluate(fixtures.first, fixtures.second)
+            .bookmakerReports.single()
+
+        assertEquals(29, report.settledFixtureCount)
+        assertNull(report.eloMinusMarketBrier95)
+        assertNull(report.eloMinusMarketLogLoss95)
+        assertNull(report.eloMinusMarketTopAccuracy95)
+    }
+
+    private fun settledFixtures(count: Int): Pair<List<InternationalOddsSnapshot>, List<ProspectiveForecastObservation>> {
+        val quotes = ArrayList<InternationalOddsSnapshot>(count)
+        val forecasts = ArrayList<ProspectiveForecastObservation>(count)
+        repeat(count) { index ->
+            val matchId = 1_000 + index
+            val fixtureKickoff = kickoff + index * 2L * 24 * 60 * 60_000L
+            val capturedAt = fixtureKickoff - 60_000L
+            val outcome = listOf("H", "D", "A")[index % 3]
+            val modelProbabilities = when (outcome) {
+                "H" -> OutcomeProbabilities(.8, .1, .1)
+                "D" -> OutcomeProbabilities(.1, .8, .1)
+                else -> OutcomeProbabilities(.1, .1, .8)
+            }
+            quotes += quote(
+                provider = "the_odds_api",
+                bookmaker = "bootstrap-book",
+                capturedAt = capturedAt,
+                home = 3.0,
+                draw = 3.0,
+                away = 3.0,
+                matchId = matchId,
+                kickoffAt = fixtureKickoff,
+            )
+            forecasts += forecast(
+                id = matchId.toLong(),
+                matchId = matchId,
+                at = capturedAt - 1_000L,
+                outcome = outcome,
+                kickoffAt = fixtureKickoff,
+            ).copy(probabilities = modelProbabilities)
+        }
+        return quotes to forecasts
+    }
+
     private fun quote(
         provider: String,
         bookmaker: String,
@@ -111,6 +176,7 @@ class InternationalMarketEvaluationTest {
         draw: Double = 3.2,
         away: Double = 3.4,
         matchId: Int = 42,
+        kickoffAt: Long = kickoff,
     ) = InternationalOddsSnapshot(
         providerId = provider,
         bookmakerId = bookmaker,
@@ -120,7 +186,7 @@ class InternationalMarketEvaluationTest {
         region = "eu",
         capturedAtMillis = capturedAt,
         providerPolledAtMillis = capturedAt - 1_000L,
-        kickoffMillis = kickoff,
+        kickoffMillis = kickoffAt,
         market = "1X2",
         homeTeam = "Roma",
         awayTeam = "Napoli",
@@ -134,7 +200,7 @@ class InternationalMarketEvaluationTest {
         matchLinkBasis = InternationalMatchLinkBasis.EXACT_KICKOFF,
     )
 
-    private fun forecast(id: Long, matchId: Int = 42, at: Long, outcome: String?) = ProspectiveForecastObservation(
+    private fun forecast(id: Long, matchId: Int = 42, at: Long, outcome: String?, kickoffAt: Long = kickoff) = ProspectiveForecastObservation(
         snapshotId = id,
         modelVersion = CURRENT_ELO_MODEL_VERSION,
         matchId = matchId,
@@ -142,14 +208,14 @@ class InternationalMarketEvaluationTest {
         homeTeam = "Roma",
         awayTeam = "Napoli",
         forecastedAtMillis = at,
-        kickoffMillis = kickoff,
+        kickoffMillis = kickoffAt,
         historyMatchCount = EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST,
         probabilities = OutcomeProbabilities(.6, .3, .1),
         actualOutcome = outcome,
-        homeGoals = if (outcome == "H") 2 else if (outcome == "A") 0 else null,
-        awayGoals = if (outcome == "H") 1 else if (outcome == "A") 2 else null,
-        settledAtMillis = if (outcome == null) null else kickoff + 20_000L,
-        resultAvailableAtMillis = if (outcome == null) null else kickoff + 10_000L,
+        homeGoals = when (outcome) { "H" -> 2; "A" -> 0; "D" -> 1; else -> null },
+        awayGoals = when (outcome) { "H" -> 1; "A" -> 2; "D" -> 1; else -> null },
+        settledAtMillis = if (outcome == null) null else kickoffAt + 20_000L,
+        resultAvailableAtMillis = if (outcome == null) null else kickoffAt + 10_000L,
         resultSourceName = if (outcome == null) null else "OpenLigaDB",
         resultSourceUrl = if (outcome == null) null else "https://www.openligadb.de",
     )
