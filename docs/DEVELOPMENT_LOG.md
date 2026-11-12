@@ -1,10 +1,10 @@
 # Development log
 
-## 2026-11-12 — add minimum-supported API instrumentation run (verification pending)
+## 2026-11-12 — repair minimum-API instrumentation compatibility (CI rerun pending)
 
-- Added a second disposable Android emulator run at API 26 to the existing GitHub Actions job. It executes the same full instrumentation suite that already runs on API 34. APK assembly, stable signing and artifact upload remain one-time steps after both runs.
-- This targets the minimum Android runtime and SQLite v16 upgrade coverage without changing app source or touching the persistent local API 34 emulator/database.
-- Next: push the workflow/doc batch and inspect the API 26, API 34, APK-signing and artifact results. If API 26 exposes compatibility failures, fix them in one grouped follow-up before claiming the matrix verified.
+- The first matrix run, Actions [43154571534](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43154571534), passed unit tests and all 30 API 34 instrumentation tests. API 26 ran 30 tests but 24 failed: Android 8's `SQLiteOpenHelper` is not `AutoCloseable`, while test code compiled against the newer SDK called Kotlin `use` on `Store`; the offline-queue test also relied on newer `cmd connectivity` / `cmd wifi` shell commands. APK assembly and artifact upload were correctly skipped after the failure.
+- Made `Store` explicitly implement `java.io.Closeable`, added an isolated minimum-API contract test, and switched the offline scheduler test to the older `settings`/`svc wifi` shell interfaces with a diagnostic timeout state.
+- Local grouped verification passed 131 JVM tests and Android-test Kotlin compilation. The persistent API 34 emulator/database was not touched. Next: rerun both CI emulator suites and the single APK build/sign/upload before claiming API 26 verified.
 
 ## 2026-11-12 — harden international event identity and recheck public odds sources (local and CI passed)
 

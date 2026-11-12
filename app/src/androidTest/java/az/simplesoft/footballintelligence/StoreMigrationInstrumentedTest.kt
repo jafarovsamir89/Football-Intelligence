@@ -32,6 +32,21 @@ import java.util.concurrent.atomic.AtomicReference
 
 @RunWith(AndroidJUnit4::class)
 class StoreMigrationInstrumentedTest {
+    @Test fun storeCanBeUsedAsCloseableOnMinimumApi() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-store-closeable-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val store = Store(context, databaseName)
+
+        try {
+            assertTrue(java.io.Closeable::class.java.isAssignableFrom(Store::class.java))
+            store.writableDatabase
+        } finally {
+            store.close()
+            context.deleteDatabase(databaseName)
+        }
+    }
+
     @Test fun foregroundForecastWriteWaitsForBackgroundStoreTransaction() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "fi-wal-writer-serialization-${UUID.randomUUID()}.db"

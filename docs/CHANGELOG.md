@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — test the minimum Android API in CI (verification pending)
+## Unreleased — repair minimum-API instrumentation compatibility (CI rerun pending)
 
-- Add the full instrumentation suite on API 26 alongside the existing API 34 run, while retaining a single APK build, stable-signing and upload stage.
-- Verify SQLite v16 upgrade paths and Android runtime behavior on the minimum supported Android release in the disposable CI emulator.
+- Add the full instrumentation suite on API 26 alongside API 34 with a single APK build/sign/upload stage. The initial run passed API 34 but exposed API 26 test compatibility issues: Store's `use` call required `AutoCloseable`, and the offline test used newer shell commands.
+- Make `Store` explicitly `Closeable`, add a minimum-API regression check, and use API 26-compatible radio controls. Local verification passed 131 JVM tests and Android-test compilation; API 26/API 34 CI and APK build are pending.
 
 ## Unreleased — prevent false international market consensus (local and Actions passed)
 

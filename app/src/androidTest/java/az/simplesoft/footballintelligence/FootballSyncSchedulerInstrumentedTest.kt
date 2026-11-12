@@ -30,8 +30,8 @@ class FootballSyncSchedulerInstrumentedTest {
         cancelTestWork(manager)
 
         try {
-            if (!wasAirplaneModeEnabled) runShellCommand("cmd connectivity airplane-mode enable")
-            if (wasWifiEnabled) runShellCommand("cmd wifi set-wifi-enabled disabled")
+            if (!wasAirplaneModeEnabled) setAirplaneModeEnabled(true)
+            if (wasWifiEnabled) setWifiEnabled(false)
             waitUntil(timeoutMillis = TimeUnit.SECONDS.toMillis(30)) {
                 Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0) == 1 &&
                     Settings.Global.getInt(context.contentResolver, Settings.Global.WIFI_ON, 0) == 0 &&
@@ -60,13 +60,11 @@ class FootballSyncSchedulerInstrumentedTest {
                 0,
             ) == 1
             if (isAirplaneModeEnabled != shouldRestoreAirplaneMode) {
-                runShellCommand(
-                    "cmd connectivity airplane-mode ${if (shouldRestoreAirplaneMode) "enable" else "disable"}",
-                )
+                setAirplaneModeEnabled(shouldRestoreAirplaneMode)
             }
             val isWifiEnabled = Settings.Global.getInt(context.contentResolver, Settings.Global.WIFI_ON, 0) == 1
             if (isWifiEnabled != wasWifiEnabled) {
-                runShellCommand("cmd wifi set-wifi-enabled ${if (wasWifiEnabled) "enabled" else "disabled"}")
+                setWifiEnabled(wasWifiEnabled)
             }
         }
     }
@@ -198,10 +196,26 @@ class FootballSyncSchedulerInstrumentedTest {
         return ParcelFileDescriptor.AutoCloseInputStream(descriptor).bufferedReader().use { it.readText() }
     }
 
+    private fun setAirplaneModeEnabled(enabled: Boolean) {
+        val value = if (enabled) 1 else 0
+        runShellCommand("settings put global airplane_mode_on $value")
+        runShellCommand("am broadcast -a android.intent.action.AIRPLANE_MODE --ez state $enabled")
+    }
+
+    private fun setWifiEnabled(enabled: Boolean) {
+        runShellCommand("svc wifi ${if (enabled) "enable" else "disable"}")
+    }
+
     private fun waitUntil(timeoutMillis: Long, condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + timeoutMillis
         while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "Timed out waiting for device airplane-mode state." }
+            check(System.currentTimeMillis() < deadline) {
+                val context = InstrumentationRegistry.getInstrumentation().targetContext
+                val airplane = Settings.Global.getInt(context.contentResolver, Settings.Global.AIRPLANE_MODE_ON, 0)
+                val wifi = Settings.Global.getInt(context.contentResolver, Settings.Global.WIFI_ON, 0)
+                val hasNetwork = context.getSystemService(ConnectivityManager::class.java).activeNetwork != null
+                "Timed out waiting for offline state (airplane=$airplane, wifi=$wifi, activeNetwork=$hasNetwork)."
+            }
             Thread.sleep(100)
         }
     }
