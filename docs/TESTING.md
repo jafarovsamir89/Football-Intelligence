@@ -1,9 +1,10 @@
 # Testing
 
-## Extract selected-match and World Market panels (local verification passed; Actions pending)
+## Extract selected-match and World Market panels (Actions passed)
 
 - Move the two market-analysis tab bodies into `FootballMarketTabs.kt`. Check that normalized source bodies remain identical after replacing host-owned actions with callbacks; keep all state transitions at `FootballScreen.kt`.
-- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed. Actions verification is pending.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed.
+- Commit `0f8203c` passed Actions [43171418933](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43171418933): unit tests, 32 API 34 tests, and API 26 with 32/32 declared tests and one network-radio skip. API 26 printed 33 finished after its 32 declared tests; Gradle succeeded. APK build/sign/upload artifact `13923020589` passed. Downloaded APK SHA-256 `c061f9df3b4512be0c8eb0a6a946a002667bda6d1159acdd7a92bdfdb2d483e5`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`. No device installation occurred.
 
 ## Asynchronous Compose screen read model (CI passed)
 

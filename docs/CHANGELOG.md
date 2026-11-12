@@ -1,9 +1,9 @@
 # Changelog
 
-## Extract market-analysis panels (Actions pending)
+## Extract market-analysis panels (CI verified)
 
 - Move the selected-match Analysis and World Market panels into `FootballMarketTabs.kt` with explicit snapshot, forecast, worker-state, and action inputs. Keep age-consent persistence and scheduling at the screen host. No provider, pricing, model, coupon, or database behavior changes.
-- The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, APK assembly, and `git diff --check`; local APK SHA-256 `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`. Actions verification is pending.
+- The local grouped cycle passed 131 JVM tests, Android-test Kotlin compilation, APK assembly, and `git diff --check`; local APK SHA-256 `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`. Actions [43171418933](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43171418933) passed unit tests, 32 API 34 instrumentation tests, API 26 instrumentation (one network-radio skip), APK build, stable signing and artifact upload `13923020589`. The API 26 runner printed 33 finished after 32 declared tests, with Gradle successful. Downloaded APK SHA-256 `c061f9df3b4512be0c8eb0a6a946a002667bda6d1159acdd7a92bdfdb2d483e5`; stable signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
 
 ## Add the screen persistence boundary (CI verified)
 

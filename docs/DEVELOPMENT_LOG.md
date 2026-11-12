@@ -1,11 +1,12 @@
 # Development log
 
-## 2026-11-12 — extract market-analysis Compose panels (local verification passed; CI pending)
+## 2026-11-12 — extract market-analysis Compose panels (CI passed)
 
 - Moved the selected-match analysis and World Market content from `FootballScreen.kt` into `FootballMarketTabs.kt`. Both panels receive their snapshots, calculated forecasts, and state-changing actions through explicit parameters; consent persistence, external links, and WorkManager scheduling remain in the screen host.
 - A normalized source comparison confirmed the moved panel bodies retain the existing text and logic; the only changes are explicit callbacks/inputs and reading the same primary theme color inside the extracted panel. No odds source, parser, freshness rule, model, coupon, or database code changed.
-- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed. GitHub Actions and the stable-signed artifact are pending.
-- Next: push this source milestone and verify both API instrumentation suites plus signed artifact in one Actions run. Then continue extracting remaining tab content without changing schema v16.
+- The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug` passed 131 JVM tests, Android-test Kotlin compilation, and debug APK assembly. Local APK SHA-256: `7d444c10ec3ae08e7b4610cf487f48f03e9ca343ae168ed819c839ca3ac40739`; `git diff --check` passed.
+- Commit `0f8203c` passed Actions [43171418933](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43171418933): unit tests, all 32 API 34 instrumentation tests, and API 26 with 32/32 declared tests complete, one radio-dependent skip and zero failures. The API 26 runner then printed “Finished 33 tests”; Gradle succeeded. Its offline-radio path remains unverified. The workflow built/stable-signed and uploaded artifact `13923020589` (16,898,090 bytes). Downloaded APK SHA-256: `c061f9df3b4512be0c8eb0a6a946a002667bda6d1159acdd7a92bdfdb2d483e5`; `apksigner verify` passed with signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`.
+- The APK was not installed. Next: extract the remaining Matches, Coupons, Results, Backtest and Settings panels in one grouped stage, preserving behavior and schema v16.
 
 ## 2026-11-12 — split the activity, Compose screen, and bookmaker collectors (local and Actions checks passed)
 
