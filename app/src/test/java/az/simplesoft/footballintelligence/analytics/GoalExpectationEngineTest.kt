@@ -108,5 +108,63 @@ class GoalExpectationEngineTest {
         assertNotNull(comparison.goalPairedHoldout.meanLogLoss)
         assertTrue(comparison.eloHoldoutForecastCount >= comparison.pairedHoldoutTargetCount)
         assertTrue(comparison.goalHoldoutForecastCount >= comparison.pairedHoldoutTargetCount)
+        assertFalse(comparison.rhoSelectionAvailable)
+        assertNull(comparison.selectedDixonColesRho)
+        assertNull(comparison.goalConfig.dixonColesRho)
+    }
+
+    @Test fun dixonColesRhoIsSelectedOnValidationAndUsedForUntouchedHoldout() {
+        val rows = history(100)
+        val dataset = EloExperimentDataset("Synthetic League", rows, targets(rows))
+        val eloReport = EloParameterExperimentEngine.evaluate(
+            datasets = listOf(dataset),
+            parameterGrid = listOf(EloConfig()),
+            minimumHistoryMatches = 0,
+            minimumMatchesPerTeam = 0,
+            minimumValidationForecastsForSelection = 1,
+        )
+        val comparison = GoalModelComparisonEngine.evaluate(
+            listOf(dataset),
+            eloReport,
+            GoalExpectationConfig(minimumLeagueMatches = 0, minimumMatchesPerTeam = 0),
+            minimumValidationForecastsForRhoSelection = 1,
+        )
+
+        assertTrue(comparison.rhoSelectionAvailable)
+        assertEquals(GoalModelComparisonEngine.DIXON_COLES_RHO_GRID.size, comparison.rhoCandidates.size)
+        assertNotNull(comparison.selectedRhoValidationMetrics?.meanLogLoss)
+        assertEquals(comparison.selectedDixonColesRho, comparison.goalConfig.dixonColesRho)
+        assertNotNull(comparison.goalPairedHoldout.meanLogLoss)
+    }
+
+    @Test fun changingOnlyHoldoutLabelsCannotChangeSelectedDixonColesRho() {
+        val rows = history(100)
+        val originalTargets = targets(rows)
+        val dataset = EloExperimentDataset("Synthetic League", rows, originalTargets)
+        val eloReport = EloParameterExperimentEngine.evaluate(
+            datasets = listOf(dataset),
+            parameterGrid = listOf(EloConfig()),
+            minimumHistoryMatches = 0,
+            minimumMatchesPerTeam = 0,
+            minimumValidationForecastsForSelection = 1,
+        )
+        val holdoutStart = requireNotNull(eloReport.testStartMillis)
+        val changedHoldoutTargets = originalTargets.map { target ->
+            if (target.forecastCutoffMillis >= holdoutStart) {
+                target.copy(homeGoals = target.awayGoals + 1, awayGoals = target.homeGoals)
+            } else {
+                target
+            }
+        }
+        val changedDataset = dataset.copy(targets = changedHoldoutTargets)
+        val config = GoalExpectationConfig(minimumLeagueMatches = 0, minimumMatchesPerTeam = 0)
+        val original = GoalModelComparisonEngine.evaluate(
+            listOf(dataset), eloReport, config, minimumValidationForecastsForRhoSelection = 1,
+        )
+        val changedHoldout = GoalModelComparisonEngine.evaluate(
+            listOf(changedDataset), eloReport, config, minimumValidationForecastsForRhoSelection = 1,
+        )
+
+        assertEquals(original.selectedDixonColesRho, changedHoldout.selectedDixonColesRho)
     }
 }

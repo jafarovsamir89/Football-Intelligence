@@ -1,5 +1,12 @@
 # Testing
 
+## Completed Dixon–Coles validation-selection batch (local verification passed; CI pending)
+
+- Added deterministic selection from five safe rho values using validation Log Loss, with a 100-forecast default floor and rho=0 fallback below the floor.
+- Added tests for successful selection, fallback when validation is too small, and invariance of the selected rho when only holdout labels change.
+- The screen reports the validation selection and keeps the final holdout separate. This is diagnostic model research; it does not change live Elo forecasts.
+- The combined local cycle passed 124 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly; `git diff --check` passed. Local APK SHA-256: `dfb78d8d24cf1a7231becd4c8c59e25e945c32b5c7d0025c8b123a84c1718291`.
+
 ## Completed grouped Retry-After milestone (local and Actions verification passed)
 
 - Added strict parsing for both HTTP `Retry-After` forms, a local HTTP 429 regression, and an API 34 worker test checking that OpenFootball/OpenLigaDB stop after their first 429 and enqueue one CONNECTED retry after the longest valid server delay.

@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-12 — validation-only Dixon–Coles rho selection (local verification passed; CI pending)
+
+- Extended the chronological goal-model comparison to select rho from `{-0.15, -0.10, -0.05, 0, 0.02}` by validation Log Loss, with a 100-forecast floor. Under the floor it retains rho=0. The chosen value is then applied to the later holdout; the holdout is never used to select a value.
+- Added tests for selection, low-sample fallback and invariance of the selected rho when only holdout labels change. Updated the Backtest screen to distinguish the rho=0 validation baseline, selection sample and untouched holdout.
+- Updated research, architecture, limitations, roadmap, README, testing and changelog. The combined local command, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug`, passed 124 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and APK assembly. `git diff --check` passed. Local debug APK SHA-256: `dfb78d8d24cf1a7231becd4c8c59e25e945c32b5c7d0025c8b123a84c1718291`.
+- Next: commit/push the milestone and verify the CI instrumentation suite and signed artifact. ADB shows only emulator `5558`; no APK was installed and its local database was not modified.
+
 ## 2026-11-11 — public odds source review and respectful Retry-After handling (local and CI verification passed)
 
 - Rechecked the requested Oddsbunch, BetExplorer, Oddspedia, OddsPortal and Oddschecker pages and current terms. Public 1X2 content is visible on some pages, but the source terms prohibit automated extraction/reproduction or leave geography/robot access restricted. No app WebView collector, page parser, hidden-route probing, or JavaScript reverse engineering was added. Page rendering and accessibility from an Azerbaijan handset remain unverified.

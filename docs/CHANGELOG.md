@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased — select Dixon–Coles rho without holdout tuning
+
+- Evaluate a conservative five-value rho grid on the chronological validation window and use the selected rho only for the untouched final holdout. Selection requires at least 100 validation forecasts; otherwise the comparison retains rho=0.
+- Keep rho selection diagnostic-only: it does not alter production Elo or immutable prospective forecasts. Show validation sample count, selection status and the selected value in the analysis screen.
+- Add regression coverage proving that changing only holdout labels cannot change the selected rho, plus insufficient-validation fallback coverage.
+- Local verification passed: 124 JVM tests, Android-test Kotlin compilation and APK assembly; Actions verification is pending.
+
 ## Unreleased — respect source `Retry-After` limits
 
 - Parse HTTP `Retry-After` delta-seconds and RFC 1123 dates for provider 429/503 responses. Stop further catalog/file requests to that provider and queue one network-constrained retry after the longest supplied delay; invalid or absent headers keep WorkManager exponential backoff.
@@ -24,7 +31,7 @@
 
 - Estimate home/away goal rates from preceding same-competition scores using league-average smoothing and explicit league/team sample floors.
 - Update goal features in strict effective-availability batches; reject result rows whose provider availability timestamp predates kickoff instead of guessing when they became usable.
-- Compare Poisson with the validation-selected Elo on identical final-holdout fixtures where both have forecasts; show model coverage separately. Do not fit Dixon–Coles rho or change live probabilities.
+- Compare Poisson with the validation-selected Elo on identical final-holdout fixtures where both have forecasts; show model coverage separately. The follow-up validation-only rho selection is recorded above; it does not change live probabilities.
 - Synthetic-data regression tests passed in the combined local cycle: 107 JVM tests, Android-test Kotlin compilation and APK assembly. Actions [43126942380](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43126942380) passed unit tests, 16 API 34 instrumentation tests, APK build, stable signing and artifact upload `13902324452`.
 
 ## Unreleased — batch Elo research and correct accumulator history

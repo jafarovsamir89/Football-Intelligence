@@ -2207,7 +2207,15 @@ class MainActivity:ComponentActivity() {
                         Text("Недостаточно отдельных временных срезов для validation/holdout.",style=MaterialTheme.typography.bodySmall)
                     } else {
                         Text(
-                            "Validation Poisson: Brier ${comparison.validationGoalMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${comparison.validationGoalMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · прогнозов ${comparison.validationGoalMetrics.forecastCount}/${comparison.validationTargetCount}.",
+                            "Validation Poisson при ρ=0: Brier ${comparison.validationGoalMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${comparison.validationGoalMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} · прогнозов ${comparison.validationGoalMetrics.forecastCount}/${comparison.validationTargetCount}.",
+                            style=MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            if(comparison.rhoSelectionAvailable) {
+                                "Dixon–Coles ρ=${comparison.selectedDixonColesRho?.let { "%.2f".format(it) } ?: "—"} выбран только на validation по Log Loss (n=${comparison.selectedRhoValidationMetrics?.forecastCount}); порог ${comparison.minimumValidationForecastsForRhoSelection}."
+                            } else {
+                                "Dixon–Coles ρ оставлен 0: validation дала ${comparison.rhoCandidates.maxOfOrNull { it.validation.forecastCount } ?: 0} прогнозов; выбор требует минимум ${comparison.minimumValidationForecastsForRhoSelection}."
+                            },
                             style=MaterialTheme.typography.bodySmall,
                         )
                         val eloPaired=comparison.eloPairedHoldout
@@ -2217,7 +2225,7 @@ class MainActivity:ComponentActivity() {
                             style=MaterialTheme.typography.bodySmall,
                         )
                         Text(
-                            "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}; Poisson сглаживает атаки/оборону на ${comparison.goalConfig.smoothingMatches.toInt()} псевдоматчах, требует ${comparison.goalConfig.minimumLeagueMatches} матчей лиги и ${comparison.goalConfig.minimumMatchesPerTeam} матчей команды. Dixon–Coles rho не подбирался.",
+                            "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}; Poisson сглаживает атаки/оборону на ${comparison.goalConfig.smoothingMatches.toInt()} псевдоматчах, требует ${comparison.goalConfig.minimumLeagueMatches} матчей лиги и ${comparison.goalConfig.minimumMatchesPerTeam} матчей команды. Holdout не используется для выбора ρ.",
                             style=MaterialTheme.typography.labelSmall,
                         )
                     }

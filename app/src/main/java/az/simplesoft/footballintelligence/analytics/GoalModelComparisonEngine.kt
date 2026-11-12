@@ -5,6 +5,11 @@ data class GoalModelComparisonReport(
     val holdoutStartMillis: Long?,
     val validationTargetCount: Int,
     val validationGoalMetrics: EloExperimentMetrics,
+    val selectedRhoValidationMetrics: EloExperimentMetrics?,
+    val rhoCandidates: List<GoalRhoGridCandidate>,
+    val selectedDixonColesRho: Double?,
+    val rhoSelectionAvailable: Boolean,
+    val minimumValidationForecastsForRhoSelection: Int,
     val holdoutTargetCount: Int,
     val eloHoldoutForecastCount: Int,
     val goalHoldoutForecastCount: Int,
@@ -16,6 +21,11 @@ data class GoalModelComparisonReport(
     val goalConfig: GoalExpectationConfig,
 )
 
+data class GoalRhoGridCandidate(
+    val rho: Double,
+    val validation: EloExperimentMetrics,
+)
+
 data class AutomaticBacktestReports(
     val eloWalkForward: EloWalkForwardReport,
     val eloParameterExperiment: EloChronologicalExperimentReport,
@@ -24,6 +34,10 @@ data class AutomaticBacktestReports(
 
 /** Compares the fixed local Poisson goal model to Elo on the identical forecastable holdout rows. */
 object GoalModelComparisonEngine {
+    /** Conservative values valid across the model's bounded 0.05–5.0 goal rates. */
+    val DIXON_COLES_RHO_GRID: List<Double> = listOf(-0.15, -0.10, -0.05, 0.0, 0.02)
+    const val DEFAULT_MINIMUM_VALIDATION_FORECASTS_FOR_RHO_SELECTION = 100
+
     private data class ModelScore(val brier: Double, val logLoss: Double)
     private data class FixtureKey(val competition: String, val targetId: String)
 
@@ -31,7 +45,10 @@ object GoalModelComparisonEngine {
         datasets: List<EloExperimentDataset>,
         eloExperiment: EloChronologicalExperimentReport,
         goalConfig: GoalExpectationConfig = GoalExpectationConfig(),
+        minimumValidationForecastsForRhoSelection: Int = DEFAULT_MINIMUM_VALIDATION_FORECASTS_FOR_RHO_SELECTION,
     ): GoalModelComparisonReport {
+        require(minimumValidationForecastsForRhoSelection >= 1)
+        val baseGoalConfig = goalConfig.copy(dixonColesRho = null)
         val eloConfig = eloExperiment.selectedConfig ?: EloConfig()
         val validationStart = eloExperiment.validationStartMillis
         val holdoutStart = eloExperiment.testStartMillis
@@ -42,6 +59,11 @@ object GoalModelComparisonEngine {
                 holdoutStartMillis = holdoutStart,
                 validationTargetCount = 0,
                 validationGoalMetrics = empty,
+                selectedRhoValidationMetrics = null,
+                rhoCandidates = emptyList(),
+                selectedDixonColesRho = null,
+                rhoSelectionAvailable = false,
+                minimumValidationForecastsForRhoSelection = minimumValidationForecastsForRhoSelection,
                 holdoutTargetCount = 0,
                 eloHoldoutForecastCount = 0,
                 goalHoldoutForecastCount = 0,
@@ -50,22 +72,29 @@ object GoalModelComparisonEngine {
                 goalPairedHoldout = empty,
                 selectedEloConfig = eloConfig,
                 usedValidationSelectedEloConfig = eloExperiment.selectionAvailable,
-                goalConfig = goalConfig,
+                goalConfig = baseGoalConfig,
             )
         }
 
         val validationDatasets = datasets.selectTargets { it >= validationStart && it < holdoutStart }
         val holdoutDatasets = datasets.selectTargets { it >= holdoutStart }
-        val goalValidationReports = validationDatasets.map { dataset ->
-            GoalExpectationWalkForwardEngine.evaluate(dataset.history, dataset.targets, goalConfig)
-        }
-        val goalValidationPredictions = goalValidationReports.flatMap { it.predictions }
-        val validationGoalMetrics = EloExperimentMetrics(
-            targetCount = validationDatasets.sumOf { it.targets.size },
-            forecastCount = goalValidationPredictions.size,
-            meanBrierScore = goalValidationPredictions.map { it.brierScore }.average().takeIf { goalValidationPredictions.isNotEmpty() },
-            meanLogLoss = goalValidationPredictions.map { it.logLoss }.average().takeIf { goalValidationPredictions.isNotEmpty() },
+        val validationCandidates = DIXON_COLES_RHO_GRID.map { rho ->
+            GoalRhoGridCandidate(
+                rho = rho,
+                validation = summarizeGoals(validationDatasets, baseGoalConfig.copy(dixonColesRho = rho)),
+            )
+        }.sortedWith(
+            compareBy<GoalRhoGridCandidate> { it.validation.meanLogLoss ?: Double.POSITIVE_INFINITY }
+                .thenBy { it.validation.meanBrierScore ?: Double.POSITIVE_INFINITY }
+                .thenBy { kotlin.math.abs(it.rho) }
+                .thenBy { it.rho },
         )
+        val selectedRho = validationCandidates.firstOrNull {
+            it.validation.forecastCount >= minimumValidationForecastsForRhoSelection &&
+                it.validation.meanLogLoss != null && it.validation.meanBrierScore != null
+        }
+        val selectedGoalConfig = baseGoalConfig.copy(dixonColesRho = selectedRho?.rho)
+        val validationGoalMetrics = summarizeGoals(validationDatasets, baseGoalConfig)
 
         val eloScores = mutableMapOf<FixtureKey, ModelScore>()
         val goalScores = mutableMapOf<FixtureKey, ModelScore>()
@@ -80,7 +109,7 @@ object GoalModelComparisonEngine {
             val goalReport = GoalExpectationWalkForwardEngine.evaluate(
                 history = dataset.history,
                 targets = dataset.targets,
-                config = goalConfig,
+                config = selectedGoalConfig,
             )
             eloForecastCount += eloReport.forecastCount
             goalForecastCount += goalReport.forecastCount
@@ -121,7 +150,35 @@ object GoalModelComparisonEngine {
             goalPairedHoldout = goalPaired,
             selectedEloConfig = eloConfig,
             usedValidationSelectedEloConfig = eloExperiment.selectionAvailable,
-            goalConfig = goalConfig,
+            selectedRhoValidationMetrics = selectedRho?.validation,
+            rhoCandidates = validationCandidates,
+            selectedDixonColesRho = selectedRho?.rho,
+            rhoSelectionAvailable = selectedRho != null,
+            minimumValidationForecastsForRhoSelection = minimumValidationForecastsForRhoSelection,
+            goalConfig = selectedGoalConfig,
+        )
+    }
+
+    private fun summarizeGoals(
+        datasets: List<EloExperimentDataset>,
+        config: GoalExpectationConfig,
+    ): EloExperimentMetrics {
+        var targetCount = 0
+        var forecastCount = 0
+        var brierSum = 0.0
+        var logLossSum = 0.0
+        datasets.forEach { dataset ->
+            val report = GoalExpectationWalkForwardEngine.evaluate(dataset.history, dataset.targets, config)
+            targetCount += report.targetCount
+            forecastCount += report.forecastCount
+            brierSum += report.predictions.sumOf { it.brierScore }
+            logLossSum += report.predictions.sumOf { it.logLoss }
+        }
+        return EloExperimentMetrics(
+            targetCount = targetCount,
+            forecastCount = forecastCount,
+            meanBrierScore = (brierSum / forecastCount).takeIf { forecastCount > 0 },
+            meanLogLoss = (logLossSum / forecastCount).takeIf { forecastCount > 0 },
         )
     }
 
