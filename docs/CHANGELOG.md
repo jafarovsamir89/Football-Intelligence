@@ -7,11 +7,11 @@
 - Сигналы новостей не входят в вероятности и подбор купонов. Один запрос после rate-limit интервала получил HTTP 200 и 5 записей GDELT, но ноль точных связей в заголовке; получение Android Worker на телефоне не проверено. Источник, условия и ограничения — `docs/DATA_SOURCES.md`, `docs/RESEARCH.md`, `docs/LIMITATIONS.md`.
 - Локально прошёл объединённый цикл: 229 JVM-тестов (0 failures), компиляция Android-тестов, `assembleDebug` и `assemblePersonal`. Actions [43514043515](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43514043515) прошёл 78 API 34 тестов и 79 результатов API 26 (один офлайн-пропуск, 0 failures), собрал keyless APK и загрузил artifact `14079059432`; SHA-256 APK `46ffff7a7d7ad796f0eb2b3d797091412fc30e13f179ed0e3bc29a79ceaec037`. GDELT live fetch не доказан: development-сеть получила rate-limit message.
 
-## Unreleased — ценовой Smart Coupon и повтор News после первой синхронизации (локально проверено; CI ожидается)
+## Unreleased — ценовой Smart Coupon и повтор News после первой синхронизации (CI/API 26/API 34 пройдены)
 
 - Добавлен отдельный `MODEL_PRICE_EDGE`: только свежая полная точная линия одной БК, сравнение `модельная p − 1/цена`, отбор при положительном разрыве, сортировка по этому разрыву. На карте купона показывается безубыточная вероятность и п.п. разницы.
 - Для экспресса сохраняются лишь границы Фреше; модельный разрыв одной ноги не объявляется EV всего купона. Проверка результата использует только заранее сохранённый виртуальный билет и цену.
-- News worker теперь может повториться после завершения футбольной синхронизации; `NO_FIXTURES` не блокирует запрос на 12 часов. Объединённый локальный цикл прошёл 235 JVM-тестов, Android worker/Compose compile и обе APK сборки; Actions/API 26/API 34 ещё ожидаются.
+- News worker теперь может повториться после завершения футбольной синхронизации; `NO_FIXTURES` не блокирует запрос на 12 часов. Локально прошли 235 JVM-тестов, Android-test compile и обе APK-сборки. Actions [43522787819](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43522787819) прошёл 81 API 34 тест и API 26 (81 выполненный тест, один offline-only skip, 0 failures); загружен keyless artifact `14084801071`, скачанная APK SHA-256 `01ab4718faaaa0a6f5a167c881677000a3bb39c47d09e7998c1d5451cde2ba0d`, signer SHA-256 `da1506fd2e896c67c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX-аудит не обнаружил личный ключ. Установки на телефон не было: ADB физического телефона не видит.
 
 ## Unreleased — подключить прошедшую holdout-проверку Poisson к рабочим прогнозам
 
