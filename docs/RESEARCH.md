@@ -64,6 +64,12 @@ The [penaltyblog model documentation](https://penaltyblog.readthedocs.io/en/late
 - A standard public-page Android WebView capture on the disposable API 34 AVD on 2026-11-13 yielded no verifiable future prematch 1X2 lines from either operator. Both were marked unavailable. This is a snapshot only; it does not prove a block or predict later availability.
 - Do not bypass access controls or substitute an unverified endpoint. Keep cached football data usable offline, expose source status accurately, and keep local bookmaker prices separate from international reference feeds.
 
+## API-Football free odds candidate (reviewed 2026-11-13)
+
+- Official pricing advertises a free tier with 100 requests/day, no card, and prematch odds. Official docs say odds are normally published 1–14 days before kickoff, retained seven days, refreshed every three hours, and vary by competition/fixture/bookmaker. The coverage catalog names Azerbaijan competitions but does not establish that this season has odds.
+- `/odds/bookmakers` and odds requests require an API key. No account was created and no market response was obtained, so neither Misli/TOPAZ availability nor local 1X2 coverage is verified. A normal Chrome visit to the public catalog showed a bot-security verification page; it was not solved or bypassed.
+- Provider terms do not grant a license to use/publish data in user-made apps/products and assign third-party authorization checks to the user. The private, on-device use case is not clearly resolved by that statement. Keep this as a research candidate, not an integrated provider, until source-specific rights and actual market coverage are established.
+
 ## Experimental policy
 
 Before any strategy is promoted:

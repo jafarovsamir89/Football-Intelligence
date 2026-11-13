@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-13 — audit API-Football for Azerbaijan odds (research only)
+
+- The Odds API catalog was queried through its documented quota-free endpoint using the existing local key in an HTTP header (the key was not printed). HTTP 200 returned 80 total catalogs / 46 soccer competitions and no Azerbaijan soccer entry; this call used no odds credits.
+- API-Football public pricing advertises a $0 plan, 100 requests/day, no credit card, and pre-match odds. Its public catalog lists Azerbaijan's Birinci Dasta, Cup, and Premyer Liqa, while documentation says odds coverage varies by season/fixture/bookmaker, is normally available 1–14 days pre-match, retained seven days, refreshed every three hours, and paginated at 10 rows.
+- No API-Football account/key was created; therefore no current Azerbaijani quote, odds-enabled season, or Misli/TOPAZ bookmaker identity has been verified. Its terms do not grant a license to use/publish data in user-made apps/products and put third-party authorization checks on the user. The private-app case is unclear, so the source is not integrated absent better permission evidence.
+- The public API-Football coverage page displayed a bot-security verification page in ordinary Chrome. No challenge was solved, no protection was bypassed, and no request was made to its odds API.
+- Updated `docs/DATA_SOURCES.md`, `docs/AZERBAIJAN_BOOKMAKERS_RU.md`, `docs/RESEARCH.md`, and this diary. No source code changed; no APK rebuild or tests were run. The Odds API quota was not consumed.
+- Next: continue with ordinary public, permitted sources and require dated evidence of a named bookmaker, event identity, market and source timestamp before integration. If the physical phone returns to ADB, verify the installed personal APK without clearing data; continue collecting prospective market/model pairs until their outcomes settle.
+
 ## 2026-11-13 — recheck local bookmaker terms and explain current product value (documentation only)
 
 - Reopened Misli's official `robots.txt`: it allows `/` but excludes account, membership, site-settings, shared-coupon, and live-detail paths. This remains a crawler directive, not a license to reuse odds.

@@ -32,6 +32,14 @@ The provider's [column notes](https://football-data.co.uk/notes.txt) define `Dat
 
 Both integrations have produced time-stamped public-page snapshots on API 34; TOPAZ exact fixture joins were observed, while the most recent Misli capture had no exact local joins. A later disposable API 34 first-run on 2026-11-13 found no verifiable future prematch lines at either public page and marked both `UNAVAILABLE`. This time-bound result does not establish a block or region restriction, resolve reuse rights, guarantee that a line remains open, or establish expected profit. The WebView refresh is foreground-only; WorkManager does not run it in the background. No permitted, dependable free automated crowd/tipster feed was confirmed. Neither operator source is replaced by third-party "fair odds."
 
+### API-Football as a free local-league odds candidate (reviewed 2026-11-13)
+
+- Its [pricing page](https://www.api-football.com/pricing/) lists a $0 plan with 100 requests/day, no credit card, and pre-match odds among available endpoints. The [documentation](https://www.api-football.com/documentation-v3) says pre-match odds are generally available 1–14 days before kickoff, retained for seven days, refreshed every three hours, paginated at 10 rows, and may vary by season, fixture, bookmaker and competition.
+- Its [coverage catalog](https://www.api-football.com/coverage/) lists Azerbaijan's Birinci Dasta, Cup and Premyer Liqa. The listed coverage changes by season/fixture and does not prove that these competitions currently have odds.
+- The bookmaker catalog and odds endpoints require an API key. No API-Football account/key was created, and no live Azerbaijan quote or named Misli/TOPAZ bookmaker ID was verified. A normal Chrome visit to its public coverage route showed a bot-security verification page; no challenge was solved or bypassed.
+- Its [terms](https://www.api-football.com/terms) state that the provider does not grant a license to use/publish its supplied data in user-made apps/products and place necessary third-party authorizations on the user. Because this is a private, local app, the practical scope is not fully clear; do not assume those terms authorize embedding/caching odds. **Decision:** research candidate only; do not integrate until current Azerbaijan odds/bookmaker coverage and intended personal-app rights are confirmed. It is not evidence of a Misli or TOPAZ feed.
+- The current quota-free authenticated catalog check for The Odds API returned 46 soccer competitions and no Azerbaijan entry. It cannot currently be treated as the alternative local-market feed.
+
 ### International source audit and market-reference POC (reviewed 2026-11-11)
 
 | Candidate | Verified access evidence | Decision for zero-touch $0 Android |
