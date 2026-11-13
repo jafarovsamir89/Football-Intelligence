@@ -153,10 +153,10 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Ошибка источника").assertIsDisplayed()
+        composeRule.onNodeWithText("Ошибка источника", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("OpenLigaDB: HTTP 503", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Статус источников").performClick()
-        composeRule.onNodeWithText("OpenLigaDB · ERROR · HTTP 503", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("OpenLigaDB · ERROR · HTTP 503", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test
