@@ -53,6 +53,37 @@ internal fun FootballModelStatsTab(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                        if(model.frequencyBaselineReports.isEmpty()) {
+                            Text(
+                                "Сравнение будущих прогнозов с базовой частотой начнётся на новых снимках. Старые снимки не содержат сохранённую базу.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        } else {
+                            model.frequencyBaselineReports.forEach { baseline ->
+                                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                    Text("Проверка Elo против простой базы",fontWeight=FontWeight.SemiBold,style=MaterialTheme.typography.bodyMedium)
+                                    Text("База — доли побед хозяев, ничьих и побед гостей в той же лиге до этого прогноза.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("Одинаковая выборка: проверено ${baseline.settledCount} / ${baseline.fixtureCount} матчей.",style=MaterialTheme.typography.bodySmall)
+                                    if(baseline.settledCount==0) {
+                                        Text("Снимки сохранены до матчей; сравнение появится после получения результатов.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    } else {
+                                        if(baseline.settledCount<30) {
+                                            Text("Мало завершённых наблюдений: пока нельзя делать вывод, что Elo лучше базы.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                        }
+                                        Text(
+                                            "Brier: Elo ${baseline.eloMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ Elo−база ${baseline.eloMinusBaselineBrierScore?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
+                                            style=MaterialTheme.typography.bodySmall,
+                                        )
+                                        Text(
+                                            "Log Loss: Elo ${baseline.eloMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ Elo−база ${baseline.eloMinusBaselineLogLoss?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
+                                            style=MaterialTheme.typography.bodySmall,
+                                        )
+                                        Text("Δ = ошибка Elo минус ошибка базы: отрицательное значение означает меньшую ошибку Elo. Это не совет ставить и не расчёт прибыли.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

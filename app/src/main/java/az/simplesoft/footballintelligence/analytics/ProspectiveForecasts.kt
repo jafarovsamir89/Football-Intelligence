@@ -20,6 +20,8 @@ data class ProspectiveForecastObservation(
     val resultAvailableAtMillis: Long?,
     val resultSourceName: String?,
     val resultSourceUrl: String?,
+    val frequencyBaselineVersion: String? = null,
+    val frequencyBaselineProbabilities: OutcomeProbabilities? = null,
 )
 
 data class ProspectiveForecastReport(
@@ -29,6 +31,20 @@ data class ProspectiveForecastReport(
     val meanLogLoss: Double?,
     val topOutcomeAccuracy: Double?,
     val modelReports: List<ProspectiveModelForecastReport> = emptyList(),
+)
+
+data class ProspectiveFrequencyBaselineReport(
+    val baselineVersion: String,
+    val fixtureCount: Int,
+    val settledCount: Int,
+    val eloMeanBrierScore: Double?,
+    val baselineMeanBrierScore: Double?,
+    /** Negative difference means Elo scored lower on the same settled fixtures. */
+    val eloMinusBaselineBrierScore: Double?,
+    val eloMeanLogLoss: Double?,
+    val baselineMeanLogLoss: Double?,
+    /** Negative difference means Elo scored lower on the same settled fixtures. */
+    val eloMinusBaselineLogLoss: Double?,
 )
 
 data class ProspectiveModelForecastReport(
@@ -41,12 +57,14 @@ data class ProspectiveModelForecastReport(
     val meanBrierScore: Double?,
     val meanLogLoss: Double?,
     val topOutcomeAccuracy: Double?,
+    val frequencyBaselineReports: List<ProspectiveFrequencyBaselineReport> = emptyList(),
 )
 
 /** Keeps prospective training history strictly before the instant when the forecast was made. */
 fun historyAvailableAt(history: Collection<HistoricalMatch>, forecastCutoffMillis: Long): List<HistoricalMatch> =
-    history.filter {
-        it.kickoffMillis < forecastCutoffMillis && it.availableAtMillis < forecastCutoffMillis
+    history.filter { match ->
+        match.kickoffMillis < forecastCutoffMillis &&
+            match.safeAvailabilityMillisOrNull()?.let { it < forecastCutoffMillis } == true
     }
 
 /** A fact cannot be known earlier than either its source availability time or its local capture. */
@@ -78,6 +96,34 @@ object ProspectiveForecastEvaluator {
             val settled = selected.mapNotNull { observation ->
                 observation.observedOutcomeOrNull()?.let { observation to it }
             }
+            val baselineReports = selected.asSequence()
+                .filter { it.frequencyBaselineVersion?.isNotBlank() == true && it.frequencyBaselineProbabilities?.let(::validProbabilities) == true }
+                .groupBy { requireNotNull(it.frequencyBaselineVersion) }
+                .toSortedMap()
+                .map { (baselineVersion, rows) ->
+                    val baselineSettled = rows.mapNotNull { observation ->
+                        observation.observedOutcomeOrNull()?.let { observation to it }
+                    }
+                    val eloBrier = meanBrier(baselineSettled)
+                    val baselineBrier = baselineSettled.map { (row, observed) ->
+                        ForecastMetrics.brierScore(requireNotNull(row.frequencyBaselineProbabilities), observed)
+                    }.average().takeIf { baselineSettled.isNotEmpty() }
+                    val eloLogLoss = meanLogLoss(baselineSettled)
+                    val baselineLogLoss = baselineSettled.map { (row, observed) ->
+                        ForecastMetrics.logLoss(requireNotNull(row.frequencyBaselineProbabilities), observed)
+                    }.average().takeIf { baselineSettled.isNotEmpty() }
+                    ProspectiveFrequencyBaselineReport(
+                        baselineVersion = baselineVersion,
+                        fixtureCount = rows.size,
+                        settledCount = baselineSettled.size,
+                        eloMeanBrierScore = eloBrier,
+                        baselineMeanBrierScore = baselineBrier,
+                        eloMinusBaselineBrierScore = if (eloBrier != null && baselineBrier != null) eloBrier - baselineBrier else null,
+                        eloMeanLogLoss = eloLogLoss,
+                        baselineMeanLogLoss = baselineLogLoss,
+                        eloMinusBaselineLogLoss = if (eloLogLoss != null && baselineLogLoss != null) eloLogLoss - baselineLogLoss else null,
+                    )
+                }
             ProspectiveModelForecastReport(
                 modelVersion = modelVersion,
                 snapshotCount = byModel.getValue(modelVersion).size,
@@ -87,6 +133,7 @@ object ProspectiveForecastEvaluator {
                 meanBrierScore = meanBrier(settled),
                 meanLogLoss = meanLogLoss(settled),
                 topOutcomeAccuracy = topAccuracy(settled),
+                frequencyBaselineReports = baselineReports,
             )
         }
         val allSettled = selectedByModel.values.flatten().mapNotNull { observation ->
@@ -107,7 +154,12 @@ object ProspectiveForecastEvaluator {
             TeamDataQuality.isValidFixture(observation.homeTeam, observation.awayTeam) &&
             observation.forecastedAtMillis > 0L &&
             observation.forecastedAtMillis < observation.kickoffMillis &&
-            observation.historyMatchCount >= EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST
+            observation.historyMatchCount >= EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST &&
+            validProbabilities(observation.probabilities)
+
+    private fun validProbabilities(probabilities: OutcomeProbabilities): Boolean =
+        probabilities.values().all { it.isFinite() && it in 0.0..1.0 } &&
+            kotlin.math.abs(probabilities.values().sum() - 1.0) < 1e-8
 
     /** A saved result is scoreable only if its timestamped availability follows both prediction and kickoff. */
     private fun ProspectiveForecastObservation.observedOutcomeOrNull(): OutcomeProbabilities? {

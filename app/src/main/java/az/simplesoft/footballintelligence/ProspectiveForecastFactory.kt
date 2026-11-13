@@ -5,6 +5,8 @@ import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.TeamDataQuality
+import az.simplesoft.footballintelligence.analytics.OutcomeFrequencyBaseline
+import az.simplesoft.footballintelligence.analytics.OUTCOME_FREQUENCY_BASELINE_VERSION
 import az.simplesoft.footballintelligence.analytics.historyAvailableAt
 import java.time.Instant
 
@@ -49,6 +51,8 @@ internal fun buildProspectiveEloForecasts(
             historyMatchCount = forecast.matchesUsed,
             modelVersion = CURRENT_ELO_MODEL_VERSION,
             competition = match.league,
+            frequencyBaselineVersion = OUTCOME_FREQUENCY_BASELINE_VERSION,
+            frequencyBaselineProbabilities = OutcomeFrequencyBaseline.fromHistory(history),
         )
     }
 }

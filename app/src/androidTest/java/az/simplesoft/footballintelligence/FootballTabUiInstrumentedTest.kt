@@ -19,6 +19,8 @@ import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluatio
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.ProspectiveModelForecastReport
+import az.simplesoft.footballintelligence.analytics.ProspectiveFrequencyBaselineReport
 import az.simplesoft.footballintelligence.analytics.EloConfig
 import az.simplesoft.footballintelligence.analytics.EloExperimentMetrics
 import az.simplesoft.footballintelligence.analytics.GoalExpectationConfig
@@ -50,6 +52,47 @@ import org.junit.runner.RunWith
 class FootballTabUiInstrumentedTest {
     @get:Rule
     val composeRule = createComposeRule()
+
+    @Test
+    fun modelStatsShowsProspectiveEloAndBaselineScoresOnTheSameSettledFixtures() {
+        val model=ProspectiveModelForecastReport(
+            modelVersion="elo-1x2-v1",
+            snapshotCount=50,
+            fixtureCount=50,
+            settledCount=5,
+            pendingCount=20,
+            meanBrierScore=.58,
+            meanLogLoss=.96,
+            topOutcomeAccuracy=.53,
+            frequencyBaselineReports=listOf(
+                ProspectiveFrequencyBaselineReport(
+                    baselineVersion="same-competition-frequency-dirichlet-1-v1",
+                    fixtureCount=50,
+                    settledCount=5,
+                    eloMeanBrierScore=.58,
+                    baselineMeanBrierScore=.62,
+                    eloMinusBaselineBrierScore=-.04,
+                    eloMeanLogLoss=.96,
+                    baselineMeanLogLoss=1.02,
+                    eloMinusBaselineLogLoss=-.06,
+                ),
+            ),
+        )
+        composeRule.setContent {
+            MaterialTheme {
+                FootballModelStatsTab(
+                    report=ProspectiveForecastReport(50,5,.58,.96,.53,listOf(model)),
+                    history=emptyList(),
+                    updating=false,
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Одинаковая выборка: проверено 5 / 50 матчей.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Мало завершённых наблюдений: пока нельзя делать вывод, что Elo лучше базы.").assertExists()
+        composeRule.onNodeWithText("Δ Elo−база -0.0400 (ниже лучше)",substring=true).assertExists()
+        composeRule.onNodeWithText("Δ Elo−база -0.0600 (ниже лучше)",substring=true).assertExists()
+    }
 
     @Test
     fun matchesTabRendersFixtureAndReturnsSelectionToHost() {

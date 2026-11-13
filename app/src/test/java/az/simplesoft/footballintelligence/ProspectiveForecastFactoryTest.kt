@@ -30,6 +30,12 @@ class ProspectiveForecastFactoryTest {
         assertTrue(forecasts.all { it.historyMatchCount == 10 })
         assertTrue(forecasts.all { it.forecastedAtMillis == forecastAt })
         assertTrue(forecasts.all { it.probabilities.values().sum() in 0.999999..1.000001 })
+        assertTrue(forecasts.all { it.frequencyBaselineVersion == az.simplesoft.footballintelligence.analytics.OUTCOME_FREQUENCY_BASELINE_VERSION })
+        val baseline=forecasts.first().frequencyBaselineProbabilities
+        assertEquals(4.0/13.0,baseline!!.home,1e-12)
+        assertEquals(1.0/13.0,baseline.draw,1e-12)
+        assertEquals(8.0/13.0,baseline.away,1e-12)
+        assertTrue(forecasts.all { it.frequencyBaselineProbabilities == baseline })
     }
 
     @Test fun requiresTheModelHistoryFloorBeforeProducingAProspectiveSnapshot() {

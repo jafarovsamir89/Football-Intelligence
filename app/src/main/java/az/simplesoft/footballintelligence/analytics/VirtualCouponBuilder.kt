@@ -10,6 +10,8 @@ data class ForecastedMatch(
     val historyMatchCount: Int = 0,
     val modelVersion: String = CURRENT_ELO_MODEL_VERSION,
     val competition: String = "",
+    val frequencyBaselineVersion: String? = null,
+    val frequencyBaselineProbabilities: OutcomeProbabilities? = null,
 )
 
 data class VirtualCouponPick(

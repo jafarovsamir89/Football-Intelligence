@@ -13,7 +13,7 @@ MainActivity host → FootballScreen / Compose
   │     └── TheOddsApiOddsWorker → official V4 catalog + bounded EU h2h league batch, quota-aware rotation
   │     └── FootballDataStatsWorker → one rotating current-season match-stat CSV, persisted two-per-week gate
   ├── Misli and TOPAZ public-page WebViews (foreground, visible DOM only, gated capture/reload at 30-minute freshness)
-  ├── Store.kt / SQLite v19 with WAL (matches, quotes, match statistics, forecasts/history)
+  ├── Store.kt / SQLite v20 with WAL (matches, quotes, match statistics, forecasts/history)
   ├── EloEngine → exact-kickoff forecasts with safe-availability cutoff
   └── VirtualCouponBuilder → separate model-ranked and same-bookmaker fresh-price accumulator drafts
 ```
@@ -44,7 +44,7 @@ Commit `0ef0539` adds direct Compose UI instrumentation for the five extracted t
 
 ### Persistence technology decision
 
-Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-19 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Replacing it would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v19 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
+Do not migrate to Room in the current milestone. The demonstrated UI problem was synchronous screen access, which is now behind a repository and moved to `Dispatchers.IO`; no Room-specific failure remains. `Store.kt` owns a version-20 schema with migrations from older installs and user-owned match, quote, coupon, import, and forecast data, and its isolated migration suite checks preservation across the supported upgrades. Version 20 adds nullable as-of frequency-baseline fields to prospective forecast snapshots; version-19 forecasts and settlements remain intact and are explicitly unpaired. Replacing SQLite would add entity/DAO conversion and another migration implementation without solving a measured requirement. Reconsider Room if a concrete invalidation/query-maintenance need appears or SQLite defects continue despite WAL and serialized writes. Any future migration must first copy and verify a data-bearing v20 database, preserve all history/IDs, and prove rollback/reopen behavior on API 26 and 34.
 
 ## Provider and persistence rules
 

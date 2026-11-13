@@ -84,7 +84,7 @@ class FootballScreenStoreSnapshotInstrumentedTest {
             val snapshot = repository.readScreenSnapshot(matchId)
             val identities = repository.fixtureIdentities()
 
-            assertEquals(19, store.writableDatabase.version)
+            assertEquals(20, store.writableDatabase.version)
             assertEquals(matchId, snapshot.matches.single().id)
             assertEquals("Snapshot League", snapshot.matches.single().league)
             assertEquals("Example Book", snapshot.selectedQuotes.single().bookmaker)
@@ -101,7 +101,7 @@ class FootballScreenStoreSnapshotInstrumentedTest {
             repository.close()
             repositoryClosed = true
             Store(context, databaseName).use { reopened ->
-                assertEquals(19, reopened.writableDatabase.version)
+                assertEquals(20, reopened.writableDatabase.version)
                 assertEquals(matchId, reopened.matches().single().id)
                 assertEquals(3, reopened.bookmakerOddsHistoryForMatch(matchId).size)
             }

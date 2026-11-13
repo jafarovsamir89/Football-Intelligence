@@ -123,7 +123,7 @@ private data class InternationalOddsRecordKey(
     }
 }
 
-class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 19), Closeable {
+class Store(context: Context, databaseName:String="football_intelligence.db") : SQLiteOpenHelper(context, databaseName, null, 20), Closeable {
     init {
         // Permit read connections while WorkManager writes a large provider batch. Without WAL,
         // the single SQLite connection can starve foreground WebView capture and UI reads.
@@ -190,6 +190,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         if(oldVersion<17) ensureInternationalOddsMatchLinkBasisColumns(db)
         if(oldVersion<18) ensureInternationalOddsQuoteSideSchema(db)
         if(oldVersion<19) createFootballDataStatsTables(db)
+        if(oldVersion<20) ensureProspectiveFrequencyBaselineColumns(db)
     }
     private fun createHistoricalImportTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE historical_imports (id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, file_name TEXT NOT NULL, imported_at INTEGER NOT NULL, rows_read INTEGER NOT NULL, accepted_rows INTEGER NOT NULL, inserted_rows INTEGER NOT NULL, duplicate_rows INTEGER NOT NULL, rejected_rows INTEGER NOT NULL)")
@@ -242,6 +243,7 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 "forecast_day_utc TEXT NOT NULL, forecasted_at INTEGER NOT NULL, kickoff_at INTEGER NOT NULL, " +
                 "competition TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, history_match_count INTEGER NOT NULL, " +
                 "home_probability REAL NOT NULL, draw_probability REAL NOT NULL, away_probability REAL NOT NULL, " +
+                "frequency_baseline_version TEXT, baseline_home_probability REAL, baseline_draw_probability REAL, baseline_away_probability REAL, " +
                 "UNIQUE(model_version,match_id,forecast_day_utc))",
         )
         db.execSQL("CREATE INDEX IF NOT EXISTS prospective_forecast_time_idx ON prospective_forecast_snapshots(forecasted_at,kickoff_at)")
@@ -251,6 +253,20 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 "actual_outcome TEXT NOT NULL, home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL, " +
                 "result_source_name TEXT NOT NULL, result_source_url TEXT)",
         )
+    }
+    private fun ensureProspectiveFrequencyBaselineColumns(db:SQLiteDatabase) {
+        val columns=mutableSetOf<String>()
+        db.rawQuery("PRAGMA table_info(prospective_forecast_snapshots)",null).use { cursor ->
+            while(cursor.moveToNext()) columns+=cursor.getString(cursor.getColumnIndexOrThrow("name"))
+        }
+        if(columns.isEmpty()) {
+            createProspectiveForecastTables(db)
+            return
+        }
+        if("frequency_baseline_version" !in columns) db.execSQL("ALTER TABLE prospective_forecast_snapshots ADD COLUMN frequency_baseline_version TEXT")
+        if("baseline_home_probability" !in columns) db.execSQL("ALTER TABLE prospective_forecast_snapshots ADD COLUMN baseline_home_probability REAL")
+        if("baseline_draw_probability" !in columns) db.execSQL("ALTER TABLE prospective_forecast_snapshots ADD COLUMN baseline_draw_probability REAL")
+        if("baseline_away_probability" !in columns) db.execSQL("ALTER TABLE prospective_forecast_snapshots ADD COLUMN baseline_away_probability REAL")
     }
     private fun createMarketReferenceTables(db:SQLiteDatabase) {
         db.execSQL("CREATE TABLE IF NOT EXISTS market_reference_sync_state (provider_id TEXT PRIMARY KEY, status TEXT NOT NULL, last_checked INTEGER NOT NULL, last_success INTEGER, fresh_records_stored INTEGER NOT NULL DEFAULT 0, methodology_version TEXT, detail TEXT)")
@@ -834,6 +850,9 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 if(currentMatch[4] as Boolean || !(currentMatch[5] as Boolean)) continue
                 if(currentMatch[3] as Long? != forecast.kickoffMillis) continue
                 if(currentMatch[1] as String != forecast.homeTeam || currentMatch[2] as String != forecast.awayTeam) continue
+                val baselineVersion=forecast.frequencyBaselineVersion?.takeIf { it.isNotBlank() }
+                val baselineProbabilities=forecast.frequencyBaselineProbabilities
+                if((baselineVersion==null)!=(baselineProbabilities==null)) continue
 
                 val forecastDayUtc=Instant.ofEpochMilli(forecast.forecastedAtMillis)
                     .atZone(ZoneOffset.UTC).toLocalDate().toString()
@@ -850,6 +869,12 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                     put("home_probability",forecast.probabilities.home)
                     put("draw_probability",forecast.probabilities.draw)
                     put("away_probability",forecast.probabilities.away)
+                    if(baselineVersion!=null&&baselineProbabilities!=null) {
+                        put("frequency_baseline_version",baselineVersion)
+                        put("baseline_home_probability",baselineProbabilities.home)
+                        put("baseline_draw_probability",baselineProbabilities.draw)
+                        put("baseline_away_probability",baselineProbabilities.away)
+                    }
                 }
                 if(db.insertWithOnConflict(
                         "prospective_forecast_snapshots",
@@ -973,7 +998,8 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         val sql="SELECT s.id,s.model_version,s.match_id,s.competition,s.home_team,s.away_team,s.forecasted_at,s.kickoff_at," +
             "s.history_match_count,s.home_probability,s.draw_probability,s.away_probability," +
-            "r.actual_outcome,r.home_goals,r.away_goals,r.settled_at,r.result_available_at,r.result_source_name,r.result_source_url " +
+            "r.actual_outcome,r.home_goals,r.away_goals,r.settled_at,r.result_available_at,r.result_source_name,r.result_source_url," +
+            "s.frequency_baseline_version,s.baseline_home_probability,s.baseline_draw_probability,s.baseline_away_probability " +
             "FROM prospective_forecast_snapshots s LEFT JOIN prospective_forecast_settlements r ON r.snapshot_id=s.id " +
             "ORDER BY s.forecasted_at DESC,s.id DESC" + if(queryLimit==null) "" else " LIMIT ?"
         readableDatabase.rawQuery(
@@ -1000,6 +1026,9 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
                 resultAvailableAtMillis=if(c.isNull(16)) null else c.getLong(16),
                 resultSourceName=if(c.isNull(17)) null else c.getString(17),
                 resultSourceUrl=if(c.isNull(18)) null else c.getString(18),
+                frequencyBaselineVersion=if(c.isNull(19)) null else c.getString(19),
+                frequencyBaselineProbabilities=if(c.isNull(20)||c.isNull(21)||c.isNull(22)) null else
+                    az.simplesoft.footballintelligence.analytics.OutcomeProbabilities(c.getDouble(20),c.getDouble(21),c.getDouble(22)),
             )
         }
         return result

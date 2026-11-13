@@ -12,8 +12,9 @@ class ProspectiveForecastsTest {
         val cutoff = 10_000L
         val eligible = HistoricalMatch(cutoff - 2_000, "A", "B", 1, 0, cutoff - 1)
         val resultNotAvailableYet = eligible.copy(kickoffMillis = cutoff - 3_000, availableAtMillis = cutoff)
+        val impossibleAvailability = eligible.copy(kickoffMillis = cutoff - 3_000, availableAtMillis = cutoff - 4_000)
         val kickoffNotPast = eligible.copy(kickoffMillis = cutoff, availableAtMillis = cutoff - 1)
-        assertEquals(listOf(eligible), historyAvailableAt(listOf(eligible, resultNotAvailableYet, kickoffNotPast), cutoff))
+        assertEquals(listOf(eligible), historyAvailableAt(listOf(eligible, resultNotAvailableYet, impossibleAvailability, kickoffNotPast), cutoff))
     }
 
     @Test fun resultAvailabilityCannotPrecedeItsLocalCapture() {
@@ -43,6 +44,43 @@ class ProspectiveForecastsTest {
         assertEquals(-ln(.6), report.meanLogLoss!!, 1e-12)
         assertEquals(1.0, report.topOutcomeAccuracy!!, 0.0)
         assertNull(ProspectiveForecastEvaluator.evaluate(listOf(pending)).meanBrierScore)
+    }
+
+    @Test fun prospectiveFrequencyBaselineIsComparedOnTheSameSettledFixtures() {
+        val settled=observation("H").copy(
+            frequencyBaselineVersion=OUTCOME_FREQUENCY_BASELINE_VERSION,
+            frequencyBaselineProbabilities=OutcomeProbabilities(.2,.3,.5),
+        )
+        val pending=observation(null,id=2).copy(
+            frequencyBaselineVersion=OUTCOME_FREQUENCY_BASELINE_VERSION,
+            frequencyBaselineProbabilities=OutcomeProbabilities(.4,.3,.3),
+        )
+
+        val report=ProspectiveForecastEvaluator.evaluate(listOf(settled,pending))
+        val comparison=report.modelReports.single().frequencyBaselineReports.single()
+
+        assertEquals(2,comparison.fixtureCount)
+        assertEquals(1,comparison.settledCount)
+        assertEquals(.26,comparison.eloMeanBrierScore!!,1e-12)
+        assertEquals(.98,comparison.baselineMeanBrierScore!!,1e-12)
+        assertEquals(-.72,comparison.eloMinusBaselineBrierScore!!,1e-12)
+        assertEquals(-kotlin.math.ln(.6),comparison.eloMeanLogLoss!!,1e-12)
+        assertEquals(-kotlin.math.ln(.2),comparison.baselineMeanLogLoss!!,1e-12)
+        assertEquals(-kotlin.math.ln(.6)+kotlin.math.ln(.2),comparison.eloMinusBaselineLogLoss!!,1e-12)
+    }
+
+    @Test fun baselineComparisonDoesNotFallBackToAnOlderSnapshotWhenTheSelectedOneHasNoBaseline() {
+        val earlier=observation("H").copy(
+            forecastedAtMillis=100,
+            frequencyBaselineVersion=OUTCOME_FREQUENCY_BASELINE_VERSION,
+            frequencyBaselineProbabilities=OutcomeProbabilities(.2,.3,.5),
+        )
+        val latest=earlier.copy(snapshotId=2,forecastedAtMillis=150,frequencyBaselineVersion=null,frequencyBaselineProbabilities=null)
+
+        val report=ProspectiveForecastEvaluator.evaluate(listOf(earlier,latest))
+
+        assertEquals(1,report.modelReports.single().fixtureCount)
+        assertTrue(report.modelReports.single().frequencyBaselineReports.isEmpty())
     }
 
     @Test fun prospectiveMetricsUseLatestPreKickoffSnapshotOncePerFixtureAndModelVersion() {

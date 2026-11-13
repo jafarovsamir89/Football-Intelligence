@@ -44,8 +44,8 @@ data class EloWalkForwardReport(
 
 /** Date- or kickoff-ordered retrospective evaluation. History timestamps mean safe availability time. */
 object EloWalkForwardEngine {
-    /** Symmetric Dirichlet(1,1,1) smoothing keeps the historical-rate reference finite. */
-    const val FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME = 1.0
+    /** Compatibility alias; retrospective and prospective reports share this fixed prior. */
+    const val FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME = OutcomeFrequencyBaseline.PSEUDOCOUNT_PER_OUTCOME
 
     fun evaluate(
         history: Collection<HistoricalMatch>,
@@ -117,11 +117,8 @@ object EloWalkForwardEngine {
             val drawProbability = (drawCount + config.priorDrawProbability * config.priorMatchCount) /
                 (matchesUsed + config.priorMatchCount)
             val model = EloRatings(ratings.toMap(), matchesUsed, drawProbability, played.toMap(), config)
-            val baselineDenominator = matchesUsed + 3.0 * FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME
-            val frequencyBaseline = OutcomeProbabilities(
-                (resultCounts[0] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
-                (resultCounts[1] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
-                (resultCounts[2] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
+            val frequencyBaseline = OutcomeFrequencyBaseline.fromCounts(
+                resultCounts[0], resultCounts[1], resultCounts[2],
             )
             val orderedTargets = sameTimeTargets.sortedWith(
                 compareBy<WalkForwardTarget> { teamKey(it.homeTeam) }

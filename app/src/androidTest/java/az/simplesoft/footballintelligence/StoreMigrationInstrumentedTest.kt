@@ -185,7 +185,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val db = store.writableDatabase
-                assertEquals(19, db.version)
+                assertEquals(20, db.version)
                 assertTrue(tableExists(db, "historical_results"))
                 assertTrue(tableExists(db, "provider_sync_state"))
                 assertTrue(tableExists(db, "bookmaker_odds_snapshots"))
@@ -255,7 +255,7 @@ class StoreMigrationInstrumentedTest {
         try {
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(19, upgraded.version)
+                assertEquals(20, upgraded.version)
                 assertTrue(tableExists(upgraded, "football_data_stats_attempts"))
                 assertTrue(tableExists(upgraded, "football_data_match_stats"))
                 upgraded.rawQuery("SELECT home,away,home_score,away_score FROM matches WHERE id=91", null).use { cursor ->
@@ -265,6 +265,59 @@ class StoreMigrationInstrumentedTest {
                     assertEquals(1, cursor.getInt(2))
                     assertEquals(0, cursor.getInt(3))
                 }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun versionNineteenUpgradeAddsProspectiveBaselineColumnsAndPreservesForecastsAndSettlements() {
+        val context=InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName="fi-v19-prospective-baseline-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val db=context.openOrCreateDatabase(databaseName,Context.MODE_PRIVATE,null)
+        db.execSQL("CREATE TABLE matches (id INTEGER PRIMARY KEY, league TEXT NOT NULL, home TEXT NOT NULL, away TEXT NOT NULL, kickoff TEXT NOT NULL, finished INTEGER NOT NULL DEFAULT 0, home_score INTEGER, away_score INTEGER, source_key TEXT UNIQUE, source_name TEXT NOT NULL DEFAULT 'OpenLigaDB', exact_kickoff INTEGER NOT NULL DEFAULT 1, available_at INTEGER, source_url TEXT, event_date TEXT, season TEXT, captured_at INTEGER)")
+        db.execSQL("CREATE TABLE prospective_forecast_snapshots (id INTEGER PRIMARY KEY AUTOINCREMENT, model_version TEXT NOT NULL, match_id INTEGER NOT NULL, forecast_day_utc TEXT NOT NULL, forecasted_at INTEGER NOT NULL, kickoff_at INTEGER NOT NULL, competition TEXT NOT NULL, home_team TEXT NOT NULL, away_team TEXT NOT NULL, history_match_count INTEGER NOT NULL, home_probability REAL NOT NULL, draw_probability REAL NOT NULL, away_probability REAL NOT NULL, UNIQUE(model_version,match_id,forecast_day_utc))")
+        db.execSQL("CREATE TABLE prospective_forecast_settlements (snapshot_id INTEGER PRIMARY KEY, settled_at INTEGER NOT NULL, result_available_at INTEGER NOT NULL, actual_outcome TEXT NOT NULL, home_goals INTEGER NOT NULL, away_goals INTEGER NOT NULL, result_source_name TEXT NOT NULL, result_source_url TEXT)")
+        db.execSQL("INSERT INTO prospective_forecast_snapshots VALUES(71,'elo-1x2-v1',7101,'2026-11-12',1794500000000,1794503600000,'league','Alpha FC','Beta FC',12,.6,.25,.15)")
+        db.execSQL("INSERT INTO prospective_forecast_settlements VALUES(71,1794510000000,1794507200000,'H',2,1,'OpenLigaDB','https://api.openligadb.de/match/7101')")
+        db.version=19
+        db.close()
+        try {
+            Store(context,databaseName).use { store ->
+                val upgraded=store.writableDatabase
+                assertEquals(20,upgraded.version)
+                listOf("frequency_baseline_version","baseline_home_probability","baseline_draw_probability","baseline_away_probability").forEach { column ->
+                    assertTrue(columnExists(upgraded,"prospective_forecast_snapshots",column))
+                }
+                val old=store.prospectiveForecastHistory().single()
+                assertEquals(71L,old.snapshotId)
+                assertEquals("H",old.actualOutcome)
+                assertEquals("https://api.openligadb.de/match/7101",old.resultSourceUrl)
+                assertNull(old.frequencyBaselineVersion)
+                assertNull(old.frequencyBaselineProbabilities)
+
+                val forecastAt=2_000_000_000_000L
+                val kickoff=forecastAt+TimeUnit.DAYS.toMillis(1)
+                store.upsert(listOf(Match(7102,"league","Gamma FC","Delta FC",Instant.ofEpochMilli(kickoff).toString(),false,null,null)))
+                val forecast=ForecastedMatch(
+                    matchId=7102,
+                    homeTeam="Gamma FC",
+                    awayTeam="Delta FC",
+                    kickoffMillis=kickoff,
+                    probabilities=OutcomeProbabilities(.5,.3,.2),
+                    forecastedAtMillis=forecastAt,
+                    historyMatchCount=12,
+                    competition="league",
+                    frequencyBaselineVersion="same-competition-frequency-dirichlet-1-v1",
+                    frequencyBaselineProbabilities=OutcomeProbabilities(.4,.35,.25),
+                )
+                assertEquals(1,store.recordProspectiveForecastSnapshots(listOf(forecast),forecastAt))
+                val saved=store.prospectiveForecastHistory().single { it.matchId==7102 }
+                assertEquals("same-competition-frequency-dirichlet-1-v1",saved.frequencyBaselineVersion)
+                assertEquals(.4,saved.frequencyBaselineProbabilities!!.home,1e-12)
+                assertEquals(.35,saved.frequencyBaselineProbabilities.draw,1e-12)
+                assertEquals(.25,saved.frequencyBaselineProbabilities.away,1e-12)
             }
         } finally {
             context.deleteDatabase(databaseName)
@@ -294,7 +347,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(19, upgraded.version)
+                assertEquals(20, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulators", "selection_basis"))
                 upgraded.rawQuery(
                     "SELECT provider_id,leg_count,snapshot_key,selection_basis FROM virtual_accumulators",
@@ -337,7 +390,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(19, upgraded.version)
+                assertEquals(20, upgraded.version)
                 assertTrue(tableExists(upgraded, "prospective_forecast_snapshots"))
                 assertTrue(tableExists(upgraded, "prospective_forecast_settlements"))
                 upgraded.rawQuery(
@@ -370,7 +423,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val upgraded=store.writableDatabase
-                assertEquals(19, upgraded.version)
+                assertEquals(20, upgraded.version)
                 assertTrue(tableExists(upgraded,"market_reference_snapshots"))
                 assertTrue(tableExists(upgraded,"market_reference_sync_state"))
                 val match=store.matches().single()
@@ -407,7 +460,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context, databaseName).use { store ->
                 val upgraded = store.writableDatabase
-                assertEquals(19, upgraded.version)
+                assertEquals(20, upgraded.version)
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "market_fair_probability"))
                 assertTrue(columnExists(upgraded, "virtual_accumulator_legs", "model_minus_market"))
                 upgraded.rawQuery(
@@ -453,7 +506,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val db=store.writableDatabase
-                assertEquals(19, db.version)
+                assertEquals(20, db.version)
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_received"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_accepted"))
                 assertTrue(columnExists(db,"international_odds_sync_state","quality_rejected"))
@@ -504,7 +557,7 @@ class StoreMigrationInstrumentedTest {
 
             Store(context,databaseName).use { store ->
                 val db=store.writableDatabase
-                assertEquals(19, db.version)
+                assertEquals(20, db.version)
                 val preserved=store.internationalOddsSyncState()!!
                 assertEquals(InternationalOddsStatus.LIVE,preserved.status)
                 assertEquals(firstCheck,preserved.lastCheckedAtMillis)
