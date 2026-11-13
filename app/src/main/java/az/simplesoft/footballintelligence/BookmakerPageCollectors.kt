@@ -148,7 +148,7 @@ private suspend fun persistBookmakerCaptureFailure(
     AndroidView(factory={webView},modifier=Modifier.size(1.dp).alpha(0.01f))
 }
 
-/** Uses only the public eTopaz page and selects its ordinary visible "İdman" tab. */
+/** Reads only rendered text from eTopaz's ordinary public pre-match page. */
 @Composable internal fun TopazPublicPageCollector(repository:FootballScreenRepository,previousCheck:Long?,onCaptured:()->Unit) {
     val activity=LocalContext.current as ComponentActivity
     val latestOnCaptured by rememberUpdatedState(onCaptured)
@@ -181,8 +181,7 @@ private suspend fun persistBookmakerCaptureFailure(
                 }
 
                 override fun onPageFinished(view:WebView,url:String) {
-                    val uri=runCatching { java.net.URI(url) }.getOrNull()
-                    if(uri==null||uri.host !in setOf("etopaz.az","www.etopaz.az")||uri.path!="/home") return
+                    if(!TopazOddsProvider.isSupportedPublicRoute(url)) return
                     val pageFinishedAt=System.currentTimeMillis()
                     if(!captureGate.tryStart(pageFinishedAt)) {
                         if(!captureGate.isCaptureInProgress()) {
@@ -192,55 +191,48 @@ private suspend fun persistBookmakerCaptureFailure(
                     }
                     handler.removeCallbacksAndMessages(null)
                     reloadScheduled=false
-                    // This clicks an ordinary visible tab by its exact accessible label; it does
-                    // not navigate to a private route or inject any bookmaker request.
                     handler.postDelayed({
-                        view.evaluateJavascript("""(function(){const els=[...document.querySelectorAll('button,[role="tab"],[role="button"],a,div,span')];const el=els.find(e=>e.innerText?.trim()==='İdman'&&e.getClientRects().length&&e.clientWidth>0&&e.clientHeight>0);if(!el)return false;el.click();return true;})()""") {
-                            handler.postDelayed({
-                                view.evaluateJavascript(
-                                    "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
-                                ) { encoded ->
-                                    val checkedAt=System.currentTimeMillis()
-                                    captureScope.launch {
-                                        try {
-                                            val page=withContext(Dispatchers.Default) {
-                                                val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
-                                                val json=when(decoded) {
-                                                    is org.json.JSONObject -> decoded
-                                                    is String -> org.json.JSONObject(decoded)
-                                                    else -> error("Страница eTopaz не вернула видимые данные.")
-                                                }
-                                                MisliVisiblePage(
-                                                    url=json.optString("url"),title=json.optString("title"),
-                                                    visibleText=json.optString("text"),timeZoneId=json.optString("timeZoneId","UTC")
-                                                )
-                                            }
-                                            val fixtures=repository.fixtureIdentities()
-                                            val result=withContext(Dispatchers.Default) { parser.parseVisiblePage(page,checkedAt,fixtures) }
-                                            val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
-                                            repository.saveBookmakerCapture("topaz",checkedAt,status,result.snapshots,result.detail)
-                                        } catch(error:CancellationException) {
-                                            throw error
-                                        } catch(error:Exception) {
-                                            persistBookmakerCaptureFailure(
-                                                repository,"topaz",checkedAt,error.message ?: "Не удалось прочитать видимые данные публичной страницы."
-                                            )
-                                        } finally {
-                                            if(captureScope.isActive&&!activity.isFinishing) finishCapture(view,checkedAt)
+                        view.evaluateJavascript(
+                            "JSON.stringify({title:document.title,url:location.href,text:(document.body?.innerText||'').slice(0,100000),timeZoneId:Intl.DateTimeFormat().resolvedOptions().timeZone||'UTC'})"
+                        ) { encoded ->
+                            val checkedAt=System.currentTimeMillis()
+                            captureScope.launch {
+                                try {
+                                    val page=withContext(Dispatchers.Default) {
+                                        val decoded=org.json.JSONTokener(encoded ?: "null").nextValue()
+                                        val json=when(decoded) {
+                                            is org.json.JSONObject -> decoded
+                                            is String -> org.json.JSONObject(decoded)
+                                            else -> error("Страница eTopaz не вернула видимые события.")
                                         }
+                                        MisliVisiblePage(
+                                            url=json.optString("url"),title=json.optString("title"),
+                                            visibleText=json.optString("text"),timeZoneId=json.optString("timeZoneId","UTC")
+                                        )
                                     }
+                                    val fixtures=repository.fixtureIdentities()
+                                    val result=withContext(Dispatchers.Default) { parser.parseVisiblePage(page,checkedAt,fixtures) }
+                                    val status=if(result.snapshots.isEmpty()) OddsProviderStatus.UNAVAILABLE else OddsProviderStatus.LIVE
+                                    repository.saveBookmakerCapture("topaz",checkedAt,status,result.snapshots,result.detail)
+                                } catch(error:CancellationException) {
+                                    throw error
+                                } catch(error:Exception) {
+                                    persistBookmakerCaptureFailure(
+                                        repository,"topaz",checkedAt,error.message ?: "Не удалось прочитать видимые данные публичной страницы."
+                                    )
+                                } finally {
+                                    if(captureScope.isActive&&!activity.isFinishing) finishCapture(view,checkedAt)
                                 }
-                            },3_000)
+                            }
                         }
-                    },4_000)
+                    },5_000)
                 }
 
                 override fun shouldOverrideUrlLoading(view:WebView,url:String):Boolean {
-                    val uri=runCatching { java.net.URI(url) }.getOrNull()
-                    return uri==null||uri.scheme!="https"||uri.host !in setOf("etopaz.az","www.etopaz.az")
+                    return !TopazOddsProvider.isSupportedPublicRoute(url)
                 }
             }
-            val publicUrl="https://etopaz.az/home?sport-id=1%3Asr%3Asport%3A1"
+            val publicUrl=TopazOddsProvider.PUBLIC_PREMATCH_URL
             if(initialLoadDelay==0L) loadUrl(publicUrl) else handler.postDelayed({
                 if(!activity.isFinishing) loadUrl(publicUrl)
             },initialLoadDelay)

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — align TOPAZ collector with its public pre-match page (local checks passed; CI pending)
+
+- Changed the foreground WebView to open eTopaz's publicly rendered English `Pre-match` route observed in a browser. Parser now handles date/time on separate lines, home and away labels on separate lines, English month abbreviations, and the first three decimal prices after the visible `1` marker; later markets are ignored. Existing Azerbaijani-format parser coverage remains.
+- Added a regression fixture from the observed visible row and strict route validation. The grouped local cycle passed 205 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug/personal APK assembly; signatures and local-key isolation were checked. No post-change Android quote capture or GitHub Actions run is claimed yet. Source reuse rights and Azerbaijan-device availability remain unverified.
+
 ## Unreleased — показывать проверяемый результат виртуальных купонов (CI/API 26/API 34 passed)
 
 - Активный экран «Купоны» теперь показывает исторический hit rate и размер выборки отдельно по оператору, размеру и способу отбора, а также 95% Wilson-интервал, купоны в ожидании и записи, требующие проверки. Если есть данные, сравниваются одиночные исходы на тех же матчах. Расчёт читает полный журнал, а список последних записей остаётся ограничен 100. Добавлены Store-интеграционный тест на 120 купонов и Compose-регрессия сводки. Локально прошли 204 JVM-теста, Android-test Kotlin compilation, `assembleDebug` и `assemblePersonal`; подписи обеих APK проверены. Actions [43454311801](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43454311801) прошёл 74/74 API 34 теста и 74 API 26 теста с одним offline-only skip/нулём ошибок, собрал и подписал keyless APK, artifact `14054056154`. APK SHA-256 `ec89973d6ae8af96285e6301c6496cbc9c1ef64de8b4bab43c0d5f3e96316078`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938f11c52fa8d935`; CI DEX не содержит личный ключ. После локального цикла уточнена подпись статусов ожидающих/перенесённых купонов; финальная версия прошла оба CI API.

@@ -22,7 +22,7 @@ class TopazOddsParserTest {
         |1.88
         |+610
         |""".trimMargin()
-    private fun page(text:String=pageText,url:String="https://etopaz.az/home?sport-id=1%3Asr%3Asport%3A1")=MisliVisiblePage(
+    private fun page(text:String=pageText,url:String=TopazOddsProvider.PUBLIC_PREMATCH_URL)=MisliVisiblePage(
         url,"Azərbaycanda Rəsmi Onlayn İdman Mərcləri Operatoru",text,"America/Los_Angeles"
     )
 
@@ -39,6 +39,42 @@ class TopazOddsParserTest {
         assertEquals(kickoff,quote.kickoffMillis)
         assertTrue(quote.eventYearInferred)
         assertEquals(OddsProviderStatus.LIVE,provider.status().status)
+    }
+
+    @Test fun parsesObservedEnglishPrematchCardAndKeepsOnlyFirstThreePrices() {
+        val capture=Instant.parse("2026-11-13T09:00:00Z").toEpochMilli()
+        val kickoff=Instant.parse("2026-11-13T10:45:00Z").toEpochMilli()
+        val observedText="""Pre-match
+            |13 Nov
+            |14:45
+            |Serbia
+            |Germany
+            |1
+            |8.92
+            |5.88
+            |1.24
+            |2.5
+            |1.37
+            |2.58
+            |+679
+            |""".trimMargin()
+
+        val result=TopazOddsProvider().parseVisiblePage(
+            page(observedText).copy(timeZoneId="Asia/Baku"),
+            capture,
+            listOf(FixtureIdentity(77,"Serbia","Germany",kickoff)),
+        )
+
+        val quote=result.snapshots.single()
+        assertEquals(77,quote.matchId)
+        assertEquals("Serbia",quote.homeTeam)
+        assertEquals("Germany",quote.awayTeam)
+        assertEquals("2026-11-13",quote.eventDate)
+        assertEquals(kickoff,quote.kickoffMillis)
+        assertEquals(8.92,quote.home,0.0)
+        assertEquals(5.88,quote.draw,0.0)
+        assertEquals(1.24,quote.away,0.0)
+        assertTrue(quote.eventYearInferred)
     }
 
     @Test fun parsesKickoffAndExactFixtureInBakuTimezone() {
@@ -132,6 +168,7 @@ class TopazOddsParserTest {
     @Test fun rejectsUnapprovedHostAndDatesMoreThanNinetyDaysAway() {
         val provider=TopazOddsProvider()
         assertTrue(provider.parseVisiblePage(page(url="https://notetopaz.example/home"),now).snapshots.isEmpty())
+        assertTrue(provider.parseVisiblePage(page(url="https://etopaz.az/eng/home"),now).snapshots.isEmpty())
         val farFuture=page(pageText.replace("12 noy","10 iyn"))
         assertTrue(TopazOddsProvider().parseVisiblePage(farFuture,now).snapshots.isEmpty())
     }

@@ -519,7 +519,7 @@ class TopazOddsProvider : BookmakerOddsProvider {
 
     override fun fetchPrematchOdds(): List<BookmakerOddsSnapshot> = emptyList()
 
-    /** Parses the ordinary public event cards after the visible UI's "İdman" tab is selected. */
+    /** Parses the visible event rows on eTopaz's ordinary English pre-match page. */
     fun parseVisiblePage(
         page: MisliVisiblePage,
         capturedAtMillis: Long,
@@ -528,39 +528,34 @@ class TopazOddsProvider : BookmakerOddsProvider {
         lastCheckedAtMillis=capturedAtMillis
         lastCount=0
         lastError=null
-        val validUrl=runCatching {
-            val uri=java.net.URI(page.url)
-            uri.scheme=="https" && uri.host in setOf("etopaz.az","www.etopaz.az") && uri.path=="/home"
-        }.getOrDefault(false)
-        if(!validUrl) return failed("Страница eTopaz открыла маршрут ${publicRouteLabel(page.url)} вне ожидаемой публичной страницы.")
+        if(!isSupportedPublicRoute(page.url)) return failed("Страница eTopaz открыла маршрут ${publicRouteLabel(page.url)} вне публичной вкладки Pre-match.")
         val zone=runCatching { ZoneId.of(page.timeZoneId) }.getOrElse { return failed("Не удалось определить часовой пояс страницы.") }
         if(page.visibleText.length>100_000) return failed("Текст страницы превышает безопасный лимит.")
         if(page.title.isBlank()||page.visibleText.isBlank()) return failed("Публичная страница не вернула видимые события.")
         val now=Instant.ofEpochMilli(capturedAtMillis).atZone(zone)
-        val lines=page.visibleText.lineSequence().map(String::trim).toList()
+        val lines=page.visibleText.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
         val parsed=mutableListOf<BookmakerOddsSnapshot>()
         var rejected=0
         for(i in lines.indices) {
             val dateLabel=parseDateLabel(lines[i]) ?: continue
-            val teams=(i-1 downTo maxOf(0,i-5)).firstNotNullOfOrNull { candidate -> splitVisiblePair(lines[candidate]) }
-            if(teams==null) { rejected++;continue }
+            val event=parseVisibleEvent(lines,i,dateLabel)
+            if(event==null) { rejected++;continue }
             val targetDate=resolveUpcomingDate(dateLabel.first,dateLabel.second,now.toLocalDate())
             if(targetDate==null) { rejected++;continue }
-            val time=dateLabel.third
-            if(time==null) { rejected++;continue }
+            val time=event.time
             val eventDateTime=runCatching { LocalDateTime.parse("$targetDate $time",TOPAZ_ROW_TIME) }.getOrNull()
             val kickoff=eventDateTime?.atZone(zone)?.toInstant()?.toEpochMilli()
             if(kickoff==null||kickoff<=capturedAtMillis) { rejected++;continue }
-            val odds=parseLabeledOneXTwo(lines,i+1) 
+            val odds=parseLabeledOneXTwo(lines,event.oddsStart)
             if(odds==null) { rejected++;continue }
-            val homeKey=TeamNameIdentity.canonical(teams.first)
-            val awayKey=TeamNameIdentity.canonical(teams.second)
+            val homeKey=TeamNameIdentity.canonical(event.home)
+            val awayKey=TeamNameIdentity.canonical(event.away)
             if(homeKey.isBlank()||awayKey.isBlank()||homeKey==awayKey) { rejected++;continue }
             val eventDate=targetDate.toString()
             val eventId="topaz:$eventDate:${time.replace(":", "")}:$homeKey:$awayKey"
             val snapshot=BookmakerOddsSnapshot(
                 providerId=providerId,eventId=eventId,sourceUrl=page.url,capturedAtMillis=capturedAtMillis,
-                kickoffMillis=kickoff,market="1X2",homeTeam=teams.first,awayTeam=teams.second,
+                kickoffMillis=kickoff,market="1X2",homeTeam=event.home,awayTeam=event.away,
                 home=odds.first,draw=odds.second,away=odds.third,eventDate=eventDate,timeZoneId=zone.id,
                 eventYearInferred=true,
             )
@@ -596,17 +591,52 @@ class TopazOddsProvider : BookmakerOddsProvider {
         return candidate.takeIf { !it.isAfter(today.plusDays(90)) }
     }
 
+    private data class VisibleEvent(
+        val time:String,
+        val home:String,
+        val away:String,
+        val oddsStart:Int,
+    )
+
+    private fun parseVisibleEvent(lines:List<String>,dateIndex:Int,date:Triple<Int,Int,String?>):VisibleEvent? {
+        val inlineTime=date.third
+        if(inlineTime!=null) {
+            val teams=(dateIndex-1 downTo maxOf(0,dateIndex-5))
+                .firstNotNullOfOrNull { candidate -> splitVisiblePair(lines[candidate]) }
+                ?: return null
+            return VisibleEvent(inlineTime,teams.first,teams.second,dateIndex+1)
+        }
+
+        val time=lines.getOrNull(dateIndex+1)?.takeIf(TOPAZ_TIME::matches) ?: return null
+        val home=lines.getOrNull(dateIndex+2)?.takeIf(::isTeamLabel) ?: return null
+        val away=lines.getOrNull(dateIndex+3)?.takeIf(::isTeamLabel) ?: return null
+        return VisibleEvent(time,home,away,dateIndex+4)
+    }
+
+    private fun isTeamLabel(value:String):Boolean =
+        value.length in 2..64 && TOPAZ_TEAM_LABEL.matches(value) &&
+            parseDateLabel(value)==null && !TOPAZ_TIME.matches(value) &&
+            value !in setOf("1","2","x","X","Pre-match","Live") &&
+            parseOdds(value)==null && !value.startsWith("+")
+
     private fun parseLabeledOneXTwo(lines:List<String>,start:Int):Triple<Double,Double,Double>? {
         var i=start
-        while(i<minOf(lines.size,start+12)) {
+        while(i<minOf(lines.size,start+16)) {
             if(lines.getOrNull(i)=="1") {
-                val home=parseOdds(lines.getOrNull(i+1))
-                if(home!=null&&lines.getOrNull(i+2)?.equals("x",ignoreCase=true)==true) {
-                    val draw=parseOdds(lines.getOrNull(i+3))
-                    if(draw!=null&&lines.getOrNull(i+4)=="2") {
-                        val away=parseOdds(lines.getOrNull(i+5))
-                        if(away!=null) return Triple(home,draw,away)
+                val prices=mutableListOf<Double>()
+                var cursor=i+1
+                while(cursor<minOf(lines.size,i+13)) {
+                    val value=lines[cursor]
+                    if(parseDateLabel(value)!=null) return null
+                    if(value.equals("x",ignoreCase=true)||value=="2") {
+                        cursor++
+                        continue
                     }
+                    val price=parseOdds(value)
+                    if(price==null) break
+                    prices+=price
+                    if(prices.size==3) return Triple(prices[0],prices[1],prices[2])
+                    cursor++
                 }
             }
             if(parseDateLabel(lines.getOrNull(i).orEmpty())!=null) return null
@@ -623,13 +653,27 @@ class TopazOddsProvider : BookmakerOddsProvider {
     private fun parseOdds(value:String?):Double?=value?.replace(',','.')?.toDoubleOrNull()?.takeIf { it.isFinite()&&it>1.0&&it<=1000.0 }
 
     companion object {
+        const val PUBLIC_PREMATCH_URL="https://etopaz.az/eng/home?match-type=pre-match"
+
+        fun isSupportedPublicRoute(url:String):Boolean=runCatching {
+            val uri=java.net.URI(url)
+            uri.scheme=="https" && uri.host in setOf("etopaz.az","www.etopaz.az") &&
+                uri.path=="/eng/home" && uri.query.orEmpty().split('&').any { parameter ->
+                    parameter.substringBefore('=')=="match-type" && parameter.substringAfter('=',"")=="pre-match"
+                }
+        }.getOrDefault(false)
+
         private val TOPAZ_DATE=Regex("^(\\d{1,2})\\s+([\\p{L}]+)(?:\\s*\\|\\s*(\\d{1,2}:\\d{2}))?$",RegexOption.IGNORE_CASE)
+        private val TOPAZ_TIME=Regex("^\\d{1,2}:\\d{2}$")
+        private val TOPAZ_TEAM_LABEL=Regex("^[\\p{L}\\p{M}\\p{N}][\\p{L}\\p{M}\\p{N} .&'’()/-]*$")
         private val TOPAZ_ROW_TIME=DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm")
         private val TOPAZ_MONTHS=mapOf(
             "yan" to 1,"yanvar" to 1,"fev" to 2,"fevral" to 2,"mar" to 3,"mart" to 3,
             "apr" to 4,"aprel" to 4,"may" to 5,"iyn" to 6,"iyun" to 6,"iyl" to 7,"iyul" to 7,
             "avq" to 8,"avqust" to 8,"sen" to 9,"sentyabr" to 9,"okt" to 10,"oktyabr" to 10,
-            "noy" to 11,"noyabr" to 11,"dek" to 12,"dekabr" to 12,
+            "noy" to 11,"noyabr" to 11,"nov" to 11,"dek" to 12,"dekabr" to 12,"dec" to 12,
+            "jan" to 1,"feb" to 2,"jun" to 6,"jul" to 7,"aug" to 8,"sep" to 9,
+            "oct" to 10,
         )
     }
 
