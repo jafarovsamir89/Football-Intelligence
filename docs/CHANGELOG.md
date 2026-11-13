@@ -3,7 +3,7 @@
 ## Unreleased — ограничить Misli/TOPAZ WebView активным окном приложения
 
 - Сбор котировок теперь разрешён только при `Activity.RESUMED`: при паузе отменяются отложенные загрузки, останавливается WebView и инвалидируется callback текущего чтения; при возврате проверка возобновляется автоматически с учётом оставшегося 30-минутного окна. Добавлены тесты политики lifecycle, задержки и invalidation.
-- Локально прошли 215 JVM-тестов, компиляция Android UI-тестов и сборка debug/personal APK; подписи проверены, личный ключ присутствует только в personal APK. CI API 26/API 34 ещё ожидается.
+- Локально прошли 215 JVM-тестов, компиляция Android UI-тестов и сборка debug/personal APK; подписи проверены, личный ключ присутствует только в personal APK. Actions [43490075335](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43490075335) прошёл API 34 75/75 и API 26 75 тестов с одним offline-only skip, без ошибок, собрал keyless APK и загрузил artifact `14069598865`.
 
 ## Unreleased — показывать проверку Misli/TOPAZ на главной
 
