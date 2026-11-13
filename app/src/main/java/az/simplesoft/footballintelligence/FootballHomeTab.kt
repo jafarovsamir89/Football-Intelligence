@@ -72,10 +72,10 @@ internal fun FootballHomeTabContent(
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("FOOTBALL INTELLIGENCE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
-            Text("Матчи и модельный обзор", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+            Text("Матчи, прогнозы и цены", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")).format(today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "Приложение само собирает результаты, оценивает вероятность победы, ничьей и поражения и сравнивает её со свежими линиями. Здесь только виртуальный анализ.",
+                "Нажми на матч: увидишь вероятности П1 / X / П2 и доступные реальные цены. Если не хватает истории для модели, разбор покажет точные требования. Купоны только виртуальные.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -98,9 +98,23 @@ internal fun FootballHomeTabContent(
             }
         }
 
+        val upcomingIds = remember(upcoming) { upcoming.map { it.id }.toSet() }
+        val modelReadyCount = remember(forecasts, upcomingIds) {
+            forecasts.asSequence().map { it.matchId }.filter { it in upcomingIds }.distinct().count()
+        }
+        val misliLinkedCount = remember(freshMisliOdds, upcomingIds) {
+            freshMisliOdds.asSequence().mapNotNull { it.matchId }.filter { it in upcomingIds }.distinct().count()
+        }
+        val topazLinkedCount = remember(freshTopazOdds, upcomingIds) {
+            freshTopazOdds.asSequence().mapNotNull { it.matchId }.filter { it in upcomingIds }.distinct().count()
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MetricCard("Сегодня · Баку", todayCount.toString(), "матчей", Modifier.weight(1f))
-            MetricCard("Коэффициенты", "${freshMisliOdds.size} / ${freshTopazOdds.size}", "Misli / TOPAZ", Modifier.weight(1f))
+            MetricCard("Сегодня · Баку", todayCount.toString(), "предстоящих матчей", Modifier.weight(1f))
+            MetricCard("Прогноз Elo", "$modelReadyCount / ${upcoming.size}", "готовых оценок 1X2", Modifier.weight(1f))
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricCard("Линия Misli", misliLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
+            MetricCard("Линия TOPAZ", topazLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {

@@ -9,11 +9,13 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
+import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
+import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -46,12 +48,31 @@ class FootballRedesignInstrumentedTest {
     @Test
     fun homeDashboardShowsSourceStateOddsAndClosestMatch() {
         val match = tomorrowMatch()
+        val now = System.currentTimeMillis()
+        val kickoff = java.time.Instant.parse(match.kickoff).toEpochMilli()
+        val linkedLine = BookmakerOddsSnapshot(
+            providerId = "misli",
+            eventId = "test-linked",
+            sourceUrl = "https://www.misli.az/",
+            capturedAtMillis = now,
+            kickoffMillis = kickoff,
+            market = "1X2",
+            homeTeam = match.home,
+            awayTeam = match.away,
+            home = 2.0,
+            draw = 3.2,
+            away = 4.0,
+            eventDate = match.kickoff.take(10),
+            timeZoneId = "Asia/Baku",
+            matchId = match.id,
+        )
+        val unmatchedLine = linkedLine.copy(eventId = "test-unmatched", matchId = null)
         composeRule.setContent {
             FootballTheme {
                 FootballHomeTabContent(
                     matches = listOf(match),
-                    forecasts = listOf(ForecastedMatch(match.id, match.home, match.away, match.kickoff.let { java.time.Instant.parse(it).toEpochMilli() }, OutcomeProbabilities(.55, .25, .20), competition = match.league)),
-                    misliOdds = emptyList(),
+                    forecasts = listOf(ForecastedMatch(match.id, match.home, match.away, kickoff, OutcomeProbabilities(.55, .25, .20), competition = match.league)),
+                    misliOdds = listOf(linkedLine, unmatchedLine),
                     topazOdds = emptyList(),
                     checkedPredictions = emptyList(),
                     syncBusy = false,
@@ -66,7 +87,11 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Коэффициенты").assertIsDisplayed()
+        composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
+        composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
+        composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("1", substring = false).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithText("2", substring = false).fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("Source Home FC").assertIsDisplayed()
         composeRule.onNodeWithText("П1 55%").assertIsDisplayed()
         composeRule.onNodeWithText("Misli").assertIsDisplayed()
@@ -96,11 +121,50 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Приложение само собирает результаты", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Нажми на матч", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("В этой установке база пока пустая", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Виртуальные купоны").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Открыть матчи").performScrollTo().performClick()
         assertTrue(openedMatches)
+    }
+
+    @Test
+    fun matchAnalysisExplainsTheExactHistoryGapInsteadOfShowingBlankProbabilities() {
+        composeRule.setContent {
+            FootballTheme {
+                MatchAnalysisTab(
+                    active = tomorrowMatch(),
+                    eloForecast = EloForecast(probabilities = null, matchesUsed = 8, homeTeamMatches = 2, awayTeamMatches = 1),
+                    activeMarketReference = null,
+                    marketReferenceSyncState = null,
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    onOpenTipsAudit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Прогноз не рассчитан: недостаточно истории", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("лига 8/10, хозяева 2/3, гости 1/3", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("10 завершённых матчей лиги", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun matchCardLabelsUnavailableModelEstimateAsAnActionableDetail() {
+        composeRule.setContent {
+            FootballTheme {
+                MatchCard(
+                    match = tomorrowMatch(),
+                    forecast = null,
+                    misliQuote = null,
+                    topazQuote = null,
+                    onClick = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Открой матч, чтобы увидеть причину", substring = true).assertIsDisplayed()
     }
 
     @Test
@@ -138,6 +202,31 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("TOPAZ · 2 исхода").assertIsDisplayed()
         composeRule.onNodeWithText("3 исхода").performClick()
         composeRule.onNodeWithText("Экспресс из 3 исходов пока не собран").assertIsDisplayed()
+    }
+
+    @Test
+    fun emptyCouponShowsModelReadinessAndLinksToMatches() {
+        val match = tomorrowMatch()
+        var openedMatches = false
+        composeRule.setContent {
+            FootballTheme {
+                FootballCouponWorkspace(
+                    matches = listOf(match),
+                    modelForecastCount = 1,
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    candidates = emptyList(),
+                    history = emptyList(),
+                    checkedPicks = emptyList(),
+                    onOpenMatches = { openedMatches = true },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Готовых прогнозов: 1", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("без них показываются только исходы и их вероятности", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Посмотреть матчи").performScrollTo().performClick()
+        assertTrue(openedMatches)
     }
 
     @Test

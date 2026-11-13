@@ -443,11 +443,14 @@ import androidx.work.WorkManager
               onSelectMatch = { selected = it; showMatchDetail = true },
             )
             destination == FootballDestination.COUPONS -> FootballCouponWorkspace(
+              matches = matches,
+              modelForecastCount = forecastedMatches.size,
               misliOdds = misliOdds,
               topazOdds = topazOdds,
               candidates = accumulatorDrafts,
               history = accumulatorHistory,
               checkedPicks = checkedCouponHistory,
+              onOpenMatches = { destination = FootballDestination.MATCHES },
             )
             destination == FootballDestination.ANALYTICS -> when (analyticsSection) {
               FootballAnalyticsSection.MARKET -> InternationalMarketTabContent(

@@ -70,7 +70,23 @@ internal fun MatchAnalysisTab(
                     } else if (!active.exactKickoff) {
                         Text("Для этой записи нет точного времени начала, поэтому предматчевый расчёт недоступен.", style = MaterialTheme.typography.bodySmall)
                     } else if (probabilities == null) {
-                        Text("Расчёт загружается или пока недостаточно истории для обеих команд.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        if (activeForecast == null) {
+                            Text("Считаю оценку по истории, доступной до начала матча…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
+                            val missing = buildList {
+                                if (activeForecast.matchesUsed < EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST) {
+                                    add("лига ${activeForecast.matchesUsed}/${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST}")
+                                }
+                                if (activeForecast.homeTeamMatches < EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST) {
+                                    add("хозяева ${activeForecast.homeTeamMatches}/${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST}")
+                                }
+                                if (activeForecast.awayTeamMatches < EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST) {
+                                    add("гости ${activeForecast.awayTeamMatches}/${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST}")
+                                }
+                            }
+                            Text("Прогноз не рассчитан: недостаточно истории (${missing.joinToString()}).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Для Elo нужны минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до kickoff и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     } else {
                         val forecast = ForecastedMatch(active.id, active.home, active.away, runCatching { Instant.parse(active.kickoff).toEpochMilli() }.getOrDefault(0L), probabilities, competition = active.league)
                         ProbabilityBar(forecast)

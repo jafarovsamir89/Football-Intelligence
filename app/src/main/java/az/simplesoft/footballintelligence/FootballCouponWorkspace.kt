@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.AccumulatorSettlementState
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
+import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.LoggedCouponPick
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
@@ -38,11 +40,14 @@ import java.util.Locale
 
 @Composable
 internal fun FootballCouponWorkspace(
+    matches: List<Match> = emptyList(),
+    modelForecastCount: Int = 0,
     misliOdds: List<BookmakerOddsSnapshot>,
     topazOdds: List<BookmakerOddsSnapshot>,
     candidates: List<VirtualCouponCandidate>,
     history: List<VirtualAccumulatorHistoryEntry>,
     checkedPicks: List<LoggedCouponPick>,
+    onOpenMatches: () -> Unit = {},
 ) {
     var provider by remember { mutableStateOf("misli") }
     var legCount by remember { mutableIntStateOf(2) }
@@ -50,6 +55,12 @@ internal fun FootballCouponWorkspace(
     var showOddsDetails by remember { mutableStateOf(false) }
     val selectedName = if (provider == "misli") "Misli" else "TOPAZ"
     val nowMillis = rememberClockMinute()
+    val upcomingFixtureCount = remember(matches, nowMillis) {
+        matches.count { match ->
+            !match.finished && match.exactKickoff &&
+                runCatching { Instant.parse(match.kickoff).toEpochMilli() > nowMillis }.getOrDefault(false)
+        }
+    }
     val selectedOdds = (if (provider == "misli") misliOdds else topazOdds)
         .filter { isFreshBookmakerQuote(it, nowMillis) }
     val sizedCandidates = candidates.filter { it.providerId == provider && it.requestedLegCount == legCount }
@@ -92,7 +103,15 @@ internal fun FootballCouponWorkspace(
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("Экспресс из $legCount исходов пока не собран", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("Нужны будущие матчи с точным временем и достаточной историей для модели. Система не добавляет слабые матчи ради количества.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val explanation = when {
+                        upcomingFixtureCount == 0 -> "В локальной базе сейчас нет предстоящих матчей с точным временем. После автоматической загрузки расписания оценки появятся здесь."
+                        modelForecastCount == 0 -> "Готовых прогнозов: 0. В базе есть $upcomingFixtureCount предстоящих матчей, но Elo требует минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до kickoff и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды."
+                        modelForecastCount < legCount -> "Готовых прогнозов: $modelForecastCount. Для купона на $legCount исходов нужно минимум $legCount; пока прогнозов меньше."
+                        else -> "Расчётов достаточно, но черновик купона пока недоступен. Открой список матчей и проверь детали оценок."
+                    }
+                    Text(explanation, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Свежие букмекерские цены для модельного подбора не обязательны: без них показываются только исходы и их вероятности, без выдуманного коэффициента.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    OutlinedButton(onClick = onOpenMatches) { Text("Посмотреть матчи") }
                 }
             }
         } else {

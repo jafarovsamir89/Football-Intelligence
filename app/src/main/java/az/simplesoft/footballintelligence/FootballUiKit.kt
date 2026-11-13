@@ -192,7 +192,7 @@ internal fun MetricCard(title: String, value: String, subtitle: String? = null, 
 @Composable
 internal fun ProbabilityBar(forecast: ForecastedMatch?) {
     if (forecast == null) {
-        Text("Модель 1X2  ·  П1 —    X —    П2 —", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Оценка Elo пока недоступна · открой матч, чтобы увидеть причину", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     val values = listOf("П1" to forecast.probabilities.home, "X" to forecast.probabilities.draw, "П2" to forecast.probabilities.away)
