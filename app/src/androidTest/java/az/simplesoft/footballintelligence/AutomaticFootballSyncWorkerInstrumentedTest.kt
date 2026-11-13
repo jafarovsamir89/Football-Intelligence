@@ -54,7 +54,7 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
             assertEquals(ListenableWorker.Result.retry().javaClass, result.javaClass)
             Store(isolatedContext, databaseName).use { store ->
                 val snapshot = store.prospectiveForecastHistory().single()
-                assertEquals(9999, snapshot.matchId)
+                assertEquals(29999, snapshot.matchId)
                 assertEquals("Home FC", snapshot.homeTeam)
                 assertEquals("Away FC", snapshot.awayTeam)
                 assertEquals(10, snapshot.historyMatchCount)
