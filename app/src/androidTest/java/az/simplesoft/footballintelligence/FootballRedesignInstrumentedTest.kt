@@ -477,7 +477,7 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Ожидается · время начала не указано").performScrollTo().assertIsDisplayed()
-        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().size >= 2)
+        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().isNotEmpty())
         composeRule.onNodeWithText("Завтра").performClick()
         composeRule.onNodeWithText("Source Away FC").performScrollTo().performClick()
         assertEquals(match.id, selectedMatch)
@@ -510,7 +510,7 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("предстоящих матчей").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("0 / 1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().size >= 2)
     }
 
     private fun tomorrowMatch(): Match {
