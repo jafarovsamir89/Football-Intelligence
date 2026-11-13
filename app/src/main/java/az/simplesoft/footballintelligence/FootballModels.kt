@@ -32,7 +32,7 @@ fun labelOutcome(outcome: String) = when(outcome) { "H" -> "П1"; "D" -> "X"; el
 fun niceTime(raw: String): String = try {
     val instant = Instant.parse(raw)
     DateTimeFormatter.ofPattern("dd.MM HH:mm", Locale("ru"))
-        .withZone(ZoneId.systemDefault()).format(instant)
+        .withZone(ZoneId.of("Asia/Baku")).format(instant)
 } catch (_: Exception) { raw.take(16) }
 fun niceMatchTime(match:Match):String {
     if(match.exactKickoff) return niceTime(match.kickoff)
@@ -44,7 +44,7 @@ fun scoreResult(m: Match): String? = if (!m.finished || m.homeScore == null || m
     else if (m.homeScore > m.awayScore) "H" else if (m.homeScore < m.awayScore) "A" else "D"
 fun matchStatusLabel(m:Match,nowMillis:Long=System.currentTimeMillis()):String {
     if(m.finished) return "Завершён: ${m.homeScore ?: "?"} : ${m.awayScore ?: "?"}"
-    val now=Instant.ofEpochMilli(nowMillis).atZone(ZoneId.systemDefault())
+    val now=Instant.ofEpochMilli(nowMillis).atZone(ZoneId.of("Asia/Baku"))
     val past=if(m.exactKickoff) {
         runCatching { Instant.parse(m.kickoff).toEpochMilli()<=nowMillis }.getOrDefault(false)
     } else {

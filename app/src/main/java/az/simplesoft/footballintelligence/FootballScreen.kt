@@ -7,6 +7,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.*
@@ -55,7 +56,9 @@ import androidx.work.WorkManager
     var screenAnalyticsUpdating by remember(repository) { mutableStateOf(true) }
     var revision by remember { mutableIntStateOf(0) }
     var selected by remember { mutableIntStateOf(-1) }
-    var tab by remember { mutableIntStateOf(0) }
+    var destination by remember { mutableStateOf(FootballDestination.HOME) }
+    var analyticsSection by remember { mutableStateOf(FootballAnalyticsSection.MARKET) }
+    var showMatchDetail by remember { mutableStateOf(false) }
     var importingCsv by remember { mutableStateOf(false) }
     var csvImportMessage by remember { mutableStateOf("") }
     var fallbackCompetition by remember { mutableStateOf("") }
@@ -71,7 +74,6 @@ import androidx.work.WorkManager
     var automaticEloExperiment by remember { mutableStateOf<EloChronologicalExperimentReport?>(null) }
     var automaticGoalComparison by remember { mutableStateOf<GoalModelComparisonReport?>(null) }
     var automaticBacktestRevision by remember { mutableIntStateOf(-1) }
-    var showBookmakerQuotes by remember { mutableStateOf(false) }
     var showInternationalHistory by remember { mutableStateOf(false) }
     var internationalAgeConfirmed by remember(activity) { mutableStateOf(isMoviOddsAgeConfirmed(activity)) }
     val workManager=remember(activity) { WorkManager.getInstance(activity) }
@@ -124,7 +126,7 @@ import androidx.work.WorkManager
         !storeLoadState.loaded -> "Читаю сохранённую локальную базу…"
         syncBusy -> automaticSyncStageMessage(activeSyncStage)
         syncQueued -> "Автоматическая синхронизация стоит в очереди WorkManager; возможна системная задержка или ожидание сети. Локальная база доступна."
-        lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
+        lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
         else -> "Автоматическая синхронизация запланирована; ожидается сеть или первый успешный ответ источника."
     }
     LaunchedEffect(
@@ -153,10 +155,6 @@ import androidx.work.WorkManager
             }
         }
     }
-    val quoteList=storeSnapshot.selectedQuotes
-    val pickList=storeSnapshot.selectedPicks
-    val tickets=storeSnapshot.tickets
-    val ticketMatches=storeSnapshot.ticketMatches
     val oddsProviders=remember { listOf(MisliOddsProvider(),TopazOddsProvider()) }
     val misliSyncState=storeSnapshot.misliSyncState
     val misliOdds=storeSnapshot.misliOdds
@@ -236,12 +234,6 @@ import androidx.work.WorkManager
     val internationalMarketEvaluation=screenAnalytics.internationalMarketEvaluation
     val prospectiveForecastReport=screenAnalytics.prospectiveForecastReport
     val accumulatorHistory=storeSnapshot.accumulatorHistory
-    var source by remember(selected) { mutableStateOf("") }
-    var outcome by remember(selected) { mutableStateOf("H") }
-    var stake by remember(selected) { mutableStateOf("10") }
-    var warning by remember(selected) { mutableStateOf("") }
-    val blue=MaterialTheme.colorScheme.primary
-
     val csvLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if(uri!=null&&!importingCsv) {
             importingCsv=true
@@ -358,93 +350,99 @@ import androidx.work.WorkManager
         }
     }
 
-    MaterialTheme {
+    BackHandler(enabled = showMatchDetail || destination == FootballDestination.SETTINGS) {
+        if (showMatchDetail) showMatchDetail = false else destination = FootballDestination.HOME
+    }
+
+    FootballTheme {
       if(storeLoadState.loaded) {
           MisliPublicPageCollector(repository,misliSyncState?.lastCheckedAtMillis) { revision++ }
           TopazPublicPageCollector(repository,topazSyncState?.lastCheckedAtMillis) { revision++ }
       }
-      Scaffold(topBar={ Surface(color=MaterialTheme.colorScheme.primaryContainer) {
-        Column(Modifier.fillMaxWidth().padding(16.dp)) {
-            Text("FOOTBALL INTELLIGENCE",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-            Text("Личный аналитический журнал • Бесплатно • Без реальных ставок",style=MaterialTheme.typography.bodySmall)
-        }
-      }}) { padding ->
+      val pageTitle = when {
+          showMatchDetail -> "Анализ матча"
+          destination == FootballDestination.HOME -> "Football Intelligence"
+          destination == FootballDestination.MATCHES -> "Матчи"
+          destination == FootballDestination.COUPONS -> "Купоны"
+          destination == FootballDestination.ANALYTICS -> "Аналитика"
+          else -> "Настройки"
+      }
+      val topDetail = when {
+          showMatchDetail -> active?.league ?: "Локальная модель и линии"
+          destination == FootballDestination.HOME -> "Матчи · данные · модельный обзор"
+          destination == FootballDestination.MATCHES -> "Фильтр по дате, лиге и линии"
+          destination == FootballDestination.COUPONS -> "Только виртуальные купоны"
+          destination == FootballDestination.ANALYTICS -> analyticsSection.label
+          else -> "Источники и дополнительные настройки"
+      }
+      Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        topBar = {
+          FootballTopBar(
+            title = pageTitle,
+            detail = topDetail,
+            showBack = showMatchDetail || destination == FootballDestination.SETTINGS,
+            onBack = { if (showMatchDetail) showMatchDetail = false else destination = FootballDestination.HOME },
+            onSettings = { destination = FootballDestination.SETTINGS; showMatchDetail = false },
+          )
+        },
+        bottomBar = {
+          if (!showMatchDetail && destination != FootballDestination.SETTINGS) {
+            FootballBottomNavigation(destination) { destination = it; showMatchDetail = false }
+          }
+        },
+      ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                    listOf("Матчи","Анализ","Купоны","Результаты","Бэктест","Настройки","Мировой рынок").forEachIndexed { i,title ->
-                    FilterChip(selected=tab==i,onClick={tab=i;if(i==4) runAutomaticBacktest()},label={Text(title)})
-                }
+          if (!showMatchDetail && destination == FootballDestination.ANALYTICS) {
+            FootballAnalyticsNavigation(analyticsSection) {
+              analyticsSection = it
+              if (it == FootballAnalyticsSection.BACKTEST) runAutomaticBacktest()
             }
-            when(tab) {
-              0 -> FootballMatchesTabContent(
-                syncStatusText=syncStatusText,
-                misliSyncState=misliSyncState,
-                misliOdds=misliOdds,
-                topazSyncState=topazSyncState,
-                topazOdds=topazOdds,
-                internationalAgeConfirmed=internationalAgeConfirmed,
-                internationalOddsSyncState=internationalOddsSyncState,
-                internationalOdds=internationalOdds,
-                marketReferenceSyncState=marketReferenceSyncState,
-                marketReferences=marketReferences,
-                syncSummaries=syncSummaries,
-                syncBusy=syncBusy,
-                footballDataStatsAttempt=storeSnapshot.footballDataStatsAttempt,
-                footballDataStatsNextAllowedAtMillis=storeSnapshot.footballDataStatsNextAllowedAtMillis,
-                matches=matches,
-                storeLoaded=storeLoadState.loaded,
-                storeError=storeLoadState.error,
-                onSelectMatch={selected=it;tab=1},
-                blue=blue,
-              )
-              1 -> MatchAnalysisTab(
-                active=active,
-                eloForecast=eloForecast,
-                activeMarketReference=activeMarketReference,
-                marketReferenceSyncState=marketReferenceSyncState,
-                misliOdds=misliOdds,
-                topazOdds=topazOdds,
-                onOpenTipsAudit={runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW,Uri.parse("https://tipsaudit.com/data"))) }},
-              )
-              2 -> FootballCouponTabContent(
-                misliSyncState=misliSyncState,
-                misliOdds=misliOdds,
-                topazSyncState=topazSyncState,
-                topazOdds=topazOdds,
-                forecastedMatches=forecastedMatches,
-                showBookmakerQuotes=showBookmakerQuotes,
-                onToggleBookmakerQuotes={showBookmakerQuotes=!showBookmakerQuotes},
-                oddsProviders=oddsProviders,
-                accumulatorDrafts=accumulatorDrafts,
-                accumulatorHistory=accumulatorHistory,
-                checkedCouponHistory=checkedCouponHistory,
-                prospectiveForecastHistory=prospectiveForecastHistory,
-                prospectiveForecastReport=prospectiveForecastReport,
-                analyticsUpdating=screenAnalyticsUpdating,
-              )
-              3 -> FootballResultsTabContent(
-                recentResults=recentResults,
-                matchStats=storeSnapshot.recentMatchStats,
-                latestStatsAttempt=storeSnapshot.footballDataStatsAttempt,
-                nextStatsSyncAtMillis=storeSnapshot.footballDataStatsNextAllowedAtMillis,
-              )
-              4 -> FootballBacktestTabContent(
-                automaticBacktestRunning=automaticBacktestRunning,
-                automaticBacktestMessage=automaticBacktestMessage,
-                automaticBacktestReport=automaticBacktestReport,
-                automaticEloByCompetitionSeason=automaticEloByCompetitionSeason,
-                automaticEloExperiment=automaticEloExperiment,
-                automaticGoalComparison=automaticGoalComparison,
-                importedCompetitionCodes=importedCompetitionCodes,
-                activeBacktestCode=activeBacktestCode,
-                onSelectBacktestCode={selectedBacktestCode=it},
-                onRunImportedBacktest={runImportedBacktest(it)},
-                backtestRunning=backtestRunning,
-                backtestMessage=backtestMessage,
-                backtestReportCode=backtestReportCode,
-                backtestReport=backtestReport,
-              )
-              6 -> InternationalMarketTabContent(
+          }
+          when {
+            showMatchDetail -> MatchAnalysisTab(
+              active = active,
+              eloForecast = eloForecast,
+              activeMarketReference = activeMarketReference,
+              marketReferenceSyncState = marketReferenceSyncState,
+              misliOdds = misliOdds,
+              topazOdds = topazOdds,
+              internationalOdds = internationalOdds,
+              onOpenTipsAudit = { runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://tipsaudit.com/data"))) } },
+            )
+            destination == FootballDestination.HOME -> FootballHomeTabContent(
+              matches = matches,
+              forecasts = forecastedMatches,
+              misliOdds = misliOdds,
+              topazOdds = topazOdds,
+              checkedPredictions = checkedCouponHistory,
+              syncBusy = syncBusy,
+              lastSyncLabel = lastSuccessfulSync?.let { "Обновлено ${niceTime(Instant.ofEpochMilli(it).toString())}" } ?: "Ожидается сеть",
+              syncDetails = syncStatusText,
+              storeLoaded = storeLoadState.loaded,
+              storeError = storeLoadState.error,
+              onOpenMatches = { destination = FootballDestination.MATCHES },
+              onOpenCoupons = { destination = FootballDestination.COUPONS },
+              onSelectMatch = { selected = it; showMatchDetail = true },
+            )
+            destination == FootballDestination.MATCHES -> FootballFixtureList(
+              matches = matches,
+              forecasts = forecastedMatches,
+              misliOdds = misliOdds,
+              topazOdds = topazOdds,
+              storeLoaded = storeLoadState.loaded,
+              storeError = storeLoadState.error,
+              onSelectMatch = { selected = it; showMatchDetail = true },
+            )
+            destination == FootballDestination.COUPONS -> FootballCouponWorkspace(
+              misliOdds = misliOdds,
+              topazOdds = topazOdds,
+              candidates = accumulatorDrafts,
+              history = accumulatorHistory,
+              checkedPicks = checkedCouponHistory,
+            )
+            destination == FootballDestination.ANALYTICS -> when (analyticsSection) {
+              FootballAnalyticsSection.MARKET -> InternationalMarketTabContent(
                 internationalAgeConfirmed=internationalAgeConfirmed,
                 theOddsApiConfigured=BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
                 internationalOddsSyncState=internationalOddsSyncState,
@@ -470,14 +468,51 @@ import androidx.work.WorkManager
                 },
                 analyticsUpdating=screenAnalyticsUpdating,
               )
-              else -> FootballSettingsTabContent(
+              FootballAnalyticsSection.BACKTEST -> FootballBacktestTabContent(
+                automaticBacktestRunning=automaticBacktestRunning,
+                automaticBacktestMessage=automaticBacktestMessage,
+                automaticBacktestReport=automaticBacktestReport,
+                automaticEloByCompetitionSeason=automaticEloByCompetitionSeason,
+                automaticEloExperiment=automaticEloExperiment,
+                automaticGoalComparison=automaticGoalComparison,
+                importedCompetitionCodes=importedCompetitionCodes,
+                activeBacktestCode=activeBacktestCode,
+                onSelectBacktestCode={selectedBacktestCode=it},
+                onRunImportedBacktest={runImportedBacktest(it)},
+                backtestRunning=backtestRunning,
+                backtestMessage=backtestMessage,
+                backtestReportCode=backtestReportCode,
+                backtestReport=backtestReport,
+              )
+              FootballAnalyticsSection.MODELS -> FootballModelStatsTab(prospectiveForecastReport, prospectiveForecastHistory, screenAnalyticsUpdating)
+              FootballAnalyticsSection.RESULTS -> FootballResultsTabContent(
+                recentResults=recentResults,
+                matchStats=storeSnapshot.recentMatchStats,
+                latestStatsAttempt=storeSnapshot.footballDataStatsAttempt,
+                nextStatsSyncAtMillis=storeSnapshot.footballDataStatsNextAllowedAtMillis,
+              )
+            }
+            else -> FootballSettingsTabContent(
                 fallbackCompetition=fallbackCompetition,
                 onFallbackCompetitionChange={fallbackCompetition=it},
                 importingCsv=importingCsv,
                 csvImportMessage=csvImportMessage,
                 onLaunchCsvImport={csvLauncher.launch(arrayOf("text/*","application/csv"))},
-              )
-            }
+                trailingContent = { FootballSourceSettings(
+                providerSyncSummaries=syncSummaries,
+                syncStatus=syncStatusText,
+                misliCount=misliOdds.size,
+                misliStatus=misliSyncState?.status?.name ?: "ЕЩЁ НЕ ПРОВЕРЕН",
+                topazCount=topazOdds.size,
+                topazStatus=topazSyncState?.status?.name ?: "ЕЩЁ НЕ ПРОВЕРЕН",
+                internationalOdds=internationalOdds,
+                internationalStatus=internationalOddsSyncState?.status?.name ?: "ЕЩЁ НЕ ПРОВЕРЕН",
+                theOddsApiStatus=theOddsApiSyncState?.status?.name ?: "ЕЩЁ НЕ ПРОВЕРЕН",
+                theOddsApiConfigured=BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
+                statsAttempt=storeSnapshot.footballDataStatsAttempt,
+              ) },
+            )
+          }
         }
       }
     }

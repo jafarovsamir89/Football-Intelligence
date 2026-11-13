@@ -14,8 +14,8 @@ class MatchStatusLabelTest {
 
     @Test fun dateOnlyTodayAndFutureRemainUpcomingUntilDayEnds() {
         val now=Instant.parse("2026-11-09T20:00:00Z").toEpochMilli()
-        val match=Match(1,"en.1","Home","Away","2026-11-09T00:00:00Z",false,null,null,
-            exactKickoff=false,eventDate="2026-11-09")
+        val match=Match(1,"en.1","Home","Away","2026-11-10T00:00:00Z",false,null,null,
+            exactKickoff=false,eventDate="2026-11-10")
         assertTrue(matchStatusLabel(match,now).startsWith("Ожидается"))
     }
 }

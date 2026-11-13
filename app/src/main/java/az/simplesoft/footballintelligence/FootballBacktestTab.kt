@@ -1,6 +1,5 @@
 package az.simplesoft.footballintelligence
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -32,16 +31,25 @@ internal fun FootballBacktestTabContent(
     backtestReportCode: String,
     backtestReport: EloWalkForwardReport?,
 ) {
+    var showMethodology by remember { mutableStateOf(false) }
+    var showModelComparisons by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                Text("Elo walk-forward",style=MaterialTheme.typography.titleLarge)
-                Text("Автоматическая оценка локальной истории OpenFootball/OpenLigaDB по отдельным соревнованиям. Для каждой цели модель использует только результаты, доступные до её временной границы.",style=MaterialTheme.typography.bodySmall)
-                Text("Это ретроспективная оценка текущих файлов, а не архив исходных публикаций. Для OpenFootball без времени kickoff используется календарная дата и консервативная доступность результата через два дня; поздно полученные результаты OpenLigaDB не попадают в прошлое обучение. Поэтому цифры исследовательские и не доказывают будущую точность или преимущество.",style=MaterialTheme.typography.bodySmall)
+                Text("Бэктест",style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Bold)
+                Text("Оценка вероятностей на сохранённой футбольной истории.",style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { showMethodology = !showMethodology }) { Text(if (showMethodology) "Скрыть методику" else "Методика и ограничения") }
+                if (showMethodology) Text("Walk-forward соблюдает временную границу каждого прогноза: в расчёт входят только результаты, доступные до cutoff. Это ретроспективная оценка текущих файлов, не архив публикаций и не доказательство будущей точности или прибыли. Date-only матчи используют календарную дату и консервативную доступность результата через два дня.", style=MaterialTheme.typography.bodySmall)
                 if(automaticBacktestRunning) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if(automaticBacktestMessage.isNotBlank()) Text(automaticBacktestMessage,style=MaterialTheme.typography.bodySmall)
                 automaticBacktestReport?.let { report ->
-                    Text("Автоматическая база: целей ${report.targetCount} · рассчитано прогнозов ${report.forecastCount} · пропущено из-за малого прошлого сэмпла ${report.skippedForInsufficientHistory}",fontWeight=FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard("Прогнозов", report.forecastCount.toString(), "из ${report.targetCount} целей", Modifier.weight(1f))
+                        MetricCard("Пропущено", report.skippedForInsufficientHistory.toString(), "мало истории", Modifier.weight(1f))
+                    }
                     if(report.meanBrierScore==null||report.meanLogLoss==null) Text("Пока недостаточно предматчевой истории для проверяемого прогноза.",style=MaterialTheme.typography.bodySmall)
-                    else Text("Средний Brier: ${"%.4f".format(report.meanBrierScore)} · средний Log Loss: ${"%.4f".format(report.meanLogLoss)}")
+                    else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        MetricCard("Brier", "%.4f".format(report.meanBrierScore), "ниже лучше", Modifier.weight(1f))
+                        MetricCard("Log Loss", "%.4f".format(report.meanLogLoss), "ниже лучше", Modifier.weight(1f))
+                    }
                     WalkForwardCalibrationSummary(report)
                     Text("Срез рассчитан отдельно в границах соревнований. Результат не является обещанием прибыли.",style=MaterialTheme.typography.bodySmall)
                     if(automaticEloByCompetitionSeason.isNotEmpty()) {
@@ -77,6 +85,12 @@ internal fun FootballBacktestTabContent(
                         }
                     }
                 }
+                if (automaticEloExperiment != null || automaticGoalComparison != null) {
+                    TextButton(onClick = { showModelComparisons = !showModelComparisons }) {
+                        Text(if (showModelComparisons) "Скрыть сравнение моделей и интервалы" else "Сравнение моделей и интервалы")
+                    }
+                }
+                if (showModelComparisons) {
                 automaticEloExperiment?.let { experiment ->
                     HorizontalDivider()
                     Text("Хронологический выбор параметров Elo",fontWeight=FontWeight.SemiBold)
@@ -172,6 +186,7 @@ internal fun FootballBacktestTabContent(
                     }
                     Text("Все сравниваемые модели используют только результаты, доступные до cutoff. Bootstrap независимо пересэмплирует матчи; повторяющиеся команды и туры могут занижать неопределённость. Это одна проверка текущих исторических файлов, не подтверждение будущей точности или преимущества. Home/Away пока исследовательская модель и не влияет на live-прогнозы или купоны.",style=MaterialTheme.typography.labelSmall)
                 }
+                }
                 HorizontalDivider()
                 Text("Дополнительный импортированный CSV",fontWeight=FontWeight.SemiBold)
                 Text("Ретроспективная оценка по импортированным результатам. Для каждого календарного дня используется один срез, без результатов этого дня; строки CSV становятся доступны только спустя два дня.",style=MaterialTheme.typography.bodySmall)
@@ -180,9 +195,16 @@ internal fun FootballBacktestTabContent(
                     Text("Дополнительный walk-forward по CSV станет доступен после импорта в настройках. Для обычного анализа работает автоматическая база.")
                 } else {
                     Text("Код соревнования из CSV",fontWeight=FontWeight.SemiBold)
-                    Row(Modifier.horizontalScroll(rememberScrollState()),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
-                        importedCompetitionCodes.forEach { code ->
-                            FilterChip(selected=activeBacktestCode==code,onClick={onSelectBacktestCode(code)},label={Text(code)})
+                    importedCompetitionCodes.chunked(2).forEach { codeRow ->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(6.dp)) {
+                            codeRow.forEach { code ->
+                                FilterChip(
+                                    selected=activeBacktestCode==code,
+                                    onClick={onSelectBacktestCode(code)},
+                                    label={Text(code, maxLines=1, overflow=androidx.compose.ui.text.style.TextOverflow.Ellipsis)},
+                                    modifier=Modifier.weight(1f),
+                                )
+                            }
                         }
                     }
                     Text("Минимум для прогноза: ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} прошлых матчей соревнования и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} матча каждой команды.",style=MaterialTheme.typography.bodySmall)

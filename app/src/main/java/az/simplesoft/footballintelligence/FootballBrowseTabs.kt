@@ -7,6 +7,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -114,32 +118,49 @@ internal fun FootballResultsTabContent(
     latestStatsAttempt: FootballDataStatsAttempt?,
     nextStatsSyncAtMillis: Long,
 ) {
-    Column(Modifier.fillMaxSize().padding(14.dp)) {
-                Text("История результатов",style=MaterialTheme.typography.titleLarge)
-                Text("Сохранённые завершённые матчи из подключённых источников. Данные остаются доступны офлайн.",style=MaterialTheme.typography.bodySmall)
-                val dateFormat=DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.systemDefault())
-                if(latestStatsAttempt==null) {
-                    Text("Дополнительная статистика: автоматический источник Football-Data.co.uk ещё не запускался.",style=MaterialTheme.typography.bodySmall)
-                } else {
-                    val status=when(latestStatsAttempt.status) {
-                        "OK" -> "сохранена"
-                        "NO_MATCH" -> "получена, точных локальных совпадений нет"
-                        "EMPTY" -> "в файле пока нет матчевой статистики"
-                        "UNAVAILABLE" -> "архив пока недоступен"
-                        "ERROR" -> "ошибка загрузки"
-                        else -> latestStatsAttempt.status
-                    }
-                    Text("Football-Data.co.uk: $status · ${latestStatsAttempt.division}/${latestStatsAttempt.season} · сопоставлено ${latestStatsAttempt.rowsMatched}/${latestStatsAttempt.rowsRead} · ${dateFormat.format(Instant.ofEpochMilli(latestStatsAttempt.attemptedAtMillis))}",style=MaterialTheme.typography.bodySmall)
-                    latestStatsAttempt.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+    var showStatsSourceDetails by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("История результатов",style=MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                Text("Завершённые матчи из локальной базы",style=MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    MetricCard("В истории", recentResults.size.toString(), "последних результатов", Modifier.weight(1f))
+                    MetricCard("Статистика", latestStatsAttempt?.rowsMatched?.toString() ?: "—", "сопоставленных матчей", Modifier.weight(1f))
                 }
-                val nextStatsSync=if(nextStatsSyncAtMillis>0L) dateFormat.format(Instant.ofEpochMilli(nextStatsSyncAtMillis)) else "при первом запуске с интернетом"
-                Text("Автообновление по сети: не более 2 CSV-загрузок за любые 7 дней; следующая проверка не ранее $nextStatsSync. Коэффициенты из источника не сохраняются.",style=MaterialTheme.typography.bodySmall)
+                val dateFormat=DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.of("Asia/Baku"))
+                TextButton(onClick = { showStatsSourceDetails = !showStatsSourceDetails }) {
+                    Text(if (showStatsSourceDetails) "Скрыть источник статистики" else "Источник и автообновление")
+                }
+                if (showStatsSourceDetails) {
+                    ElevatedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            if(latestStatsAttempt==null) {
+                                Text("Football-Data.co.uk ещё не проверялся автоматически.",style=MaterialTheme.typography.bodySmall)
+                            } else {
+                                val status=when(latestStatsAttempt.status) {
+                                    "OK" -> "сохранена"
+                                    "NO_MATCH" -> "получена, точных локальных совпадений нет"
+                                    "EMPTY" -> "в файле пока нет матчевой статистики"
+                                    "UNAVAILABLE" -> "архив пока недоступен"
+                                    "ERROR" -> "ошибка загрузки"
+                                    else -> latestStatsAttempt.status
+                                }
+                                Text("Football-Data.co.uk: $status · ${latestStatsAttempt.division}/${latestStatsAttempt.season} · сопоставлено ${latestStatsAttempt.rowsMatched}/${latestStatsAttempt.rowsRead} · ${dateFormat.format(Instant.ofEpochMilli(latestStatsAttempt.attemptedAtMillis))}",style=MaterialTheme.typography.bodySmall)
+                                latestStatsAttempt.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                            }
+                            val nextStatsSync=if(nextStatsSyncAtMillis>0L) dateFormat.format(Instant.ofEpochMilli(nextStatsSyncAtMillis)) else "при первом запуске с интернетом"
+                            Text("Проверка: не более 2 загрузок за 7 дней; следующая не ранее $nextStatsSync. Коэффициенты из источника не сохраняются.",style=MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
                 LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                    if (recentResults.isEmpty()) item {
+                        Text("Результаты появятся после завершения матчей и автоматической синхронизации.", Modifier.padding(vertical = 18.dp), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                     items(recentResults,key={it.id}) { m ->
                         ElevatedCard(Modifier.fillMaxWidth()) {
-                            Column(Modifier.padding(12.dp)) {
+                            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("${m.league} · ${niceMatchTime(m)}",style=MaterialTheme.typography.labelSmall)
-                                Text("${m.home} ${m.homeScore}:${m.awayScore} ${m.away}",fontWeight=FontWeight.SemiBold)
+                                Text("${m.home} ${m.homeScore}:${m.awayScore} ${m.away}",fontWeight=FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
                                 Text("${m.sourceName} · сезон ${m.season ?: "не указан"}",style=MaterialTheme.typography.bodySmall)
                                 matchStats[m.id]?.let { saved ->
                                     val values=saved.values
@@ -170,18 +191,27 @@ internal fun FootballSettingsTabContent(
     importingCsv: Boolean,
     csvImportMessage: String,
     onLaunchCsvImport: () -> Unit,
+    trailingContent: @Composable () -> Unit = {},
 ) {
     Column(Modifier.verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(10.dp)) {
-                  Text("Football Intelligence Lab",style=MaterialTheme.typography.titleLarge)
-                  Text("Личная лаборатория исследования футбольных ставок, без оплаты и обязательных ключей.")
-                  Text("Автоматические футбольные источники: OpenFootball и OpenLigaDB. Misli/TOPAZ читаются только из публичных видимых страниц при открытом приложении; bet365 доступен через MoviOdds при наличии подтверждённой свежей линии.")
-                  Text("Дополнительные функции")
-                  OutlinedTextField(value=fallbackCompetition,onValueChange=onFallbackCompetitionChange,label={Text("Необязательный код соревнования для CSV")},singleLine=true,modifier=Modifier.fillMaxWidth())
-                  Button(onClick=onLaunchCsvImport,enabled=!importingCsv,modifier=Modifier.fillMaxWidth()) { Text(if(importingCsv) "Импорт…" else "Импорт CSV (дополнительно)") }
-                  if(csvImportMessage.isNotBlank()) Text(csvImportMessage,style=MaterialTheme.typography.bodySmall)
-                  Text("CSV не нужен для обычного запуска: матчи и результаты загружаются автоматически.",style=MaterialTheme.typography.bodySmall)
-                  Text("Вероятности Elo экспериментальные и не калиброваны. Купоны виртуальные.")
-                  Text("Система не выполняет ставки, не входит в букмекерские аккаунты и не обещает доход.")
-                  Text("Открытые источники могут временно не отвечать. Уже сохранённые данные доступны без сети.")
+        Text("Настройки",style=MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text("Личная локальная лаборатория футбольной аналитики.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        ElevatedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                Text("Дополнительный импорт",style=MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("CSV нужен только для собственного расширенного бэктеста. Матчи и результаты для обычного анализа загружаются автоматически.",style=MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(value=fallbackCompetition,onValueChange=onFallbackCompetitionChange,label={Text("Необязательный код соревнования для CSV")},singleLine=true,modifier=Modifier.fillMaxWidth())
+                Button(onClick=onLaunchCsvImport,enabled=!importingCsv,modifier=Modifier.fillMaxWidth()) { Text(if(importingCsv) "Импорт…" else "Импорт CSV (дополнительно)") }
+                if(csvImportMessage.isNotBlank()) Text(csvImportMessage,style=MaterialTheme.typography.bodySmall)
+            }
+        }
+        ElevatedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("О приложении",style=MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text("OpenFootball и OpenLigaDB автоматически загружают историю. Линии Misli/TOPAZ читаются с открытых страниц, пока приложение на экране. Доступные сохранённые данные работают офлайн.",style=MaterialTheme.typography.bodySmall)
+                Text("Вероятности Elo экспериментальные и не калиброваны. Все купоны виртуальные; приложение не выполняет ставки и не обещает доход.",style=MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        trailingContent()
     }
 }

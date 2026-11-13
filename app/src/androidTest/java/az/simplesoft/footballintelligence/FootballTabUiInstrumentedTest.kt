@@ -282,6 +282,7 @@ class FootballTabUiInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithText("Сравнение моделей и интервалы").performScrollTo().performClick()
         composeRule.onNodeWithText("Elo, Poisson и Home/Away performance").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Validation Home/Away:", substring = true).assertExists()
         composeRule.onNodeWithText("Holdout Elo/Home-Away на общих матчах 1:", substring = true).assertExists()

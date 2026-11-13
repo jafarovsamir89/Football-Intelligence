@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -24,6 +24,7 @@ import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
+import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
 import az.simplesoft.footballintelligence.data.InternationalMatchLinkBasis
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncAttempt
 import az.simplesoft.footballintelligence.data.InternationalOddsSyncState
@@ -46,57 +47,111 @@ internal fun MatchAnalysisTab(
     marketReferenceSyncState: MarketReferenceSyncState?,
     misliOdds: List<BookmakerOddsSnapshot>,
     topazOdds: List<BookmakerOddsSnapshot>,
+    internationalOdds: List<InternationalOddsSnapshot> = emptyList(),
     onOpenTipsAudit: () -> Unit,
 ) {
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-        if(active==null) { Text("Сначала выбери матч на вкладке «Матчи».") }
-        else {
-            Text("${active.home} — ${active.away}",style=MaterialTheme.typography.titleLarge)
-            Text("${niceMatchTime(active)} · ${if(active.finished) "Завершён" else "До начала"}",style=MaterialTheme.typography.labelSmall)
-            HorizontalDivider()
-            Text("Экспериментальный Elo-baseline",fontWeight=FontWeight.Bold)
-            val activeForecast=eloForecast
-            if(active.finished) {
-                Text("Предматчевый расчёт для завершённого матча не показывается.",style=MaterialTheme.typography.bodySmall)
-            } else if(!active.exactKickoff) {
-                Text("Для этой записи есть только дата без точного kickoff; предматчевый расчёт недоступен.",style=MaterialTheme.typography.bodySmall)
-            } else if(activeForecast==null) {
-                Text("Расчёт Elo по локальной истории загружается…",style=MaterialTheme.typography.bodySmall)
-            } else {
-                val probabilities=activeForecast.probabilities
-                if(probabilities==null) {
-                    Text("Недостаточно истории: ${activeForecast.matchesUsed} матчей в лиге, ${activeForecast.homeTeamMatches} для ${active.home} и ${activeForecast.awayTeamMatches} для ${active.away}. Для показа нужно минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} матчей в лиге и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} для каждой команды.",style=MaterialTheme.typography.bodySmall)
-                } else {
-                    Text("Оценка 1X2: ${"%.1f".format(probabilities.home*100)}% / ${"%.1f".format(probabilities.draw*100)}% / ${"%.1f".format(probabilities.away*100)}%",fontWeight=FontWeight.SemiBold)
-                    Text("На основе ${activeForecast.matchesUsed} прошлых матчей лиги; ${active.home}: ${activeForecast.homeTeamMatches}, ${active.away}: ${activeForecast.awayTeamMatches}.",style=MaterialTheme.typography.bodySmall)
-                }
-                Text("Источник: сохранённые результаты OpenLigaDB этой лиги до времени начала матча. Elo с фиксированными параметрами, без калибровки и walk-forward проверки; экспериментальная оценка, не рекомендация и не показатель уверенности.",style=MaterialTheme.typography.bodySmall)
-            }
-            HorizontalDivider()
-            Text("Рыночный ориентир 1X2",fontWeight=FontWeight.Bold)
-            if(activeMarketReference==null) {
-                Text("Нет свежей, однозначно сопоставленной оценки TipsAudit для этого матча. Устаревшие значения не используются. Последняя проверка: ${marketReferenceSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "не выполнялась"}.",style=MaterialTheme.typography.bodySmall)
-            } else {
-                val reference=activeMarketReference
-                val marketProb=Triple(reference.homeProbability,reference.drawProbability,reference.awayProbability)
-                val fairRead=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(reference.fairReadAtMillis))
-                Text("TipsAudit fair reference: ${"%.1f".format(marketProb.first*100)}% / ${"%.1f".format(marketProb.second*100)}% / ${"%.1f".format(marketProb.third*100)}% · ориентирные цены ${reference.homeFairOdds} / ${reference.drawFairOdds} / ${reference.awayFairOdds} · источник считал в $fairRead · метод ${reference.methodologyVersion}.",style=MaterialTheme.typography.bodySmall)
-                eloForecast?.probabilities?.let { model ->
-                    Text("Расхождение Elo с рыночным ориентиром: ${marketPercentagePoints(model.home-marketProb.first)} / ${marketPercentagePoints(model.draw-marketProb.second)} / ${marketPercentagePoints(model.away-marketProb.third)} п.п. Это сравнение, не сигнал доходности.",style=MaterialTheme.typography.bodySmall)
-                }
-                (misliOdds+topazOdds).filter { it.matchId==active.id }.forEach { quote ->
-                    val bookmakerProb=fairProbabilities(Quote(0,active.id,quote.providerId,quote.home,quote.draw,quote.away,quote.capturedAtMillis))
-                    Text("${if(quote.providerId=="misli") "Misli" else "TOPAZ"} без маржи против ориентира: ${marketPercentagePoints(bookmakerProb.first-marketProb.first)} / ${marketPercentagePoints(bookmakerProb.second-marketProb.second)} / ${marketPercentagePoints(bookmakerProb.third-marketProb.third)} п.п. Линия той же БК, 1X2; рассчитано пропорциональным снятием маржи.",style=MaterialTheme.typography.bodySmall)
-                }
-                Text("Один внешний производный ориентир; это не независимый консенсус и не сырые цены Pinnacle, Betfair или bet365. Значения не используются как цены купона или для расчёта EV.",style=MaterialTheme.typography.bodySmall)
-            }
-            TextButton(onClick={
-                onOpenTipsAudit()
-            }) { Text("Источник и методика: TipsAudit · бесплатное использование с атрибуцией") }
+    var showDetails by remember(active?.id) { mutableStateOf(false) }
+    val activeForecast = eloForecast
+    val nowMillis = rememberClockMinute()
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        if (active == null) {
+            Text("Выберите матч в списке.", style = MaterialTheme.typography.bodyLarge)
+        } else {
+            Text(active.league, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("${active.home} — ${active.away}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text("${bakuKickoff(active)} · ${if (active.finished) "Завершён" else "До начала"}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Модель Elo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    val probabilities = activeForecast?.probabilities
+                    if (active.finished) {
+                        Text("Предматчевая оценка для завершённой игры не показывается.", style = MaterialTheme.typography.bodySmall)
+                    } else if (!active.exactKickoff) {
+                        Text("Для этой записи нет точного времени начала, поэтому предматчевый расчёт недоступен.", style = MaterialTheme.typography.bodySmall)
+                    } else if (probabilities == null) {
+                        Text("Расчёт загружается или пока недостаточно истории для обеих команд.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        val forecast = ForecastedMatch(active.id, active.home, active.away, runCatching { Instant.parse(active.kickoff).toEpochMilli() }.getOrDefault(0L), probabilities, competition = active.league)
+                        ProbabilityBar(forecast)
+                    }
+                }
+            }
+
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Сравнение цен 1X2", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("П1 · X · П2", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val misli = misliOdds.firstOrNull { it.matchId == active.id }
+                    val topaz = topazOdds.firstOrNull { it.matchId == active.id }
+                    val model = activeForecast?.probabilities
+                    OddsRow("misli", misli, nowMillis)
+                    if (model != null && misli != null && isFreshBookmakerQuote(misli, nowMillis)) {
+                        val fair = fairProbabilities(Quote(0, active.id, "Misli", misli.home, misli.draw, misli.away, misli.capturedAtMillis))
+                        Text("Elo − Misli без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    OddsRow("topaz", topaz, nowMillis)
+                    if (model != null && topaz != null && isFreshBookmakerQuote(topaz, nowMillis)) {
+                        val fair = fairProbabilities(Quote(0, active.id, "TOPAZ", topaz.home, topaz.draw, topaz.away, topaz.capturedAtMillis))
+                        Text("Elo − TOPAZ без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    val now = nowMillis
+                    val international = internationalOdds.filter {
+                        it.matchId == active.id && it.quoteSide == InternationalOddsQuoteSide.BACK &&
+                            it.kickoffMillis > now && it.capturedAtMillis <= now + 60_000L &&
+                            now - it.capturedAtMillis <= INTERNATIONAL_ODDS_FRESHNESS_MILLIS
+                    }
+                    if (international.isEmpty()) {
+                        Text("Международный рынок · —", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        international.take(4).forEach { quote ->
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(quote.bookmakerId, modifier = Modifier.weight(1f), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                                Text("${"%.2f".format(Locale.US, quote.home)}  ${"%.2f".format(Locale.US, quote.draw)}  ${"%.2f".format(Locale.US, quote.away)}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+                            }
+                            Text("Снимок ${bakuTime(quote.capturedAtMillis)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            if (model != null) {
+                                val fair = fairProbabilities(Quote(0, active.id, quote.bookmakerId, quote.home, quote.draw, quote.away, quote.capturedAtMillis))
+                                Text("Elo − рынок без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                    val fairReference = activeMarketReference?.let { Triple(it.homeProbability, it.drawProbability, it.awayProbability) }
+                    if (model != null && fairReference != null) {
+                        Text("Elo − рыночный ориентир: ${marketPercentagePoints(model.home - fairReference.first)} / ${marketPercentagePoints(model.draw - fairReference.second)} / ${marketPercentagePoints(model.away - fairReference.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Text("Рыночный ориентир", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    if (activeMarketReference == null) {
+                        Text("Свежей однозначно связанной оценки пока нет.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    } else {
+                        val reference = activeMarketReference
+                        Text("TipsAudit · ${"%.1f".format(Locale.US, reference.homeProbability * 100)} / ${"%.1f".format(Locale.US, reference.drawProbability * 100)} / ${"%.1f".format(Locale.US, reference.awayProbability * 100)}%", fontWeight = FontWeight.SemiBold)
+                        Text("Производная оценка, не коэффициент конкретной БК.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "Скрыть подробности" else "Источники и методика") }
+                    if (showDetails) {
+                        Text("Elo использует сохранённые результаты лиги, доступные до времени начала. Модель экспериментальная и не калибрована.", style = MaterialTheme.typography.bodySmall)
+                        Text("Свежесть Misli/TOPAZ — 30 минут. Международная линия показывается только при точной локальной связи и свежем сохранённом снимке.", style = MaterialTheme.typography.bodySmall)
+                        Text("${activeMarketReference?.let { "TipsAudit · ${it.methodologyVersion} · рассчитано ${bakuTime(it.fairReadAtMillis)}" } ?: "TipsAudit ещё не связал свежую линию с этим матчем"}. Расхождение описывает данные, не прибыль.", style = MaterialTheme.typography.bodySmall)
+                        Text("Последняя проверка TipsAudit: ${marketReferenceSyncState?.lastCheckedAtMillis?.let(::bakuTime) ?: "не выполнялась"}.", style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = onOpenTipsAudit) { Text("Открыть описание источника") }
+                    }
+                }
+            }
         }
     }
 }
+
+private fun bakuKickoff(match: Match): String = if (!match.exactKickoff) niceMatchTime(match) else runCatching {
+    DateTimeFormatter.ofPattern("dd.MM.yyyy · HH:mm", Locale("ru")).withZone(ZoneId.of("Asia/Baku")).format(Instant.parse(match.kickoff))
+}.getOrDefault("Время уточняется")
+
+private fun bakuTime(millis: Long): String = DateTimeFormatter.ofPattern("dd.MM HH:mm", Locale("ru")).withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(millis))
 
 @Composable
 internal fun InternationalMarketTabContent(
@@ -120,6 +175,14 @@ internal fun InternationalMarketTabContent(
     onConfirmMoviOddsAge: () -> Unit,
     analyticsUpdating: Boolean = false,
 ) {
+    var showProviderDetails by remember { mutableStateOf(false) }
+    val nowMillis = rememberClockMinute()
+    val currentInternationalOdds = remember(internationalOdds, nowMillis) {
+        internationalOdds.filter {
+            it.kickoffMillis > nowMillis && it.capturedAtMillis <= nowMillis + 60_000L &&
+                nowMillis - it.capturedAtMillis <= INTERNATIONAL_ODDS_FRESHNESS_MILLIS
+        }
+    }
     LazyColumn(
         Modifier.fillMaxSize().padding(horizontal=14.dp).testTag("internationalMarketList"),
         verticalArrangement=Arrangement.spacedBy(8.dp),
@@ -127,46 +190,41 @@ internal fun InternationalMarketTabContent(
     ) {
         item {
             Column(Modifier.fillMaxWidth().padding(vertical=8.dp),verticalArrangement=Arrangement.spacedBy(5.dp)) {
-                val moviOddsLines=internationalOdds.count { it.providerId==MOVIODDS_PROVIDER_ID }
-                val checked=internationalOddsSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
-                Text("Мировой рынок · футбольный 1X2",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
-                Text("bet365 через независимый агрегатор MoviOdds · ${if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,moviOddsLines) else "ТРЕБУЕТСЯ 18+"} · проверка $checked · свежих линий $moviOddsLines${if(workerBusy) " · обновление выполняется" else ""}",style=MaterialTheme.typography.bodySmall)
-                internationalOddsSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
-                internationalOddsSyncState?.qualityCounts?.let { quality ->
-                    Text(
-                        "Quality gate последнего ответа: принято ${quality.acceptedMatches}/${quality.receivedMatches}, отклонено ${quality.rejectedMatches}, устарело ${quality.staleMatches}, дубликаты ${quality.duplicateMatches}, не подтверждено ${quality.unverifiedMatches}. Это счётчики разбора, не рейтинг точности.",
-                        style=MaterialTheme.typography.bodySmall,
-                    )
-                }
-                if(internationalOddsSyncHistory.isNotEmpty()) {
-                    Text("История проверок источника · последние ${internationalOddsSyncHistory.size} попыток за 30 дней",fontWeight=FontWeight.SemiBold)
-                    internationalOddsSyncHistory.take(5).forEach { attempt ->
-                        val attemptTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
-                        val attemptCounts=attempt.qualityCounts?.let { " · принято ${it.acceptedMatches}/${it.receivedMatches}, отклонено ${it.rejectedMatches}, устарело ${it.staleMatches}, дубликаты ${it.duplicateMatches}, не подтверждено ${it.unverifiedMatches}" }
-                            ?: " · разбор ответа недоступен"
-                        Text("$attemptTime · ${attempt.status}$attemptCounts",style=MaterialTheme.typography.bodySmall)
-                    }
-                    Text("Это журнал наблюдений, а не процент доступности или гарантия будущей работы источника.",style=MaterialTheme.typography.bodySmall)
-                }
-                val theOddsApiLines=internationalOdds.count { it.providerId==THE_ODDS_API_PROVIDER_ID }
-                val theOddsApiChecked=theOddsApiSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                val moviOddsLines=currentInternationalOdds.count { it.providerId==MOVIODDS_PROVIDER_ID }
+                val checked=internationalOddsSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
+                val theOddsApiLines=currentInternationalOdds.count { it.providerId==THE_ODDS_API_PROVIDER_ID }
+                val theOddsApiChecked=theOddsApiSyncState?.lastCheckedAtMillis?.let { DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(it)) } ?: "ещё не проверен"
                 val theOddsApiStatus=if(theOddsApiConfigured) visibleInternationalOddsStatus(theOddsApiSyncState,theOddsApiLines) else "КЛЮЧ НЕ ВСТРОЕН В ЭТУ СБОРКУ"
-                Text("The Odds API · EU · $theOddsApiStatus · проверка $theOddsApiChecked · свежих линий $theOddsApiLines",style=MaterialTheme.typography.bodySmall)
-                theOddsApiSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
-                if(theOddsApiSyncHistory.isNotEmpty()) {
-                    Text("The Odds API · последние проверки",fontWeight=FontWeight.SemiBold)
-                    theOddsApiSyncHistory.take(3).forEach { attempt ->
-                        val time=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
-                        Text("$time · ${attempt.status} · сохранено линий ${attempt.qualityCounts?.acceptedMatches ?: 0}",style=MaterialTheme.typography.bodySmall)
+                Text("Мировой рынок · футбольный 1X2",style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold)
+                SourceStatus("bet365 · MoviOdds", if(internationalAgeConfirmed) visibleInternationalOddsStatus(internationalOddsSyncState,moviOddsLines) else "ТРЕБУЕТСЯ 18+", "$moviOddsLines свежих линий · проверено $checked${if(workerBusy) " · обновляется" else ""}", healthy = moviOddsLines > 0)
+                Text("The Odds API · EU · $theOddsApiStatus · $theOddsApiLines свежих линий · проверено $theOddsApiChecked", style=MaterialTheme.typography.labelMedium)
+                TextButton(onClick = { showProviderDetails = !showProviderDetails }) {
+                    Text(if (showProviderDetails) "Скрыть детали источников" else "Подробности источников")
+                }
+                if(showProviderDetails) {
+                    internationalOddsSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                    internationalOddsSyncState?.qualityCounts?.let { quality ->
+                        Text("Последний ответ: принято ${quality.acceptedMatches}/${quality.receivedMatches}, отклонено ${quality.rejectedMatches}, устарело ${quality.staleMatches}, дубликаты ${quality.duplicateMatches}, непроверено ${quality.unverifiedMatches}. Это счётчики разбора, не точности.", style=MaterialTheme.typography.bodySmall)
                     }
+                    if(internationalOddsSyncHistory.isNotEmpty()) {
+                        Text("Проверки MoviOdds · до пяти последних",fontWeight=FontWeight.SemiBold)
+                        internationalOddsSyncHistory.take(5).forEach { attempt ->
+                            val attemptTime=DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
+                            Text("$attemptTime · ${attempt.status} · сохранено ${attempt.qualityCounts?.acceptedMatches ?: "—"}",style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    theOddsApiSyncState?.detail?.let { Text(it,style=MaterialTheme.typography.bodySmall) }
+                    if(theOddsApiSyncHistory.isNotEmpty()) {
+                        Text("Проверки The Odds API · до трёх последних",fontWeight=FontWeight.SemiBold)
+                        theOddsApiSyncHistory.take(3).forEach { attempt ->
+                            val time=DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(attempt.checkedAtMillis))
+                            Text("$time · ${attempt.status} · ${attempt.qualityCounts?.acceptedMatches ?: 0} линий",style=MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if(!theOddsApiConfigured) Text("В этой сборке нет личного API-ключа; ключ используется только в закрытом личном APK.", style=MaterialTheme.typography.bodySmall)
+                    Text("The Odds API: одна лига за проход раз в 2 часа, до 12 запросов в сутки, регион EU и рынок 1X2. Обновление WorkManager может задерживаться Android.",style=MaterialTheme.typography.bodySmall)
+                    Text("Международные котировки не входят в купоны Misli/TOPAZ. Они считаются свежими только до 15 минут; оценка рынка не доказывает доходность.",style=MaterialTheme.typography.bodySmall)
                 }
-                if(!theOddsApiConfigured) {
-                    Text("Эта публичная/CI-сборка не содержит личный ключ. Персональная APK-сборка читает ключ только из игнорируемого local.properties; не публикуй её или сам APK-ключ в открытом репозитории.",style=MaterialTheme.typography.bodySmall)
-                }
-                Text("Для бесплатной квоты The Odds API проверяет одну активную лигу за проход, не чаще раза в 2 часа, максимум 12 запросов за любые 24 часа. Используются один регион EU и рынок 1X2; список лиг вращается. WorkManager может отложить проход.",style=MaterialTheme.typography.bodySmall)
-                Text("Котировка считается свежей только при недавнем времени опроса рынка у источника (до 15 минут), независимо от того, когда изменился коэффициент. Приложение и источник сохраняются с разными отметками времени.",style=MaterialTheme.typography.bodySmall)
-                Text("Данные bet365 поступают через MoviOdds, который не аффилирован с bet365. Условия MoviOdds требуют возраст 18+ и разрешают использование в собственных приложениях; точная доступность в Азербайджане на физическом телефоне ещё не проверена. Источник может быть неполным или недоступным.",style=MaterialTheme.typography.bodySmall)
-                Text("Misli/TOPAZ остаются отдельными местными линиями. Международная цена не используется для виртуальных купонов Misli или TOPAZ. Цены и модели не являются доказательством преимущества или прибыли.",style=MaterialTheme.typography.bodySmall)
                 if(!internationalAgeConfirmed) {
                     ElevatedCard(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -192,8 +250,16 @@ internal fun InternationalMarketTabContent(
                     if(analyticsUpdating) {
                         Text("Обновляю оценку рынка; предыдущие сводные показатели временно скрыты.",style=MaterialTheme.typography.bodySmall)
                     } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MetricCard("Связано", internationalMarketEvaluation.quoteFixtureCount.toString(), "БК · матч", Modifier.weight(1f))
+                            MetricCard("С Elo", internationalMarketEvaluation.pairedFixtureCount.toString(), "сопоставимых пар", Modifier.weight(1f))
+                        }
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MetricCard("Проверено", internationalMarketEvaluation.settledFixtureCount.toString(), "результатов", Modifier.weight(1f))
+                            MetricCard("Ожидают", internationalMarketEvaluation.pendingFixtureCount.toString(), "результатов", Modifier.weight(1f))
+                        }
                         Text(
-                            "Котировок БК–матч: ${internationalMarketEvaluation.quoteFixtureCount} · с прогнозом Elo: ${internationalMarketEvaluation.pairedFixtureCount} · рассчитано: ${internationalMarketEvaluation.settledFixtureCount} · без проверенного исхода: ${internationalMarketEvaluation.pendingFixtureCount}. История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
+                            "История ограничена последними 30 днями и 5 000 сохранёнными изменениями цен.",
                             style=MaterialTheme.typography.bodySmall,
                         )
                         if(internationalMarketEvaluation.bookmakerReports.isEmpty()) {
@@ -206,7 +272,13 @@ internal fun InternationalMarketTabContent(
                                     "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
                                 }
                                 val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
-                                Text("${internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId)} · $providers · медиана до kickoff ${report.medianHoursBeforeKickoff.formatLeadTime()} · $metricText",style=MaterialTheme.typography.bodySmall)
+                                ElevatedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)) {
+                                    Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        Text(internationalBookmakerName(THE_ODDS_API_PROVIDER_ID,report.bookmakerId), style=MaterialTheme.typography.titleSmall, fontWeight=FontWeight.SemiBold)
+                                        Text("$providers · медиана до начала ${report.medianHoursBeforeKickoff.formatLeadTime()}",style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(metricText,style=MaterialTheme.typography.bodySmall)
+                                    }
+                                }
                                 val confidenceText = if(report.settledFixtureCount >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS) {
                                     "95% парный bootstrap, Δ Elo−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
                                 } else {
@@ -227,7 +299,7 @@ internal fun InternationalMarketTabContent(
                 }
             }
         }
-        if(internationalOdds.isEmpty()) {
+        if(currentInternationalOdds.isEmpty()) {
             item {
                 ElevatedCard(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
@@ -237,7 +309,7 @@ internal fun InternationalMarketTabContent(
                 }
             }
         }
-        items(internationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.market}:${it.sourceMarketKey}:${it.quoteSide}"}) { quote ->
+        items(currentInternationalOdds,key={"${it.providerId}:${it.bookmakerId}:${it.eventId}:${it.market}:${it.sourceMarketKey}:${it.quoteSide}"}) { quote ->
             val isLay=quote.quoteSide==InternationalOddsQuoteSide.LAY
             val isBetfairExchange=quote.providerId==THE_ODDS_API_PROVIDER_ID&&quote.bookmakerId.startsWith("betfair_ex_")
             val eventConsensus=if(analyticsUpdating||isLay) null else internationalConsensus.firstOrNull { it.matchId!=null&&it.matchId==quote.matchId }
@@ -251,17 +323,17 @@ internal fun InternationalMarketTabContent(
             val internationalFair=if(isLay) null else ProbabilityEngine.removeMargin(quote.home,quote.draw,quote.away,MarginMethod.BASIC)
             val movement=InternationalMarketEngine.latestMovement(quote,internationalOddsHistory)
             val distinctBooks=eventConsensus?.distinctBookmakerCount ?: 1
-            val peer=internationalOdds.firstOrNull { candidate ->
+            val peer=currentInternationalOdds.firstOrNull { candidate ->
                 candidate.providerId==quote.providerId&&candidate.bookmakerId==quote.bookmakerId&&candidate.eventId==quote.eventId&&
                     candidate.quoteSide!=quote.quoteSide&&candidate.market==quote.market
             }
             val exchangeSpread=peer?.let { paired ->
                 if(isLay) internationalExchangeSpread(paired,quote) else internationalExchangeSpread(quote,paired)
             }
-            val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
-            val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
+            val pollTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(quote.providerPolledAtMillis))
+            val captureTime=DateTimeFormatter.ofPattern("dd.MM HH:mm:ss").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(quote.capturedAtMillis))
             val priceTimes=listOf(quote.homePriceChangedAtMillis,quote.drawPriceChangedAtMillis,quote.awayPriceChangedAtMillis).joinToString(" / ") {
-                DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it))
+                DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(it))
             }
             val updateDescription=if(quote.providerId==THE_ODDS_API_PROVIDER_ID) "рынок обновлён $pollTime" else "времена цен 1/X/2: $priceTimes"
             val sideLabel=if(isLay) "Lay" else "Back"
@@ -344,7 +416,7 @@ internal fun InternationalMarketTabContent(
                             else {
                                 val localFair=ProbabilityEngine.removeMargin(local.home,local.draw,local.away,MarginMethod.BASIC)
                                 val fair=requireNotNull(internationalFair)
-                                val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(local.capturedAtMillis))
+                                val localCaptured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(local.capturedAtMillis))
                                 Text("$name ${"%.2f".format(local.home)}/${"%.2f".format(local.draw)}/${"%.2f".format(local.away)} · без маржи ${"%.1f".format(localFair.home*100)}/${"%.1f".format(localFair.draw*100)}/${"%.1f".format(localFair.away*100)}% · Δ к $bookmakerName ${"%+.1f".format((localFair.home-fair.home)*100)}/${"%+.1f".format((localFair.draw-fair.draw)*100)}/${"%+.1f".format((localFair.away-fair.away)*100)} п.п. · снимок $localCaptured. Котировки не смешиваются в купон.",style=MaterialTheme.typography.bodySmall)
                             }
                         }
@@ -364,7 +436,7 @@ internal fun InternationalMarketTabContent(
                 val sourceLimits=listOf(old.homeBetLimit,old.drawBetLimit,old.awayBetLimit)
                     .mapNotNull { it?.let { limit -> "%.2f".format(limit) } }.takeIf { it.isNotEmpty() }
                     ?.joinToString("/") ?: "нет"
-                Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} · $side (${old.sourceMarketKey}) · ${internationalProviderName(old.providerId)} · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · лимиты источника $sourceLimits (единица неизвестна) · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
+                Text("${old.league} · ${internationalBookmakerName(old.providerId,old.bookmakerId)} · $side (${old.sourceMarketKey}) · ${internationalProviderName(old.providerId)} · ${old.homeTeam} — ${old.awayTeam} · ${"%.2f".format(old.home)}/${"%.2f".format(old.draw)}/${"%.2f".format(old.away)} · лимиты источника $sourceLimits (единица неизвестна) · рынок опрошен ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(old.providerPolledAtMillis))} · снимок ${DateTimeFormatter.ofPattern("dd.MM HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(old.capturedAtMillis))}",style=MaterialTheme.typography.bodySmall)
             }
         }
     }

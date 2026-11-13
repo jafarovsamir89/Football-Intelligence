@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — redesign the Android analysis workspace
+
+- Add a dark Material 3 design, four-item bottom navigation, top-bar settings, Baku-local fixture times, compact home dashboard, date/league/quote filters, dedicated match analysis, and separated Misli/TOPAZ virtual coupon workspace. Move model stats and results into Analytics; keep source diagnostics and CSV under Settings. Collapse long model-comparison and source-detail text, and re-check displayed local/international prices against freshness while screens stay open.
+- Add Compose regressions for navigation, dashboard states, coupon controls and Baku-date filters, plus Baku-time unit coverage. The grouped local run passed 182 JVM tests, Android-test Kotlin compilation, `assembleDebug`, `assemblePersonal`, signature verification and DEX audit. Debug APK SHA-256 `a9c786e4df03921fc8a8ca05d11ed9f8649d8aa64a1cca3f7608a366db4e33c8`; personal APK SHA-256 `47378d617e2fcc689c67ca30b188317708934463204295e231e70bb72695f2ff`; local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit found the personal credential absent from debug and present only in the private personal APK. GitHub Actions pending; no APK was installed.
+
 ## Unreleased — validate OpenLigaDB final-score semantics
 
 - Settle imported 1X2 results only from matches marked finished and the semantic `After90Minutes` row. Do not treat extra-time, penalty-only or unfinished results as settled; retain result type ID 2 only for older payloads with no semantic-kind fields. Added regression coverage for mixed score rows, unfinished matches and legacy payloads. Cancellation remains unknown because the source schema has no cancellation field.
