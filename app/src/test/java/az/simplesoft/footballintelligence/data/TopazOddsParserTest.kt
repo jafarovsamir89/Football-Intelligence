@@ -124,6 +124,19 @@ class TopazOddsParserTest {
         assertTrue(result.detail.contains("часовой пояс"))
     }
 
+    @Test fun explainsWhenThePublicPageReportsNoEvents() {
+        val provider = TopazOddsProvider()
+        val result = provider.parseVisiblePage(
+            page("Pre-match\nThere are currently no events to show for this sport"),
+            now,
+        )
+
+        assertTrue(result.snapshots.isEmpty())
+        assertTrue(result.detail.contains("сейчас нет событий"))
+        assertEquals(OddsProviderStatus.UNAVAILABLE, provider.status().status)
+        assertTrue(provider.status().detail.contains("сейчас нет событий"))
+    }
+
     @Test fun exactOrientationRequiredForLocalFixtureLink() {
         val result=TopazOddsProvider().parseVisiblePage(page(),now,listOf(FixtureIdentity(42,"Belgium","Türkiye",kickoff)))
         assertNull(result.snapshots.single().matchId)

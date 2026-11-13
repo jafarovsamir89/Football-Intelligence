@@ -78,14 +78,22 @@ internal fun FootballHomeTabContent(
             Text("Матчи, прогнозы и цены", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")).format(today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "Приложение собирает расписание и результаты, рассчитывает вероятности исходов и позже сверяет прогнозы со счётом. Проценты экспериментальные: это не совет ставить.",
+                "Практическая цель: посмотреть оценку П1 / Х / П2 для матча и позже проверить её по фактическому счёту. Вероятности экспериментальные; это не совет ставить.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Как получить результат", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    Text("1. В «Матчах» откройте игру: увидите вероятности модели и историю, на которой они основаны.", style = MaterialTheme.typography.bodySmall)
+                    Text("2. Если есть свежая котировка, сравните её с оценкой модели. Нет котировки — приложение её не придумывает.", style = MaterialTheme.typography.bodySmall)
+                    Text("3. «Купоны» — виртуальные подборы исходов. После финального счёта приложение проверит попадания; прибыль оно не обещает.", style = MaterialTheme.typography.bodySmall)
+                }
+            }
             if (nextAnalysisMatch != null) {
                 ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Твой следующий шаг", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("Начните с ближайшего матча", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                         Text("${nextAnalysisMatch.home} — ${nextAnalysisMatch.away}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                         Text(
                             if (nextAnalysisForecast != null) "Расчёт 1 / X / 2 готов. Открой объяснение модели и сравнение с доступными ценами."

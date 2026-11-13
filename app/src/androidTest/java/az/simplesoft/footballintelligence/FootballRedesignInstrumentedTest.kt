@@ -92,8 +92,10 @@ class FootballRedesignInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
-        composeRule.onNodeWithText("Твой следующий шаг").assertIsDisplayed()
-        composeRule.onNodeWithText("Проценты экспериментальные", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Начните с ближайшего матча").assertIsDisplayed()
+        composeRule.onNodeWithText("Как получить результат").assertIsDisplayed()
+        composeRule.onNodeWithText("Нет котировки — приложение её не придумывает.", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("не совет ставить", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Открыть анализ").performClick()
         assertEquals(match.id, selectedMatch)
         composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
@@ -130,7 +132,9 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Приложение собирает расписание и результаты", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Практическая цель", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Как получить результат").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("позже проверить её по фактическому счёту", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("не совет ставить", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("В этой установке база пока пустая", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Виртуальные купоны").performScrollTo().assertIsDisplayed()

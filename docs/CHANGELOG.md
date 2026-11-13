@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — сделать сценарий главного экрана понятным и объяснить пустую линию eTopaz (local checks passed; CI pending)
+
+- Главная теперь объясняет, что пользователь получает от анализа матча, когда следует сравнивать котировки и что купоны виртуальные. Явно сказано, что свежая цена не выдумывается, вероятности экспериментальные, а прибыль не обещана.
+- Если публичная страница eTopaz сама сообщает, что событий нет, приложение показывает это объяснение со статусом `UNAVAILABLE`, а не общую фразу об отсутствии распознанных линий. Добавлены Compose- и парсер-регрессии. Локальная групповая проверка прошла: 206 JVM-тестов, компиляцию Android-тестов и обе APK-сборки. GitHub Actions ожидается.
+
 ## Unreleased — align TOPAZ collector with its public pre-match page (CI/API 26/API 34 passed)
 
 - Changed the foreground WebView to open eTopaz's publicly rendered English `Pre-match` route observed in a browser. Parser now handles date/time on separate lines, home and away labels on separate lines, English month abbreviations, and the first three decimal prices after the visible `1` marker; later markets are ignored. Existing Azerbaijani-format parser coverage remains.

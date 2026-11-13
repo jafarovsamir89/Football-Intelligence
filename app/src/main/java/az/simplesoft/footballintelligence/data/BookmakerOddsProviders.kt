@@ -566,7 +566,13 @@ class TopazOddsProvider : BookmakerOddsProvider {
             if(prices.size==1) prices.first() else { rejected+=rows.size;null }
         }.sortedBy { it.kickoffMillis }
         lastCount=snapshots.size
-        if(snapshots.isEmpty()) lastError="Публичная страница не содержит проверяемых будущих prematch-линий 1X2."
+        if(snapshots.isEmpty()) {
+            lastError = if (page.visibleText.contains("There are currently no events to show for this sport", ignoreCase = true)) {
+                "Публичная страница eTopaz сообщает, что сейчас нет событий для этого вида спорта."
+            } else {
+                "Публичная страница не содержит проверяемых будущих prematch-линий 1X2."
+            }
+        }
         return TopazParseResult(snapshots,rejected,lastError ?: "Получено видимых prematch-линий: ${snapshots.size}.")
     }
 
