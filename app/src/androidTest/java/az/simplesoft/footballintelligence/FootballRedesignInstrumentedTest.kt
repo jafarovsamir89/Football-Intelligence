@@ -179,7 +179,7 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("Самая высокая оценка: П1 (55.0%)", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Elo хозяев 1540, гостей 1480", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("22 завершённых результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("не подтверждает преимущество или прибыль", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Модель использует только результаты и фактор домашнего поля. Она экспериментальная, не учитывает составы и не подтверждает преимущество или прибыль.").performScrollTo().assertIsDisplayed()
     }
 
     @Test
