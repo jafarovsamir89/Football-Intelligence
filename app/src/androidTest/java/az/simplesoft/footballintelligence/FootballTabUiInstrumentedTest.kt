@@ -24,6 +24,8 @@ import az.simplesoft.footballintelligence.analytics.EloExperimentMetrics
 import az.simplesoft.footballintelligence.analytics.GoalExpectationConfig
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
+import az.simplesoft.footballintelligence.analytics.WalkForwardPrediction
+import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
 import az.simplesoft.footballintelligence.analytics.CombinedModelCandidate
 import az.simplesoft.footballintelligence.analytics.CombinedModelCalibrationMetrics
@@ -211,9 +213,25 @@ class FootballTabUiInstrumentedTest {
                 FootballBacktestTabContent(
                     automaticBacktestRunning = false,
                     automaticBacktestMessage = "",
-                    automaticBacktestReport = EloWalkForwardReport(1,1,0,0.5,1.0,emptyList()),
+                    automaticBacktestReport = EloWalkForwardReport(
+                        1, 1, 0, 0.5, 1.0,
+                        listOf(
+                            WalkForwardPrediction(
+                                targetId = "fixture-1",
+                                forecastCutoffMillis = 1L,
+                                probabilities = OutcomeProbabilities(0.5, 0.25, 0.25),
+                                observedHomeGoals = 1,
+                                observedAwayGoals = 0,
+                                brierScore = 0.5,
+                                logLoss = 1.0,
+                                frequencyBaselineProbabilities = OutcomeProbabilities(0.4, 0.3, 0.3),
+                                frequencyBaselineBrierScore = 0.52,
+                                frequencyBaselineLogLoss = 1.06,
+                            ),
+                        ),
+                    ),
                     automaticEloByCompetitionSeason = listOf(
-                        CompetitionSeasonWalkForwardMetrics("League A","2024-25",20,18,2,0.51,1.04),
+                        CompetitionSeasonWalkForwardMetrics("League A","2024-25",20,18,2,0.51,1.04,0.53,1.08),
                     ),
                     automaticEloExperiment = null,
                     automaticGoalComparison = null,
@@ -231,6 +249,8 @@ class FootballTabUiInstrumentedTest {
 
         composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
         composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertIsDisplayed()
+        composeRule.onNodeWithText("Простая база · частоты П1 / X / П2 до каждого матча").assertExists()
+        composeRule.onNodeWithText("База частот: Brier 0.5300 · Log Loss 1.0800", substring = true).assertExists()
     }
 
     @Test

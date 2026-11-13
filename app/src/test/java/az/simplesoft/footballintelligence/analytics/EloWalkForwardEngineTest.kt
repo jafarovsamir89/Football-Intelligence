@@ -57,6 +57,44 @@ class EloWalkForwardEngineTest {
         )
         assertEquals(2, report.forecastCount)
         assertEquals(report.predictions[0].probabilities, report.predictions[1].probabilities)
+        assertEquals(report.predictions[0].frequencyBaselineProbabilities, report.predictions[1].frequencyBaselineProbabilities)
+    }
+
+    @Test fun historicalFrequencyReferenceUsesOnlyStrictlyAvailableLeagueResultsAndScoresSameRows() {
+        val report = EloWalkForwardEngine.evaluate(
+            history = listOf(
+                HistoricalMatch(10, "Alpha", "Gamma", 2, 0, availableAtMillis = 50),
+                // This away win is unavailable at cutoff 100 and becomes available only afterward.
+                HistoricalMatch(20, "Delta", "Beta", 0, 1, availableAtMillis = 100),
+            ),
+            targets = listOf(
+                WalkForwardTarget("at-cutoff", 100, "Alpha", "Beta", 1, 0),
+                WalkForwardTarget("after-cutoff", 101, "Alpha", "Beta", 0, 0),
+            ),
+            minimumHistoryMatches = 0,
+            minimumMatchesPerTeam = 0,
+        )
+
+        val atCutoff = report.predictions.single { it.targetId == "at-cutoff" }
+        val afterCutoff = report.predictions.single { it.targetId == "after-cutoff" }
+        assertEquals(OutcomeProbabilities(0.5, 0.25, 0.25), atCutoff.frequencyBaselineProbabilities)
+        assertEquals(OutcomeProbabilities(0.4, 0.2, 0.4), afterCutoff.frequencyBaselineProbabilities)
+        assertEquals(
+            ForecastMetrics.brierScore(requireNotNull(atCutoff.frequencyBaselineProbabilities), OutcomeProbabilities(1.0, 0.0, 0.0)),
+            atCutoff.frequencyBaselineBrierScore!!,
+            1e-12,
+        )
+        assertEquals(
+            ForecastMetrics.logLoss(requireNotNull(afterCutoff.frequencyBaselineProbabilities), OutcomeProbabilities(0.0, 1.0, 0.0)),
+            afterCutoff.frequencyBaselineLogLoss!!,
+            1e-12,
+        )
+        assertEquals(
+            listOf(requireNotNull(atCutoff.frequencyBaselineBrierScore), requireNotNull(afterCutoff.frequencyBaselineBrierScore)).average(),
+            report.meanFrequencyBaselineBrierScore!!,
+            1e-12,
+        )
+        assertEquals(2, report.forecastCount)
     }
 
     @Test fun streamingWalkForwardMatchesIndependentAsOfFitsAcrossAvailabilityBatches() {

@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — add a leakage-safe historical-frequency baseline to Elo walk-forward (local checks passed; CI pending)
+
+- In response to the user's concern that the installed app gives no practical way to judge its forecast, the historical Elo report now scores a simple same-competition outcome-frequency reference on exactly the same forecastable fixtures. For each target, it counts only source results whose conservative availability is strictly before the cutoff and applies a fixed one-count Dirichlet smoothing prior to home/draw/away frequencies. It does not use target outcomes, tune live settings, or alter the live Elo forecast/coupon path.
+- The report and competition-season rows carry baseline Brier/Log Loss. The Android backtest screen will show the baseline and Elo-minus-baseline deltas with lower-is-better wording, plus the same comparison by exact stored season. This makes the historical value of Elo inspectable against a simple reference, without implying future accuracy or betting value.
+- Added tests for result availability at the exact cutoff, same-cutoff target consistency, proper scores, aggregated metrics and exact season groups. Updated README, research, limitations, roadmap and changelog.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 218 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug SHA-256 `75f98217d6052076000ba10f6e11dda04f2d63881ade53b92d50c6849572e827`; personal SHA-256 `b07490da43e32d54297826aacfa8c6b74a4f693212cc370ebe152c12aa7a3d9e`. Both signatures verify with local signer `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`; DEX audit found the personal API key absent from debug and present only in the private personal variant. `git diff --check` passed.
+- Next action: commit/push and verify GitHub Actions before calling the milestone complete. ADB currently has no devices, so no physical update-install can be performed.
+
 ## 2026-11-13 — restrict bookmaker WebViews to the resumed Activity (CI/API 26/API 34 passed)
 
 - A lifecycle audit found the 30-minute `Handler` reload was only guarded against Activity destruction; it could still request a public bookmaker page after the Activity was paused. This did not satisfy the documented foreground-only collection boundary.

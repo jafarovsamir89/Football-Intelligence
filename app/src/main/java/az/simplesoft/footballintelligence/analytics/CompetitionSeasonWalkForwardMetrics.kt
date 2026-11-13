@@ -9,6 +9,8 @@ data class CompetitionSeasonWalkForwardMetrics(
     val skippedForInsufficientHistory: Int,
     val meanBrierScore: Double?,
     val meanLogLoss: Double?,
+    val frequencyBaselineMeanBrierScore: Double? = null,
+    val frequencyBaselineMeanLogLoss: Double? = null,
 )
 
 /** Groups already computed as-of Elo predictions by the exact competition and season labels. */
@@ -24,6 +26,8 @@ object CompetitionSeasonWalkForwardMetricsBuilder {
             dataset.targets.groupBy { it.season }.map { (season, targets) ->
                 val predictions = targets.mapNotNull { predictionsById[it.id] }
                 val forecastCount = predictions.size
+                val baselineBrier = predictions.mapNotNull { it.frequencyBaselineBrierScore }
+                val baselineLogLoss = predictions.mapNotNull { it.frequencyBaselineLogLoss }
                 CompetitionSeasonWalkForwardMetrics(
                     competition = dataset.competition,
                     season = season,
@@ -32,6 +36,8 @@ object CompetitionSeasonWalkForwardMetricsBuilder {
                     skippedForInsufficientHistory = targets.size - forecastCount,
                     meanBrierScore = predictions.map { it.brierScore }.average().takeIf { forecastCount > 0 },
                     meanLogLoss = predictions.map { it.logLoss }.average().takeIf { forecastCount > 0 },
+                    frequencyBaselineMeanBrierScore = baselineBrier.average().takeIf { baselineBrier.isNotEmpty() },
+                    frequencyBaselineMeanLogLoss = baselineLogLoss.average().takeIf { baselineLogLoss.isNotEmpty() },
                 )
             }
         }.sortedWith(compareBy<CompetitionSeasonWalkForwardMetrics> { it.competition }

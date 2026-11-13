@@ -37,7 +37,7 @@ internal fun FootballBacktestTabContent(
                 Text("Бэктест",style=MaterialTheme.typography.headlineMedium, fontWeight=FontWeight.Bold)
                 Text("Оценка вероятностей на сохранённой футбольной истории.",style=MaterialTheme.typography.bodySmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
                 TextButton(onClick = { showMethodology = !showMethodology }) { Text(if (showMethodology) "Скрыть методику" else "Методика и ограничения") }
-                if (showMethodology) Text("Walk-forward соблюдает временную границу каждого прогноза: в расчёт входят только результаты, доступные до cutoff. Это ретроспективная оценка текущих файлов, не архив публикаций и не доказательство будущей точности или прибыли. Date-only матчи используют календарную дату и консервативную доступность результата через два дня.", style=MaterialTheme.typography.bodySmall)
+                if (showMethodology) Text("Walk-forward соблюдает временную границу каждого прогноза: в расчёт входят только результаты, доступные до cutoff. Для сравнения Elo на тех же матчах считается простая база из частот П1 / X / П2 в этой лиге; к каждой частоте добавляется по одной псевдозаписи, чтобы избежать нулевой вероятности. Это ретроспективная оценка текущих файлов, не архив публикаций и не доказательство будущей точности или прибыли. Date-only матчи используют календарную дату и консервативную доступность результата через два дня.", style=MaterialTheme.typography.bodySmall)
                 if(automaticBacktestRunning) LinearProgressIndicator(Modifier.fillMaxWidth())
                 if(automaticBacktestMessage.isNotBlank()) Text(automaticBacktestMessage,style=MaterialTheme.typography.bodySmall)
                 automaticBacktestReport?.let { report ->
@@ -49,6 +49,20 @@ internal fun FootballBacktestTabContent(
                     else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MetricCard("Brier", "%.4f".format(report.meanBrierScore), "ниже лучше", Modifier.weight(1f))
                         MetricCard("Log Loss", "%.4f".format(report.meanLogLoss), "ниже лучше", Modifier.weight(1f))
+                    }
+                    val baselineBrier = report.meanFrequencyBaselineBrierScore
+                    val baselineLogLoss = report.meanFrequencyBaselineLogLoss
+                    if (baselineBrier != null && baselineLogLoss != null && report.meanBrierScore != null && report.meanLogLoss != null) {
+                        Text("Простая база · частоты П1 / X / П2 до каждого матча", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Brier ${"%.4f".format(baselineBrier)} · Log Loss ${"%.4f".format(baselineLogLoss)} · та же выборка Elo: n=${report.forecastCount}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        Text(
+                            "Разница Elo − база: Brier ${"%+.4f".format(report.meanBrierScore - baselineBrier)} · Log Loss ${"%+.4f".format(report.meanLogLoss - baselineLogLoss)}. Отрицательное значение означает меньшую ошибку Elo.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     WalkForwardCalibrationSummary(report)
                     Text("Срез рассчитан отдельно в границах соревнований. Результат не является обещанием прибыли.",style=MaterialTheme.typography.bodySmall)
@@ -79,6 +93,13 @@ internal fun FootballBacktestTabContent(
                                         style=MaterialTheme.typography.bodySmall,
                                         modifier=Modifier.padding(vertical=3.dp),
                                     )
+                                    if (seasonal.frequencyBaselineMeanBrierScore != null && seasonal.frequencyBaselineMeanLogLoss != null) {
+                                        Text(
+                                            "База частот: Brier ${"%.4f".format(seasonal.frequencyBaselineMeanBrierScore)} · Log Loss ${"%.4f".format(seasonal.frequencyBaselineMeanLogLoss)}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
                                 }
                             }
                             Text("Эти строки — объединённые as-of walk-forward прогнозы по исходным меткам сезона. Значения с n<30 описательны и слишком малы для вывода о качестве.",style=MaterialTheme.typography.labelSmall)

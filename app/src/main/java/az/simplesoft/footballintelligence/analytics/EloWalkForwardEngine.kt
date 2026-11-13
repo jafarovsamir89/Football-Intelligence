@@ -21,6 +21,10 @@ data class WalkForwardPrediction(
     val observedAwayGoals: Int,
     val brierScore: Double,
     val logLoss: Double,
+    /** Same-cutoff historical 1X2 frequency reference, smoothed with one pseudo-count per outcome. */
+    val frequencyBaselineProbabilities: OutcomeProbabilities? = null,
+    val frequencyBaselineBrierScore: Double? = null,
+    val frequencyBaselineLogLoss: Double? = null,
 )
 
 data class EloWalkForwardReport(
@@ -30,10 +34,19 @@ data class EloWalkForwardReport(
     val meanBrierScore: Double?,
     val meanLogLoss: Double?,
     val predictions: List<WalkForwardPrediction>,
-)
+) {
+    val meanFrequencyBaselineBrierScore: Double?
+        get() = predictions.mapNotNull { it.frequencyBaselineBrierScore }.average().takeIf { it.isFinite() }
+
+    val meanFrequencyBaselineLogLoss: Double?
+        get() = predictions.mapNotNull { it.frequencyBaselineLogLoss }.average().takeIf { it.isFinite() }
+}
 
 /** Date- or kickoff-ordered retrospective evaluation. History timestamps mean safe availability time. */
 object EloWalkForwardEngine {
+    /** Symmetric Dirichlet(1,1,1) smoothing keeps the historical-rate reference finite. */
+    const val FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME = 1.0
+
     fun evaluate(
         history: Collection<HistoricalMatch>,
         targets: Collection<WalkForwardTarget>,
@@ -58,6 +71,7 @@ object EloWalkForwardEngine {
         val targetsByCutoff = targets.groupBy { it.forecastCutoffMillis }.toSortedMap()
         val ratings = mutableMapOf<String, Double>()
         val played = mutableMapOf<String, Int>()
+        val resultCounts = IntArray(3)
         var matchesUsed = 0
         var drawCount = 0
         var historyIndex = 0
@@ -88,6 +102,11 @@ object EloWalkForwardEngine {
                     ratingDeltas[away] = (ratingDeltas[away] ?: 0.0) - delta
                     played[home] = (played[home] ?: 0) + 1
                     played[away] = (played[away] ?: 0) + 1
+                    when {
+                        match.homeGoals > match.awayGoals -> resultCounts[0]++
+                        match.homeGoals == match.awayGoals -> resultCounts[1]++
+                        else -> resultCounts[2]++
+                    }
                     if (actualHome == 0.5) drawCount++
                     matchesUsed++
                 }
@@ -98,6 +117,12 @@ object EloWalkForwardEngine {
             val drawProbability = (drawCount + config.priorDrawProbability * config.priorMatchCount) /
                 (matchesUsed + config.priorMatchCount)
             val model = EloRatings(ratings.toMap(), matchesUsed, drawProbability, played.toMap(), config)
+            val baselineDenominator = matchesUsed + 3.0 * FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME
+            val frequencyBaseline = OutcomeProbabilities(
+                (resultCounts[0] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
+                (resultCounts[1] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
+                (resultCounts[2] + FREQUENCY_BASELINE_PSEUDOCOUNT_PER_OUTCOME) / baselineDenominator,
+            )
             val orderedTargets = sameTimeTargets.sortedWith(
                 compareBy<WalkForwardTarget> { teamKey(it.homeTeam) }
                     .thenBy { teamKey(it.awayTeam) }
@@ -124,6 +149,9 @@ object EloWalkForwardEngine {
                         target.awayGoals,
                         ForecastMetrics.brierScore(probabilities, observed),
                         ForecastMetrics.logLoss(probabilities, observed),
+                        frequencyBaseline,
+                        ForecastMetrics.brierScore(frequencyBaseline, observed),
+                        ForecastMetrics.logLoss(frequencyBaseline, observed),
                     )
                 )
             }
