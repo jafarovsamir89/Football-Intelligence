@@ -1,12 +1,13 @@
 # Development log
 
-## 2026-11-13 — prioritize matches with ready forecasts on Home (local checks passed; Actions pending)
+## 2026-11-13 — prioritize matches with ready forecasts on Home (local checks passed; API 26 retry pending)
 
 - Home previously featured only the three earliest upcoming fixtures. A match without enough history could take the slot even when a later nearby game already had an Elo forecast, hiding the app's most immediately usable analysis.
 - Home now keeps kickoff order among forecast-ready matches, shows those first, then fills remaining slots with the nearest unready fixtures. The “Все матчи” route still exposes the full schedule; a short label explains the ordering.
 - Added pure ordering regressions for priority, stable order, zero limit and empty input; the Compose test asserts the ready-analysis header. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 192 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed.
 - Debug SHA-256 `8152d41101d96a790203132dad46fb31c9b4694b2efab37b56f8b814111cf911`; private personal SHA-256 `83d8b900bcd7444b3b0d2bf88d4f1b20702f3e7a88995d19bd00ada028e676c9`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit found the personal API key absent from debug and present only in the private APK. ADB lists no device; no APK was installed and no external odds quota was used.
-- Next: commit/push this group, run Actions API 34/API 26 instrumentation and verify the keyless artifact. Then resume the data-preserving personal APK install check when the user's phone reconnects.
+- First Actions run [43414235687](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43414235687) passed unit tests and API 34 instrumentation 67/67, but API 26 failed one `homeDashboardShowsSourceStateOddsAndClosestMatch` Compose visibility assertion; no APK/artifact was built. The small API 26 viewport required scrolling to off-screen dashboard items. Updated all relevant assertions in that test to scroll before `assertIsDisplayed`; `:app:compileDebugAndroidTestKotlin` and `git diff --check` then passed. Application behavior is unchanged by this correction.
+- Next: commit/push the viewport-safe test assertion and verify one Actions retry on both API levels plus the keyless artifact. Then resume the data-preserving personal APK install check when the user's phone reconnects.
 
 ## 2026-11-13 — explain the Elo assessment on each selected match (local and Actions passed; phone update pending)
 

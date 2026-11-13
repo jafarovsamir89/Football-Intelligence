@@ -88,15 +88,15 @@ class FootballRedesignInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
-        composeRule.onNodeWithText("Матчи с готовым прогнозом").assertIsDisplayed()
+        composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
         composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("1", substring = false).fetchSemanticsNodes().isNotEmpty())
         assertTrue(composeRule.onAllNodesWithText("2", substring = false).fetchSemanticsNodes().isEmpty())
-        composeRule.onNodeWithText("Source Home FC").assertIsDisplayed()
-        composeRule.onNodeWithText("П1 55%").assertIsDisplayed()
-        composeRule.onNodeWithText("Misli").assertIsDisplayed()
-        assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().isNotEmpty())
+        composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("П1 55%").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Misli").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("нет линии").performScrollTo().assertIsDisplayed()
     }
 
     @Test

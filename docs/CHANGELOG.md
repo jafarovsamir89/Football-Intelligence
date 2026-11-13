@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — показывать готовые оценки вверху главного списка (local checks passed; Actions pending)
+## Unreleased — показывать готовые оценки вверху главного списка (local checks passed; API 26 retry pending)
 
 - Короткий список Главной теперь сначала выводит ближайшие матчи с рассчитанным прогнозом Elo, сохраняя порядок по времени начала внутри этой группы; затем добавляет ближайшие игры без готовой оценки. Кнопка «Все матчи» сохраняет доступ ко всему расписанию.
-- Добавлены unit-проверки порядка и Compose-проверка заголовка списка. Локально прошли 192 JVM tests, Android-test Kotlin compilation и обе APK-сборки; CI ожидается.
+- Добавлены unit-проверки порядка и Compose-проверка заголовка списка. Локально прошли 192 JVM tests, Android-test Kotlin compilation и обе APK-сборки. Первый Actions run [43414235687](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43414235687) прошёл API 34 (67/67), но API 26 обнаружил off-screen visibility assertion в Home dashboard тесте; все затронутые проверки теперь прокручивают экран. Перезапуск CI ожидается.
 
 ## Unreleased — объяснить, откуда берётся прогноз Elo на выбранный матч (local and Actions passed; phone update pending)
 
