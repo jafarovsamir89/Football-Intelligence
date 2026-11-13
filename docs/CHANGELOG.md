@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — сделать ежедневный сценарий прогнозов и купонов понятнее (local checks passed; Actions pending)
+## Unreleased — сделать ежедневный сценарий прогнозов и купонов понятнее (local and Actions passed; phone update pending)
 
 - Главная считает готовые Elo-оценки ближайших матчей и свежие линии только при точной локальной связи; карточка без оценки направляет в разбор, где показан недостающий порог истории. Пустой купон сообщает количество готовых оценок, требования модели и даёт открыть список матчей. Compose-регрессии покрывают счётчики, объяснения и маршрут.
-- Групповая локальная команда `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` прошла: 190 JVM-тестов без ошибок/пропусков, компиляцию Android-тестов и обе APK-сборки. Подписи проверены, локальный ключ отсутствует в debug DEX и присутствует только в personal APK. CI ожидается; детали и SHA-256 — в дневнике.
+- Групповая локальная команда `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` прошла: 190 JVM-тестов без ошибок/пропусков, компиляцию Android-тестов и обе APK-сборки. Actions [43406089834](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43406089834) прошёл API 34 (66/66) и API 26 (66 завершено, 1 offline-only пропуск, 0 ошибок), keyless-сборки, подпись и загрузку артефакта `14026999284`. Проверенный APK SHA-256 и подпись указаны в дневнике; DEX не содержит личный ключ. Физическое обновление ожидает подключения телефона.
 
 ## Unreleased — добавить temperature scaling и ECE для исследовательской смеси (CI/API 26/API 34 passed)
 
