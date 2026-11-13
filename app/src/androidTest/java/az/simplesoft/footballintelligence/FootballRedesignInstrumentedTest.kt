@@ -48,6 +48,7 @@ class FootballRedesignInstrumentedTest {
     @Test
     fun homeDashboardShowsSourceStateOddsAndClosestMatch() {
         val match = tomorrowMatch()
+        var selectedMatch: Int? = null
         val now = System.currentTimeMillis()
         val kickoff = java.time.Instant.parse(match.kickoff).toEpochMilli()
         val linkedLine = BookmakerOddsSnapshot(
@@ -82,12 +83,16 @@ class FootballRedesignInstrumentedTest {
                     storeError = null,
                     onOpenMatches = {},
                     onOpenCoupons = {},
-                    onSelectMatch = {},
+                    onSelectMatch = { selectedMatch = it },
                 )
             }
         }
 
         composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
+        composeRule.onNodeWithText("Твой следующий шаг").assertIsDisplayed()
+        composeRule.onNodeWithText("Проценты экспериментальные", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Открыть анализ").performClick()
+        assertEquals(match.id, selectedMatch)
         composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
         composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
@@ -122,7 +127,8 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Нажми на матч", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Приложение собирает расписание и результаты", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("не совет ставить", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("В этой установке база пока пустая", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Виртуальные купоны").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Открыть матчи").performScrollTo().performClick()

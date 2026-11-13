@@ -5,6 +5,7 @@
 
 The app is an offline-first research notebook with experimental probabilities, not a validated betting product.
 
+- Home now states the purpose and offers a direct button into the first featured match analysis. This improves navigation only: the model still has no validated bet/no-bet decision, and the new card has not yet been observed on the physical phone.
 - The active coupon workspace creates virtual outcome selections from experimental Elo marginals and, where available, fresh exact-linked bookmaker prices. It deliberately does not answer “should I bet?” or calculate conditional EV before enough independent prospective forecasts settle. The current Android UI warns about this; no future accuracy or profit is established. The latest coupon UI fix passed Actions [43435064071](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43435064071) on API 34 and API 26, but has not been confirmed on the physical phone.
 
 - The per-match Elo screen now exposes the numeric basis of a forecast: pre-kickoff team ratings, home-advantage points, eligible league/team result counts, and the smoothed competition draw-rate reference. The highest marginal probability describes only the model's most likely 1X2 outcome; it is not a bet instruction or a validated joint coupon chance. Live Elo remains uncalibrated and does not model lineups, injuries, or other match-day information. Prospective snapshots are saved for later outcome checks, but no independent prospective edge has been established.

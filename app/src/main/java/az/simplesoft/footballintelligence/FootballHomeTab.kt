@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +63,8 @@ internal fun FootballHomeTabContent(
     val freshTopazOdds = remember(topazOdds, now) { topazOdds.filter { isFreshBookmakerQuote(it, now) } }
     val forecastReadyIds = remember(forecasts) { forecasts.mapTo(mutableSetOf()) { it.matchId } }
     val featured = remember(upcoming, forecastReadyIds) { featuredHomeMatches(upcoming, forecastReadyIds) }
+    val nextAnalysisMatch = featured.firstOrNull()
+    val nextAnalysisForecast = nextAnalysisMatch?.let { forecastById[it.id] }
     val featuredIncludesForecast = featured.any { it.id in forecastReadyIds }
     val checked = checkedPredictions.asSequence().filter { it.finished && it.homeGoals != null && it.awayGoals != null }.take(3).toList()
     var showSyncDetails by remember { mutableStateOf(matches.isEmpty()) }
@@ -75,10 +78,25 @@ internal fun FootballHomeTabContent(
             Text("Матчи, прогнозы и цены", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")).format(today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "Нажми на матч: увидишь вероятности П1 / X / П2 и доступные реальные цены. Если не хватает истории или точного времени начала, разбор объяснит причину. Купоны только виртуальные.",
+                "Приложение собирает расписание и результаты, рассчитывает вероятности исходов и позже сверяет прогнозы со счётом. Проценты экспериментальные: это не совет ставить.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            if (nextAnalysisMatch != null) {
+                ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Твой следующий шаг", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                        Text("${nextAnalysisMatch.home} — ${nextAnalysisMatch.away}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            if (nextAnalysisForecast != null) "Расчёт 1 / X / 2 готов. Открой объяснение модели и сравнение с доступными ценами."
+                            else "Прогноз пока недоступен. В карточке матча будет указано, каких данных не хватает.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Button(onClick = { onSelectMatch(nextAnalysisMatch.id) }) { Text("Открыть анализ") }
+                    }
+                }
+            }
         }
 
         ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {

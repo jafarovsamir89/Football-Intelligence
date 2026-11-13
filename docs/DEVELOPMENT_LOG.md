@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-13 — make Home's next action explicit (local checks passed; Actions pending)
+
+- The previous Home copy explained what the app calculates, but the first useful action was a tappable match card lower on the page. Added a short purpose statement that calls the probabilities experimental and says they are not a bet instruction. A “Твой следующий шаг” card now names the first featured fixture and opens its analysis directly; forecast-ready fixtures stay first, and unavailable estimates still explain the missing data in the match analysis.
+- Updated the Android Compose regression to verify the purpose statement, visible next-step card and match-selection callback. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 200 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Local debug APK SHA-256 `fa398b89c180096d572b9374440f817eb06f669beaedc7cba2988e2e0660496e`; private personal APK SHA-256 `ebfbf96c3dac61838b893b2c1a5242d07f680a8afac3804b1515d27310db895e`. DEX audit found the key absent from debug and present only in the owner-only personal build.
+- API 26/API 34 instrumentation and keyless artifact verification are pending. ADB has no connected device; this change has not been visually checked on the phone and no odds quota was used. Next: verify the Compose change in Actions, then update-install the private APK without clearing data when the phone reconnects; continue the broader data/model validation rather than claiming the CTA itself makes the forecasts actionable.
+
 ## 2026-11-13 — keep model EV out of live coupon views (local and Actions checks passed)
 
 - Audit found a legacy coupon tab (not wired into `FootballScreen`) displayed a conditional EV interval from uncalibrated Elo marginals. The active coupon workspace already omitted EV, but its UI regression did not explicitly protect that behavior. Align the legacy component with the product gate: no prospective EV/ROI display until independent prospective model validation, and explain that real odds are a price, not an edge.
