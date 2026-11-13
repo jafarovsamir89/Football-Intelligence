@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — explain the Elo assessment on each selected match (local checks passed; Actions pending)
+
+- The user could see a 1X2 bar but not why a model produced it. Extended the forecast result to carry the pre-kickoff Elo ratings, home-advantage setting and smoothed draw-rate reference from the same leakage-safe model fit used for probabilities.
+- Match Analysis now labels the largest marginal as the model's most likely outcome (not a betting instruction), displays the home/away ratings and adjusted difference, reports how many league and team results were eligible before kickoff, and explains that the snapshot is saved for later result checking. It also states the model omits lineups and is not validated evidence of an edge or profit. Replaced the remaining visible `kickoff` prerequisite wording with “до начала”.
+- Unit regression confirms the added forecast inputs equal the model fit at the cutoff and do not change when a future match is added. Compose regression checks the user-facing explanation. Grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 190 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed.
+- Local debug SHA-256 `066793d72b2ae93ae0563c101a1ad9389d43b2c91e6dc997d49e4c533ed48916`; private personal SHA-256 `1bdb4a2289f9d3c877a5f4d9375089b68f80464d389fa0632241347651de6241`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit found the personal key absent from debug and present only in the private APK. No API/quota request or APK installation was made. ADB lists no device.
+- Next: commit/push the grouped source/tests/docs change and verify API 34/26 Compose tests and keyless CI artifact. When the phone reconnects, install the private APK with data preservation and verify this analysis screen; continue collecting prospective results before making any model-quality claim.
+
 ## 2026-11-13 — explain the limits of a coupon's combined probability (local and Actions passed; phone update pending)
 
 - The active coupon details showed a model-derived range as a “calculated joint probability” without saying it was only a Fréchet bound or that match dependence is unknown. That wording could be read as a calibrated chance of an accumulator.

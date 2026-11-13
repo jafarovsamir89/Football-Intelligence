@@ -63,7 +63,7 @@ internal fun MatchAnalysisTab(
 
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Модель Elo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Вероятности исхода · Elo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     val probabilities = activeForecast?.probabilities
                     if (active.finished) {
                         Text("Предматчевая оценка для завершённой игры не показывается.", style = MaterialTheme.typography.bodySmall)
@@ -85,11 +85,12 @@ internal fun MatchAnalysisTab(
                                 }
                             }
                             Text("Прогноз не рассчитан: недостаточно истории (${missing.joinToString()}).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Для Elo нужны минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до kickoff и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Для Elo нужны минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до начала и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
                         val forecast = ForecastedMatch(active.id, active.home, active.away, runCatching { Instant.parse(active.kickoff).toEpochMilli() }.getOrDefault(0L), probabilities, competition = active.league)
                         ProbabilityBar(forecast)
+                        EloExplanation(activeForecast)
                     }
                 }
             }
@@ -160,6 +161,50 @@ internal fun MatchAnalysisTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EloExplanation(forecast: EloForecast) {
+    val probabilities = forecast.probabilities ?: return
+    val highest = listOf("П1" to probabilities.home, "X" to probabilities.draw, "П2" to probabilities.away)
+        .maxBy { it.second }
+    val homeRating = forecast.homeTeamRating
+    val awayRating = forecast.awayTeamRating
+    val homeAdvantage = forecast.homeAdvantagePoints
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        Text("Как читать эту оценку", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+        Text(
+            "Самая высокая оценка: ${highest.first} (${"%.1f".format(Locale.US, highest.second * 100)}%). Это наиболее вероятный исход по модели, а не совет о ставке.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        if (homeRating != null && awayRating != null && homeAdvantage != null) {
+            val adjustedDifference = homeRating + homeAdvantage - awayRating
+            Text(
+                "Почему: Elo хозяев ${"%.0f".format(Locale.US, homeRating)}, гостей ${"%.0f".format(Locale.US, awayRating)}; домашний фактор ${"%+.0f".format(Locale.US, homeAdvantage)}; разница с ним ${"%+.0f".format(Locale.US, adjustedDifference)} очков.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text(
+            "Основа: ${forecast.matchesUsed} завершённых результатов лиги, доступных до начала; у команд ${forecast.homeTeamMatches} и ${forecast.awayTeamMatches} прошлых матчей.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        forecast.smoothedDrawProbability?.let { drawRate ->
+            Text(
+                "Сглаженный исторический ориентир ничьих в лиге: ${"%.1f".format(Locale.US, drawRate * 100)}%.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        Text(
+            "Модель использует только результаты и фактор домашнего поля. Она экспериментальная, не учитывает составы и не подтверждает преимущество или прибыль.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "Прогноз сохраняется до матча и автоматически сверяется с итоговым счётом.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

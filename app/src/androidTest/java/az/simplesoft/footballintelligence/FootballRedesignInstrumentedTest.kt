@@ -150,6 +150,38 @@ class FootballRedesignInstrumentedTest {
     }
 
     @Test
+    fun matchAnalysisExplainsWhyTheModelProducedItsProbabilityEstimate() {
+        composeRule.setContent {
+            FootballTheme {
+                MatchAnalysisTab(
+                    active = tomorrowMatch(),
+                    eloForecast = EloForecast(
+                        probabilities = OutcomeProbabilities(.55, .25, .20),
+                        matchesUsed = 22,
+                        homeTeamMatches = 7,
+                        awayTeamMatches = 9,
+                        homeTeamRating = 1540.0,
+                        awayTeamRating = 1480.0,
+                        homeAdvantagePoints = 65.0,
+                        smoothedDrawProbability = .26,
+                    ),
+                    activeMarketReference = null,
+                    marketReferenceSyncState = null,
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    onOpenTipsAudit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Как читать эту оценку").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Самая высокая оценка: П1 (55.0%)", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Elo хозяев 1540, гостей 1480", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("22 завершённых результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("не подтверждает преимущество или прибыль", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun matchCardLabelsUnavailableModelEstimateAsAnActionableDetail() {
         composeRule.setContent {
             FootballTheme {

@@ -49,6 +49,12 @@ data class EloForecast(
     val matchesUsed: Int,
     val homeTeamMatches: Int,
     val awayTeamMatches: Int,
+    /** Ratings fitted only from results available strictly before forecast kickoff. */
+    val homeTeamRating: Double? = null,
+    val awayTeamRating: Double? = null,
+    val homeAdvantagePoints: Double? = null,
+    /** Smoothed draw rate fitted from the same eligible competition history. */
+    val smoothedDrawProbability: Double? = null,
 )
 
 object EloEngine {
@@ -140,7 +146,16 @@ object EloEngine {
             homeMatches >= minimumMatchesPerTeam &&
             awayMatches >= minimumMatchesPerTeam
         ) predict1x2(model, homeTeam, awayTeam) else null
-        return EloForecast(probabilities, model.matchesUsed, homeMatches, awayMatches)
+        return EloForecast(
+            probabilities = probabilities,
+            matchesUsed = model.matchesUsed,
+            homeTeamMatches = homeMatches,
+            awayTeamMatches = awayMatches,
+            homeTeamRating = model.ratingFor(homeTeam),
+            awayTeamRating = model.ratingFor(awayTeam),
+            homeAdvantagePoints = model.config.homeAdvantage,
+            smoothedDrawProbability = model.drawProbability,
+        )
     }
 
     private fun expectedHomeScore(homeRating: Double, awayRating: Double, homeAdvantage: Double): Double =

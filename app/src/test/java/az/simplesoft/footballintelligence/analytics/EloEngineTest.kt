@@ -48,6 +48,13 @@ class EloEngineTest {
         val second = EloEngine.fit(withFuture, 300)
         assertEquals(first.ratings, second.ratings)
         assertEquals(first.drawProbability, second.drawProbability, 1e-12)
+
+        val firstForecast = EloEngine.forecast(earlier, 300, "Alpha", "Beta")
+        val secondForecast = EloEngine.forecast(withFuture, 300, "Alpha", "Beta")
+        assertEquals(first.ratingFor("Alpha"), firstForecast.homeTeamRating!!, 1e-12)
+        assertEquals(firstForecast.homeTeamRating!!, secondForecast.homeTeamRating!!, 1e-12)
+        assertEquals(firstForecast.awayTeamRating!!, secondForecast.awayTeamRating!!, 1e-12)
+        assertEquals(firstForecast.smoothedDrawProbability!!, secondForecast.smoothedDrawProbability!!, 1e-12)
     }
 
     @Test fun homeAdvantageFavorsTheHomeSideForEitherTeamOrder() {
@@ -101,6 +108,11 @@ class EloEngineTest {
         assertEquals(3, forecast.awayTeamMatches)
         assertTrue(forecast.probabilities != null)
         assertEquals(1.0, forecast.probabilities!!.values().sum(), 1e-12)
+        val fitted = EloEngine.fit(history, 1_100)
+        assertEquals(fitted.ratingFor("Alpha"), forecast.homeTeamRating!!, 1e-12)
+        assertEquals(fitted.ratingFor("Beta"), forecast.awayTeamRating!!, 1e-12)
+        assertEquals(fitted.config.homeAdvantage, forecast.homeAdvantagePoints!!, 1e-12)
+        assertEquals(fitted.drawProbability, forecast.smoothedDrawProbability!!, 1e-12)
     }
 
     @Test fun rejectsInvalidTrainingRows() {
