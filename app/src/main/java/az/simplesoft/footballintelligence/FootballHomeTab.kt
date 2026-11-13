@@ -27,7 +27,6 @@ import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.LoggedCouponPick
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import java.time.Instant
-import java.time.LocalDate
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -53,13 +52,10 @@ internal fun FootballHomeTabContent(
     val now = rememberClockMinute()
     val forecastById = remember(forecasts) { forecasts.associateBy { it.matchId } }
     val upcoming = remember(matches, now) {
-        matches.asSequence().filter { !it.finished && it.exactKickoff }
-            .filter { runCatching { Instant.parse(it.kickoff).toEpochMilli() > now }.getOrDefault(false) }
-            .sortedBy { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
-            .toList()
+        upcomingFixtures(matches, now, BAKU_ZONE)
     }
     val today = remember(now) { Instant.ofEpochMilli(now).atZone(BAKU_ZONE).toLocalDate() }
-    val todayCount = upcoming.count { kickoffDate(it) == today }
+    val todayCount = upcoming.count { fixtureLocalDate(it, BAKU_ZONE) == today }
     val freshMisliOdds = remember(misliOdds, now) { misliOdds.filter { isFreshBookmakerQuote(it, now) } }
     val freshTopazOdds = remember(topazOdds, now) { topazOdds.filter { isFreshBookmakerQuote(it, now) } }
     val forecastReadyIds = remember(forecasts) { forecasts.mapTo(mutableSetOf()) { it.matchId } }
@@ -77,7 +73,7 @@ internal fun FootballHomeTabContent(
             Text("Матчи, прогнозы и цены", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")).format(today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Text(
-                "Нажми на матч: увидишь вероятности П1 / X / П2 и доступные реальные цены. Если не хватает истории для модели, разбор покажет точные требования. Купоны только виртуальные.",
+                "Нажми на матч: увидишь вероятности П1 / X / П2 и доступные реальные цены. Если не хватает истории или точного времени начала, разбор объяснит причину. Купоны только виртуальные.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -185,7 +181,3 @@ internal fun featuredHomeMatches(upcoming: List<Match>, forecastMatchIds: Set<In
     val (forecastReady, awaitingHistory) = upcoming.partition { it.id in forecastMatchIds }
     return (forecastReady + awaitingHistory).take(limit)
 }
-
-private fun kickoffDate(match: Match): LocalDate? = runCatching {
-    Instant.parse(match.kickoff).atZone(BAKU_ZONE).toLocalDate()
-}.getOrNull()

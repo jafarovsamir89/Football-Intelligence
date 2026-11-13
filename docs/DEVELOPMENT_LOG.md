@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — keep date-only fixtures visible in the normal schedule (local checks passed; Actions pending)
+
+- In response to the report that the installed app feels empty, reviewed the daily workflow. Upcoming fixtures from OpenFootball that contain a calendar date but no exact kickoff were saved in SQLite yet excluded from both Home and the ordinary Matches list. That made some of the imported database invisible and contributed to the impression that the app had no useful content.
+- Added a shared date-aware upcoming-fixture selector. Exact kickoffs still require a future instant; date-only rows are visible from today onward, ordered after exact-time games on the same local day, and labeled `время начала не указано`. Home counts them by Baku date. They remain ineligible for Elo forecasts and exact local prices, so no time/analysis is fabricated.
+- Added unit and Compose regressions for date-only filtering, status labels, Home count, next-day filter, card visibility and opening match analysis. The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 193 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed.
+- Local debug APK SHA-256 `e369c33d559425ce2692178988f1445219559a313708cc178e48699b8292b7e0`; private personal APK SHA-256 `1a1424d3af3fd7c960193eb13a3b7fe13be0d45e9882ac1c7435269408f84e1d`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the API key is absent from debug and present only in the owner-only personal APK. ADB lists no device; no APK was installed, no international API quota was used, and physical phone behavior remains unknown.
+- Next: commit/push this batch, run API 26/34 instrumentation and keyless APK verification in GitHub Actions, update the verified artifact reference, and continue on the most visible daily-workflow gaps. Do not claim that the phone has this revision until it is data-preservingly update-installed.
+
 ## 2026-11-13 — prioritize matches with ready forecasts on Home (local and Actions passed; phone update pending)
 
 - Home previously featured only the three earliest upcoming fixtures. A match without enough history could take the slot even when a later nearby game already had an Elo forecast, hiding the app's most immediately usable analysis.

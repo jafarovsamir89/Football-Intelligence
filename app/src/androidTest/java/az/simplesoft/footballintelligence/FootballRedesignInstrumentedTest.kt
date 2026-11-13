@@ -290,6 +290,63 @@ class FootballRedesignInstrumentedTest {
         assertEquals(match.id, selectedMatch)
     }
 
+    @Test
+    fun matchListShowsDateOnlyFixtureAndLetsUserOpenItsAnalysis() {
+        val sourceDate = LocalDate.now(ZoneId.of("Asia/Baku")).plusDays(1).toString()
+        val match = tomorrowMatch().copy(exactKickoff = false, eventDate = sourceDate, kickoff = sourceDate)
+        var selectedMatch: Int? = null
+        composeRule.setContent {
+            FootballTheme {
+                FootballFixtureList(
+                    matches = listOf(match),
+                    forecasts = emptyList(),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    storeLoaded = true,
+                    storeError = null,
+                    onSelectMatch = { selectedMatch = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Ожидается · время начала не указано").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Завтра").performClick()
+        composeRule.onNodeWithText("Source Away FC").performScrollTo().performClick()
+        assertEquals(match.id, selectedMatch)
+    }
+
+    @Test
+    fun homeCountsAndShowsUpcomingDateOnlyFixtureWithoutInventingForecast() {
+        val sourceDate = LocalDate.now(ZoneId.of("Asia/Baku")).toString()
+        val match = tomorrowMatch().copy(exactKickoff = false, eventDate = sourceDate, kickoff = sourceDate)
+        composeRule.setContent {
+            FootballTheme {
+                FootballHomeTabContent(
+                    matches = listOf(match),
+                    forecasts = emptyList(),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    checkedPredictions = emptyList(),
+                    syncBusy = false,
+                    lastSyncLabel = "Обновлено сейчас",
+                    syncDetails = "OpenFootball OK",
+                    storeLoaded = true,
+                    storeError = null,
+                    onOpenMatches = {},
+                    onOpenCoupons = {},
+                    onSelectMatch = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("предстоящих матчей").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("0 / 1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
     private fun tomorrowMatch(): Match {
         val kickoff = LocalDate.now(ZoneId.of("Asia/Baku")).plusDays(1)
             .atTime(19, 30).atZone(ZoneId.of("Asia/Baku")).toInstant().toString()

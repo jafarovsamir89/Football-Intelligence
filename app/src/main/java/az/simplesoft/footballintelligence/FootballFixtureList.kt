@@ -49,9 +49,7 @@ internal fun FootballFixtureList(
         (misliOdds + topazOdds).filter { it.matchId != null }.groupBy { it.providerId to it.matchId!! }
     }
     val upcoming = remember(matches, now) {
-        matches.filter { !it.finished && it.exactKickoff }
-            .filter { runCatching { Instant.parse(it.kickoff).toEpochMilli() > now }.getOrDefault(false) }
-            .sortedBy { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
+        upcomingFixtures(matches, now, baku)
     }
     val leagueOptions = remember(upcoming) { listOf("Все лиги") + upcoming.map { it.league }.distinct().sorted() }
     var dateFilter by remember { mutableStateOf("Все") }
@@ -59,7 +57,7 @@ internal fun FootballFixtureList(
     var onlyWithOdds by remember { mutableStateOf(false) }
     var leagueMenuOpen by remember { mutableStateOf(false) }
     val filtered = upcoming.filter { match ->
-        val date = runCatching { Instant.parse(match.kickoff).atZone(baku).toLocalDate() }.getOrNull()
+        val date = fixtureLocalDate(match, baku)
         val matchesDate = when (dateFilter) {
             "Сегодня" -> date == today
             "Завтра" -> date == today.plusDays(1)
@@ -74,7 +72,7 @@ internal fun FootballFixtureList(
 
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text("Матчи", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Text("Время начала указано по Баку", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Точное время указано по Баку; у части матчей известна только дата.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         listOf("Сегодня", "Завтра", "7 дней", "Все").chunked(2).forEach { rowFilters ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowFilters.forEach { filter ->
