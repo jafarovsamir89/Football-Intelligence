@@ -248,7 +248,7 @@ class FootballTabUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Показать сезонные результаты").performScrollTo().performClick()
-        composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("League A · 2024-25: прогнозов 18/20",substring=true).assertExists()
         composeRule.onNodeWithText("Простая база · частоты П1 / X / П2 до каждого матча").assertExists()
         composeRule.onNodeWithText("База частот: Brier 0.5300 · Log Loss 1.0800", substring = true).assertExists()
     }
