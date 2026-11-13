@@ -1,5 +1,12 @@
 # Development log
 
+## 2026-11-13 — put the model output on the first screen (local checks passed; CI pending)
+
+- User says the app feels like it has no function after three days of work. Confirmed the real gap: it contains data/model/coupon/analytics workflows, but the Home screen asked the user to open another screen before showing the nearest match's actual 1X2 output. The product is currently a local football analysis notebook, not a validated “bet/skip” service.
+- Changed Home to show the closest eligible fixture, Elo P1/X/P2 estimate, and fresh Misli/TOPAZ quote only when a quote is fresh and exactly linked. The details of the method move behind “Как читать расчёт”. Missing prices stay absent. Updated Compose assertions, README, limitations, roadmap, and changelog to describe actual behavior.
+- One grouped run passed: `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` (208 JVM tests, zero failures/errors/skips, Android-test Kotlin compilation, both APKs). A follow-up assertion-only edit was checked with `:app:compileDebugAndroidTestKotlin`; it passed without rebuilding either APK. Debug SHA-256 `94964af62fda2528e4bbe73475d16b1131de40ff367a96ef1d241f7ccad3ff6c`; owner-only personal SHA-256 `78b8fdc79946e4957bed63f395493e6a269cc71fa9a14198fdf9ee1d523bdb37`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`; DEX audit confirmed the local key absent from debug and present only in personal. `git diff --check` passed.
+- No ADB phone is connected; do not claim this UI change is installed. Next: commit/push and wait for full Actions instrumentation/artifact checks. Do not repeat builds for single small edits.
+
 ## 2026-11-13 — record prospective Elo forecasts from automatic sync (local checks passed)
 
 - User again reported that the installed app's purpose is unclear. The honest product description remains a local football-data/model research notebook: it estimates outcomes, compares a quote only if the source provides a fresh exact-linked price, and records virtual picks for later scoring. It does not currently establish a reliable bet/no-bet instruction or future profit; source availability and prospective sample size are still weak.

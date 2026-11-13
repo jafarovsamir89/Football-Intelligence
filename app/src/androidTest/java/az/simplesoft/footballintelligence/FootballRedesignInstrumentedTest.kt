@@ -91,22 +91,27 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Прогноз Elo").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Начните с ближайшего матча").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Как получить результат").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Нет котировки — приложение её не придумывает.", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("не совет ставить", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Открыть анализ").performScrollTo().performClick()
+        composeRule.onNodeWithText("Расчёт для ближайшего матча").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("${match.home} — ${match.away}").performScrollTo().assertIsDisplayed()
+        listOf("П1 55%", "X 25%", "П2 20%").forEach { label ->
+            assertTrue(composeRule.onAllNodesWithText(label).fetchSemanticsNodes().size >= 2)
+        }
+        assertTrue(composeRule.onAllNodesWithText("2.00   3.20   4.00").fetchSemanticsNodes().size >= 2)
+        assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().size >= 2)
+        composeRule.onNodeWithText("Подробный разбор").performScrollTo().performClick()
         assertEquals(match.id, selectedMatch)
+        composeRule.onNodeWithText("Как читать расчёт").performScrollTo().performClick()
+        composeRule.onNodeWithText("Что вы видите").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("не рекомендация", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
         composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("1", substring = false).fetchSemanticsNodes().isNotEmpty())
         assertTrue(composeRule.onAllNodesWithText("2", substring = false).fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("П1 55%").performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("П1 55%").fetchSemanticsNodes().size >= 2)
         composeRule.onNodeWithText("Misli").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("нет линии").performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().size >= 2)
     }
 
     @Test
@@ -133,9 +138,8 @@ class FootballRedesignInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Практическая цель", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Как получить результат").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("позже проверить её по фактическому счёту", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("не совет ставить", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Как читать расчёт").performScrollTo().performClick()
+        composeRule.onNodeWithText("Цены Misli/TOPAZ показываются только при свежей полной линии", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("В этой установке база пока пустая", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Виртуальные купоны").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Открыть матчи").performScrollTo().performClick()
