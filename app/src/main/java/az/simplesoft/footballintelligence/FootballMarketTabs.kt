@@ -23,6 +23,9 @@ import az.simplesoft.footballintelligence.analytics.MarginMethod
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
+import az.simplesoft.footballintelligence.data.BookmakerOddsHistoryState
+import az.simplesoft.footballintelligence.data.bookmakerOddsMovementPercent
+import az.simplesoft.footballintelligence.data.summarizeBookmakerOddsHistory
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
 import az.simplesoft.footballintelligence.data.INTERNATIONAL_ODDS_FRESHNESS_MILLIS
@@ -49,6 +52,7 @@ internal fun MatchAnalysisTab(
     misliOdds: List<BookmakerOddsSnapshot>,
     topazOdds: List<BookmakerOddsSnapshot>,
     internationalOdds: List<InternationalOddsSnapshot> = emptyList(),
+    localOddsHistory: List<BookmakerOddsSnapshot> = emptyList(),
     onOpenTipsAudit: () -> Unit,
 ) {
     var showDetails by remember(active?.id) { mutableStateOf(false) }
@@ -93,6 +97,19 @@ internal fun MatchAnalysisTab(
                         ProbabilityBar(forecast)
                         EloExplanation(activeForecast)
                     }
+                }
+            }
+
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+                    Text("Наблюдаемое изменение местных цен", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Только сохранённые снимки Misli/TOPAZ с точной связью по матчу. Это не официальная opening/closing линия и не CLV.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    LocalOddsMovementSummary("Misli", "misli", active.id, localOddsHistory, nowMillis)
+                    LocalOddsMovementSummary("TOPAZ", "topaz", active.id, localOddsHistory, nowMillis)
                 }
             }
 
@@ -169,6 +186,57 @@ internal fun MatchAnalysisTab(
         }
     }
 }
+
+@Composable
+private fun LocalOddsMovementSummary(
+    bookmakerName: String,
+    providerId: String,
+    matchId: Int,
+    history: List<BookmakerOddsSnapshot>,
+    nowMillis: Long,
+) {
+    val summary = summarizeBookmakerOddsHistory(history, providerId, matchId, nowMillis)
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text("$bookmakerName · наблюдений ${summary.snapshotCount}", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+        when (summary.state) {
+            BookmakerOddsHistoryState.NO_MATCHED_HISTORY -> Text(
+                "Нет сохранённой истории с точной связью по этому матчу.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BookmakerOddsHistoryState.AMBIGUOUS_EVENT_IDENTITY -> Text(
+                "История не объединена: у локального матча найдено несколько ID событий букмекера.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BookmakerOddsHistoryState.CONFLICTING_CAPTURE -> Text(
+                "У одного снимка найдены разные цены; движение не рассчитано.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            BookmakerOddsHistoryState.SINGLE_SNAPSHOT -> {
+                val only = requireNotNull(summary.firstSnapshot)
+                Text("Первая сохранённая цена: ${localOddsVector(only)} · ${bakuTime(only.capturedAtMillis)}.", style = MaterialTheme.typography.bodySmall)
+                Text("Изменение появится после второго сохранённого снимка.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            BookmakerOddsHistoryState.MOVEMENT_AVAILABLE -> {
+                val first = requireNotNull(summary.firstSnapshot)
+                val latest = requireNotNull(summary.latestSnapshot)
+                val movement = requireNotNull(bookmakerOddsMovementPercent(first, latest))
+                Text("Первая сохранённая цена: ${localOddsVector(first)} · ${bakuTime(first.capturedAtMillis)}.", style = MaterialTheme.typography.bodySmall)
+                Text("Последний снимок: ${localOddsVector(latest)} · ${bakuTime(latest.capturedAtMillis)}.", style = MaterialTheme.typography.bodySmall)
+                Text(
+                    "Изменение цены: 1 ${"%+.1f".format(Locale.US, movement.home)}% · X ${"%+.1f".format(Locale.US, movement.draw)}% · 2 ${"%+.1f".format(Locale.US, movement.away)}%.",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+        }
+    }
+}
+
+private fun localOddsVector(snapshot: BookmakerOddsSnapshot): String =
+    "1 ${"%.2f".format(Locale.US, snapshot.home)} / X ${"%.2f".format(Locale.US, snapshot.draw)} / 2 ${"%.2f".format(Locale.US, snapshot.away)}"
 
 @Composable
 private fun LocalModelMarketGapNote(

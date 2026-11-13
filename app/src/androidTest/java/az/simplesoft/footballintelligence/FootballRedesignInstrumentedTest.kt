@@ -219,6 +219,37 @@ class FootballRedesignInstrumentedTest {
     }
 
     @Test
+    fun matchAnalysisShowsOnlyObservedLocalOddsMovementAndKeepsProviderHistorySeparate() {
+        val match = tomorrowMatch()
+        val kickoff = java.time.Instant.parse(match.kickoff).toEpochMilli()
+        val captured = System.currentTimeMillis()
+        val first = localQuote(match, "misli", "misli-event", captured - 5 * 60_000L, kickoff, 2.0, 3.0, 4.0)
+        val latest = localQuote(match, "misli", "misli-event", captured - 60_000L, kickoff, 2.2, 2.7, 4.4)
+        val topaz = localQuote(match, "topaz", "topaz-event", captured - 60_000L, kickoff, 2.1, 3.1, 4.2)
+
+        composeRule.setContent {
+            FootballTheme {
+                MatchAnalysisTab(
+                    active = match,
+                    eloForecast = null,
+                    activeMarketReference = null,
+                    marketReferenceSyncState = null,
+                    misliOdds = listOf(latest),
+                    topazOdds = listOf(topaz),
+                    localOddsHistory = listOf(first, latest, topaz),
+                    onOpenTipsAudit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Наблюдаемое изменение местных цен").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Misli · наблюдений 2").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Изменение цены: 1 +10.0% · X -10.0% · 2 +10.0%.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("TOPAZ · наблюдений 1").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Это не официальная opening/closing линия и не CLV.", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun matchAnalysisExplainsPositiveLocalMarketDifferenceWithoutCallingItARecommendation() {
         val match = tomorrowMatch()
         val now = System.currentTimeMillis()
@@ -433,4 +464,30 @@ class FootballRedesignInstrumentedTest {
             .atTime(19, 30).atZone(ZoneId.of("Asia/Baku")).toInstant().toString()
         return Match(901001, "Test League", "Source Home FC", "Source Away FC", kickoff, false, null, null, "test:901001")
     }
+
+    private fun localQuote(
+        match: Match,
+        providerId: String,
+        eventId: String,
+        capturedAt: Long,
+        kickoff: Long,
+        home: Double,
+        draw: Double,
+        away: Double,
+    ) = BookmakerOddsSnapshot(
+        providerId = providerId,
+        eventId = eventId,
+        sourceUrl = if (providerId == "misli") "https://www.misli.az/idman-novleri/futbol" else "https://www.etopaz.az/",
+        capturedAtMillis = capturedAt,
+        kickoffMillis = kickoff,
+        market = "1X2",
+        homeTeam = match.home,
+        awayTeam = match.away,
+        home = home,
+        draw = draw,
+        away = away,
+        eventDate = match.kickoff.take(10),
+        timeZoneId = "Asia/Baku",
+        matchId = match.id,
+    )
 }

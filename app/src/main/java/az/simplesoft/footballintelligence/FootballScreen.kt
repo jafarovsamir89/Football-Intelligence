@@ -428,6 +428,7 @@ import androidx.work.WorkManager
               misliOdds = misliOdds,
               topazOdds = topazOdds,
               internationalOdds = internationalOdds,
+              localOddsHistory = storeSnapshot.selectedBookmakerOddsHistory,
               onOpenTipsAudit = { runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://tipsaudit.com/data"))) } },
             )
             destination == FootballDestination.HOME -> FootballHomeTabContent(

@@ -36,6 +36,7 @@ data class FootballScreenStoreSnapshot(
     val misliOdds: List<BookmakerOddsSnapshot>,
     val topazSyncState: BookmakerSyncState?,
     val topazOdds: List<BookmakerOddsSnapshot>,
+    val selectedBookmakerOddsHistory: List<BookmakerOddsSnapshot>,
     val internationalOddsSyncState: InternationalOddsSyncState?,
     val internationalOddsSyncHistory: List<InternationalOddsSyncAttempt>,
     val theOddsApiSyncState: InternationalOddsSyncState?,
@@ -68,6 +69,7 @@ data class FootballScreenStoreSnapshot(
             misliOdds = emptyList(),
             topazSyncState = null,
             topazOdds = emptyList(),
+            selectedBookmakerOddsHistory = emptyList(),
             internationalOddsSyncState = null,
             internationalOddsSyncHistory = emptyList(),
             theOddsApiSyncState = null,
@@ -126,6 +128,8 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         checkActive()
         val topazLines = freshBookmakerOdds("topaz")
         checkActive()
+        val selectedBookmakerHistory = selectedMatchId?.let { bookmakerOddsHistoryForMatch(it) }.orEmpty()
+        checkActive()
         val internationalState = internationalOddsSyncState()
         checkActive()
         val internationalAttempts = internationalOddsSyncHistory(50)
@@ -168,6 +172,7 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
             misliOdds = misliLines,
             topazSyncState = topazState,
             topazOdds = topazLines,
+            selectedBookmakerOddsHistory = selectedBookmakerHistory,
             internationalOddsSyncState = internationalState,
             internationalOddsSyncHistory = internationalAttempts,
             theOddsApiSyncState = theOddsApiState,

@@ -1475,6 +1475,22 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         }
         return latestBookmakerSnapshotsPerEvent(result)
     }
+    /** Exact-linked Misli/TOPAZ 1X2 observations for one match, oldest first and capped to 5,000 rows. */
+    fun bookmakerOddsHistoryForMatch(matchId:Int,limit:Int=5_000):List<BookmakerOddsSnapshot> {
+        require(matchId>0)
+        val result=mutableListOf<BookmakerOddsSnapshot>()
+        readableDatabase.rawQuery(
+            "SELECT provider_id,event_id,source_url,captured_at,kickoff,market,home_team,away_team,home_odds,draw_odds,away_odds,event_date,time_zone_id,match_id,event_year_inferred " +
+                "FROM bookmaker_odds_snapshots WHERE match_id=? AND provider_id IN ('misli','topaz') AND captured_at<kickoff ORDER BY captured_at DESC,id DESC LIMIT ?",
+            arrayOf(matchId.toString(),limit.coerceIn(1,5_000).toString()),
+        ).use { c ->
+            while(c.moveToNext()) result+=BookmakerOddsSnapshot(
+                c.getString(0),c.getString(1),c.getString(2),c.getLong(3),c.getLong(4),c.getString(5),c.getString(6),c.getString(7),
+                c.getDouble(8),c.getDouble(9),c.getDouble(10),c.getString(11),c.getString(12),if(c.isNull(13)) null else c.getInt(13),c.getInt(14)==1,
+            )
+        }
+        return result.sortedWith(compareBy<BookmakerOddsSnapshot> { it.capturedAtMillis }.thenBy { it.eventId })
+    }
     /** Rechecks recent unmatched snapshots after local fixture data changes, using exact reviewed aliases. */
     fun relinkUnmatchedBookmakerOdds(nowMillis:Long=System.currentTimeMillis()):Int {
         val fixtures=matchIdentities()
