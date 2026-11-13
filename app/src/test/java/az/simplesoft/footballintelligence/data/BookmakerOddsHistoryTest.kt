@@ -17,6 +17,7 @@ class BookmakerOddsHistoryTest {
         assertEquals(2, summary.snapshotCount)
         assertSame(first, summary.firstSnapshot)
         assertSame(latest, summary.latestSnapshot)
+        assertEquals(listOf(first, latest), summary.observations)
         val movement = bookmakerOddsMovementPercent(first, latest)!!
         assertEquals(10.0, movement.home, 1e-9)
         assertEquals(-10.0, movement.draw, 1e-9)
@@ -41,6 +42,7 @@ class BookmakerOddsHistoryTest {
 
         assertEquals(BookmakerOddsHistoryState.AMBIGUOUS_EVENT_IDENTITY, ambiguous.state)
         assertEquals(2, ambiguous.snapshotCount)
+        assertEquals(emptyList<BookmakerOddsSnapshot>(), ambiguous.observations)
         assertEquals(BookmakerOddsHistoryState.SINGLE_SNAPSHOT, topazOnly.state)
         assertEquals(1, topazOnly.snapshotCount)
         assertNull(bookmakerOddsMovementPercent(first, otherProvider))

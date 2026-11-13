@@ -13,6 +13,7 @@ data class BookmakerOddsHistorySummary(
     val snapshotCount: Int,
     val firstSnapshot: BookmakerOddsSnapshot?,
     val latestSnapshot: BookmakerOddsSnapshot?,
+    val observations: List<BookmakerOddsSnapshot> = emptyList(),
 )
 
 data class BookmakerOddsMovementPercent(
@@ -66,7 +67,7 @@ fun summarizeBookmakerOddsHistory(
     } else {
         BookmakerOddsHistoryState.SINGLE_SNAPSHOT
     }
-    return BookmakerOddsHistorySummary(state, uniqueCaptureTimes.size, first, latest)
+    return BookmakerOddsHistorySummary(state, uniqueCaptureTimes.size, first, latest, uniqueCaptureTimes)
 }
 
 /** Percentage change between two pre-kickoff observations of the same source event. */

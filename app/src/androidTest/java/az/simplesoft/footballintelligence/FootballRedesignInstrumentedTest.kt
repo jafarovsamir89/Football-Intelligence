@@ -223,7 +223,9 @@ class FootballRedesignInstrumentedTest {
         val match = tomorrowMatch()
         val kickoff = java.time.Instant.parse(match.kickoff).toEpochMilli()
         val captured = System.currentTimeMillis()
-        val first = localQuote(match, "misli", "misli-event", captured - 5 * 60_000L, kickoff, 2.0, 3.0, 4.0)
+        val first = localQuote(match, "misli", "misli-event", captured - 9 * 60_000L, kickoff, 2.0, 3.0, 4.0)
+        val intermediate = localQuote(match, "misli", "misli-event", captured - 6 * 60_000L, kickoff, 2.1, 3.1, 4.2)
+        val laterIntermediate = localQuote(match, "misli", "misli-event", captured - 3 * 60_000L, kickoff, 2.15, 2.9, 4.3)
         val latest = localQuote(match, "misli", "misli-event", captured - 60_000L, kickoff, 2.2, 2.7, 4.4)
         val topaz = localQuote(match, "topaz", "topaz-event", captured - 60_000L, kickoff, 2.1, 3.1, 4.2)
 
@@ -236,15 +238,17 @@ class FootballRedesignInstrumentedTest {
                     marketReferenceSyncState = null,
                     misliOdds = listOf(latest),
                     topazOdds = listOf(topaz),
-                    localOddsHistory = listOf(first, latest, topaz),
+                    localOddsHistory = listOf(first, intermediate, laterIntermediate, latest, topaz),
                     onOpenTipsAudit = {},
                 )
             }
         }
 
         composeRule.onNodeWithText("Наблюдаемое изменение местных цен").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Misli · наблюдений 2").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Misli · наблюдений 4").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Изменение цены: 1 +10.0% · X -10.0% · 2 +10.0%.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Промежуточные снимки:").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("1 2.10 / X 3.10 / 2 4.20", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("TOPAZ · наблюдений 1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Это не официальная opening/closing линия и не CLV.", substring = true).performScrollTo().assertIsDisplayed()
     }

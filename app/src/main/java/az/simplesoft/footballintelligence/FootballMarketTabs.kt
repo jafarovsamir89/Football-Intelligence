@@ -205,7 +205,7 @@ private fun LocalOddsMovementSummary(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             BookmakerOddsHistoryState.AMBIGUOUS_EVENT_IDENTITY -> Text(
-                "История не объединена: у локального матча найдено несколько ID событий букмекера.",
+                "История не объединена: по видимым данным найдены разные варианты идентичности события.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -224,6 +224,13 @@ private fun LocalOddsMovementSummary(
                 val latest = requireNotNull(summary.latestSnapshot)
                 val movement = requireNotNull(bookmakerOddsMovementPercent(first, latest))
                 Text("Первая сохранённая цена: ${localOddsVector(first)} · ${bakuTime(first.capturedAtMillis)}.", style = MaterialTheme.typography.bodySmall)
+                val intermediate = summary.observations.drop(1).dropLast(1).takeLast(3)
+                if (intermediate.isNotEmpty()) {
+                    Text("Промежуточные снимки:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    intermediate.forEach { snapshot ->
+                        Text("${bakuTime(snapshot.capturedAtMillis)} · ${localOddsVector(snapshot)}", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 Text("Последний снимок: ${localOddsVector(latest)} · ${bakuTime(latest.capturedAtMillis)}.", style = MaterialTheme.typography.bodySmall)
                 Text(
                     "Изменение цены: 1 ${"%+.1f".format(Locale.US, movement.home)}% · X ${"%+.1f".format(Locale.US, movement.draw)}% · 2 ${"%+.1f".format(Locale.US, movement.away)}%.",
