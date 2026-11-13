@@ -316,7 +316,7 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Отдельный holdout для validation-выбранного веса", substring = true).assertExists()
         composeRule.onNodeWithText("Holdout-gate пройден", substring = true).assertExists()
         composeRule.onNodeWithText("Temperature scaling", substring = true).assertExists()
-        composeRule.onNodeWithText("One-vs-rest ECE holdout", substring = true).assertExists()
+        composeRule.onNodeWithText("Holdout ECE", substring = true).assertExists()
     }
 
     @Test
