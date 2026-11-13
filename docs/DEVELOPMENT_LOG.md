@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-13 — recheck local bookmaker terms and explain current product value (documentation only)
+
+- Reopened Misli's official `robots.txt`: it allows `/` but excludes account, membership, site-settings, shared-coupon, and live-detail paths. This remains a crawler directive, not a license to reuse odds.
+- Reopened eTopaz's official English subscriber terms. Clauses 8.7–8.8 reserve rights to site materials and require written permission for subscribers to use/copy/publish them. The subscriber contract does not expressly resolve anonymous public-page collection, so neither permission nor a categorical ban is inferred for that case.
+- The disposable API 34 first-run on 2026-11-13 had zero verifiable future Misli/eTopaz prematch lines and recorded `UNAVAILABLE`; this is one dated observation, not proof of blocking or regional restriction. No access controls were bypassed.
+- Updated `docs/AZERBAIJAN_BOOKMAKERS_RU.md`, `docs/DATA_SOURCES.md`, `docs/RESEARCH.md`, and `docs/LIMITATIONS.md`. No production code changed; no APK rebuild or test run was needed. A docs-only commit is the planned milestone close.
+- Product-purpose explanation: the app is currently a local football-data and model-research notebook. It automatically collects fixture/result history, stores it offline, computes experimental 1X2 estimates, compares those to available real quotes, drafts virtual coupons, and tracks future forecasts against settled results. It is not yet a dependable bet/no-bet adviser: current local-bookmaker lines are unavailable in the latest capture, the model has no completed prospective validation, and the international odds sources do not provide Misli/TOPAZ quotes. A virtual coupon is a saved analysis selection, not a recommended or profitable bet.
+- Next concrete task: continue searching for a permitted, free and automatic local odds source or a reliable way for the ordinary Misli/eTopaz public pages to expose future lines; if none is found, keep the limitation explicit and preserve the functioning offline data/model analysis. Update-install and inspect the user's phone only when ADB actually exposes that device; do not clear its app data.
+
 
 ## 2026-11-13 — show intermediate observed local-price snapshots and correct event identity wording (local and Actions passed)
 

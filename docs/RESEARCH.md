@@ -1,6 +1,6 @@
 # Research notes
 
-**Reviewed:** 2026-11-09. This document records candidate methods, not evidence of a profitable strategy.
+**Reviewed:** 2026-11-13. This document records candidate methods, not evidence of a profitable strategy.
 
 ## Forecasting and scoring
 
@@ -56,6 +56,13 @@ The [penaltyblog model documentation](https://penaltyblog.readthedocs.io/en/late
 - `TheOddsApiProvider` validates documented V4 h2h fields, server `Date` versus device clock, market update timestamps, prematch kickoff, full decimal 1X2, duplicate events and unique local linking. SQLite records whether a link used exact kickoff or a unique same-UTC-date local fixture. It stores the source poll and local capture separately. It does not infer book prices or transform Odds API quotes into Misli/TOPAZ lines.
 - `TheOddsApiOddsWorker` is enabled only by a personal local APK build. It fetches the active soccer catalog, caches it for seven days, requests one rotating league per two-hour pass, caps attempts at 12 per rolling 24 hours, honors `Retry-After`, and persists quota headers. If the last reported balance is 20 credits or less, it pauses until after the first UTC day of the following month. The [official FAQ](https://the-odds-api.com/manage/faqs.html) says credits reset on the first of every month. The [official V4 guide](https://the-odds-api.com/liveapi/guides/v4/) says one EU `h2h` market costs one credit and includes `h2h_lay` automatically for relevant exchanges; `includeBetLimits=true` requests available outcome bet limits. The free plan is 500 monthly credits. Back and Lay are persisted and rendered as separate quote sides; Lay is excluded from market consensus and prospective market/Elo evaluation. A Lay−Back spread is shown only when both sides share the provider, exchange, event, kickoff, source update and capture timestamps. Commission is absent and not deducted; a reported bet limit is not treated as liquidity. The provider lists 1X2 pre-match refresh at 60 seconds, with intervals tightening during the six hours before kickoff, while our parser requires the market timestamp to be within 15 minutes of the trusted response date ([update intervals](https://the-odds-api.com/sports-odds-data/update-intervals.html)). Spreading up to 12 calls across the day increases the chance of opening the app during a fresh capture window without spending more monthly credits. The active catalog rotates over multiple days (46 competitions in the latest host check) and WorkManager is best-effort; the app falls back to cached local data offline.
 - The API key is read from ignored `local.properties`; it is deliberately absent from GitHub Actions variables and uploaded artifacts. The `personal` APK embeds that key, is signed with the local debug key, and must remain private. CI builds the variant keyless only to catch build errors; it uploads only the separate keyless debug APK. Regional availability on the physical Azerbaijan phone remains unverified.
+
+## Azerbaijan operator access and reuse terms (reviewed 2026-11-13)
+
+- Misli's [robots.txt](https://www.misli.az/robots.txt) allows `/` while excluding account, membership, site-settings, shared-coupon and live-detail routes. This is a crawl directive, not a license to retain or reuse prices.
+- The [eTopaz English subscriber terms](https://www.etopaz.az/eng/terms-conditions), clauses 8.7–8.8, reserve rights in site materials and require subscribers to obtain written permission before using/copying/publishing them. The document does not expressly determine anonymous public-page reading; do not treat ambiguity as permission or as a categorical ruling about that route.
+- A standard public-page Android WebView capture on the disposable API 34 AVD on 2026-11-13 yielded no verifiable future prematch 1X2 lines from either operator. Both were marked unavailable. This is a snapshot only; it does not prove a block or predict later availability.
+- Do not bypass access controls or substitute an unverified endpoint. Keep cached football data usable offline, expose source status accurately, and keep local bookmaker prices separate from international reference feeds.
 
 ## Experimental policy
 

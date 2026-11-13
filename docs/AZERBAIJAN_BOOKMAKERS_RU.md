@@ -1,14 +1,14 @@
 # Azerbaijan-first: Misli and TOPAZ odds without paid APIs
 
-**Reviewed:** 2026-11-11. Previously collected prices are time-stamped observations; snapshots older than 30 minutes are not current.
+**Reviewed:** 2026-11-13. Previously collected prices are time-stamped observations; snapshots older than 30 minutes are not current.
 
 ## User mandate (2026-11-09)
 Personal Android APK for Azerbaijan. Automatically retrieve public prematch odds from Misli.az and TOPAZ/eTopaz for private analysis, without manual CSV files, manual coefficient entry, API registration, paid API or server. An official API is not a requirement. Use standard public website rendering and openly accessible data only where allowed. Describe availability only from timestamped captures verified on the current device/session; it may change and a technical capture does not establish reuse permission.
 
 ## Research
 - Misli official: https://www.misli.az/ . A standard Android API 34 WebView rendered the public football page, including future dates, local kickoff times, team labels and the complete 1/X/2 market. The app's parser reads only `document.body.innerText` from that public page; no private endpoint or account is used.
-- Misli [robots.txt](https://www.misli.az/robots.txt), rechecked 2026-11-10, says `Allow: /` while disallowing account, shared-coupon, and live-market-detail path patterns. This is a crawler directive; it does not establish a license or affirmative right to automate reuse of odds. No explicit public reuse permission was found.
-- TOPAZ official: https://etopaz.az/ and https://topaz.az/ . The ordinary public home page has an `İdman` tab. Selecting that visible tab in a standard Android WebView showed future 1X2 football events; the app performs the same normal tab click and reads visible page text. The current [official terms](https://etopaz.az/terms-conditions), reviewed 2026-11-10, define a subscriber/wagering agreement; clauses 4.2.1–4.2.2 limit subscriber-account use to permitted games, but do not expressly address anonymous public odds reuse. `https://etopaz.az/robots.txt` was not retrievable in the web review. Do not infer permission or a technical block from that failure.
+- Misli [robots.txt](https://www.misli.az/robots.txt), rechecked 2026-11-13, says `Allow: /` while disallowing account, membership, site-settings, shared-coupon, and live-detail path patterns. This is a crawler directive; it does not establish a license or affirmative right to automate reuse of odds. No explicit public reuse permission was found.
+- TOPAZ official: https://etopaz.az/ and https://topaz.az/ . The ordinary public home page has an `İdman` tab. Selecting that visible tab in a standard Android WebView showed future 1X2 football events; the app performs the same normal tab click and reads visible page text. The current [official English terms](https://www.etopaz.az/eng/terms-conditions), rechecked 2026-11-13, are a BAL LINE subscriber contract. Clauses 8.7–8.8 reserve rights to site materials and say subscribers need written permission to use/copy/publish them. The contract does not expressly resolve anonymous public-page collection by a non-subscriber; this is not treated as permission or a definitive prohibition for that case. Do not infer permission from subscriber-account restrictions.
 - Existing open source reference: [aliabbasov99/ai-football-prediction](https://github.com/aliabbasov99/ai-football-prediction), [backend/scripts/scrape_misli_all.py](https://github.com/aliabbasov99/ai-football-prediction/blob/main/backend/scripts/scrape_misli_all.py). Its implementation uses `undetected_chromedriver`, stealth flags, scrolling, BeautifulSoup selectors, aliases and fuzzy `SequenceMatcher` similarity. No code or evasion mechanism was copied. This app uses visible standard-WebView text and exact reviewed aliases.
 
 ### Proof-of-concept outcome (API 34 runtime)
@@ -21,6 +21,13 @@ Personal Android APK for Azerbaijan. Automatically retrieve public prematch odds
 The same 5558 database finished its automatic football import with OpenFootball `OK`/25,904 and OpenLigaDB `OK`/17,202. The fresh 07:37–07:38 UTC odds observations were taken before update-installing commit `9399fa4`; that update preserved the quote records, exact fixture links, and separate coupon sections. Another API 34 emulator reported both bookmakers `UNAVAILABLE` with zero visible future lines at 07:22 UTC, showing that page availability varies. The earlier `fd51aa4` refresh regression confirmed one check per expiry window with no repeated capture loop.
 
 These are time-bound availability observations only; they do not establish that either operator blocks access or grants automated reuse permission. The explicit automated-reuse permission assessment remains unchanged.
+
+### Terms and availability recheck (2026-11-13)
+
+- Misli's live [robots.txt](https://www.misli.az/robots.txt) still allows `/` and lists exclusions for account, membership, site-settings, shared-coupon, and live-detail paths. Robots permission concerns crawler routing only; it is not an odds-reuse license.
+- The live [eTopaz English subscriber contract](https://www.etopaz.az/eng/terms-conditions), clauses 8.7–8.8, says BAL LINE controls rights to site materials and subscribers need written permission to use/copy/publish them. Because this is a subscriber agreement, it does not clearly settle collection from an anonymous public page; the app records no affirmative permission and must not broaden the collector based on that ambiguity.
+- On the disposable API 34 first-run on 2026-11-13, ordinary visible-page capture found no verifiable future prematch 1X2 rows for Misli or eTopaz and recorded `UNAVAILABLE`. This is a single time-bound observation, not evidence of a block, regional restriction, or permanent outage. No challenge, login, hidden endpoint, or control bypass was attempted.
+- Existing historical snapshots remain local and freshness-gated. Keep this source status distinct from international feeds; those do not supply Misli/TOPAZ quotes. If a standard public page does not yield verifiable rows, show unavailable and continue using cached football history/results.
 
 ## Separate international fair-market reference
 
