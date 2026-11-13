@@ -19,6 +19,7 @@ import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
+import az.simplesoft.footballintelligence.data.FootballNewsItem
 import az.simplesoft.footballintelligence.data.OddsProviderStatus
 import java.time.LocalDate
 import java.time.ZoneId
@@ -118,6 +119,49 @@ class FootballRedesignInstrumentedTest {
         assertTrue(composeRule.onAllNodesWithText("П1 55%").fetchSemanticsNodes().size >= 2)
         assertTrue(composeRule.onAllNodesWithText("Misli").fetchSemanticsNodes().size >= 2)
         assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().size >= 2)
+    }
+
+    @Test
+    fun homeNewsCardShowsHeadlineOnlyMatchContextAndOpensItsPrimarySource() {
+        val match = tomorrowMatch()
+        val now = System.currentTimeMillis()
+        val item = FootballNewsItem(
+            title = "${match.home} injury update before the weekend fixture",
+            url = "https://news.example/story",
+            sourceDomain = "news.example",
+            language = "English",
+            indexedAtMillis = now,
+            capturedAtMillis = now,
+        )
+        var openedUrl: String? = null
+
+        composeRule.setContent {
+            FootballTheme {
+                FootballHomeTabContent(
+                    matches = listOf(match),
+                    forecasts = emptyList(),
+                    newsItems = listOf(item),
+                    newsSyncSummary = az.simplesoft.footballintelligence.data.ProviderSyncSummary("gdelt_football_news", "OK", now, now, 1, null),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    checkedPredictions = emptyList(),
+                    syncBusy = false,
+                    lastSyncLabel = "Обновлено",
+                    syncDetails = "OpenFootball OK",
+                    storeLoaded = true,
+                    storeError = null,
+                    onOpenMatches = {},
+                    onOpenCoupons = {},
+                    onSelectMatch = {},
+                    onOpenNews = { openedUrl = it },
+                )
+            }
+        }
+
+        composeRule.onNodeWithText(item.title).performScrollTo().assertIsDisplayed().performClick()
+        assertEquals(item.url, openedUrl)
+        composeRule.onNodeWithText("травмы · по заголовку", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Новости не меняют вероятности модели", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -229,8 +273,8 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Как читать эту оценку").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Самая высокая оценка: П1 (55.0%)", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Основа: 22 результатов лиги", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("22 результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("22 завершённых результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Используется резервная Elo-модель, потому что для основной Poisson не хватило истории. Составы и новости не используются; оценка остаётся экспериментальной.").performScrollTo().assertIsDisplayed()
     }
 

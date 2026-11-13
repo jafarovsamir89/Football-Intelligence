@@ -12,6 +12,7 @@ class MainActivity:ComponentActivity() {
         super.onCreate(savedInstanceState)
         screenRepository=StoreFootballScreenRepository(Store(this))
         FootballSyncScheduler.scheduleOnAppOpen(this)
+        NewsIntelligenceScheduler.scheduleOnAppOpen(this)
         setContent { FootballScreen(screenRepository) }
     }
     override fun onDestroy() {

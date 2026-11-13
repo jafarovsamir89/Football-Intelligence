@@ -28,6 +28,10 @@ import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.LoggedCouponPick
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
+import az.simplesoft.footballintelligence.data.FootballNewsItem
+import az.simplesoft.footballintelligence.data.GDELT_NEWS_ATTRIBUTION_URL
+import az.simplesoft.footballintelligence.data.GdeltNewsProvider
+import az.simplesoft.footballintelligence.data.ProviderSyncSummary
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -39,6 +43,8 @@ private val BAKU_ZONE: ZoneId = ZoneId.of("Asia/Baku")
 internal fun FootballHomeTabContent(
     matches: List<Match>,
     forecasts: List<ForecastedMatch>,
+    newsItems: List<FootballNewsItem> = emptyList(),
+    newsSyncSummary: ProviderSyncSummary? = null,
     misliOdds: List<BookmakerOddsSnapshot>,
     topazOdds: List<BookmakerOddsSnapshot>,
     misliSyncState: BookmakerSyncState? = null,
@@ -54,6 +60,7 @@ internal fun FootballHomeTabContent(
     onOpenMatches: () -> Unit,
     onOpenCoupons: () -> Unit,
     onSelectMatch: (Int) -> Unit,
+    onOpenNews: (String) -> Unit = {},
 ) {
     val now = rememberClockMinute()
     val forecastById = remember(forecasts) { forecasts.associateBy { it.matchId } }
@@ -69,6 +76,13 @@ internal fun FootballHomeTabContent(
     val nextAnalysisMatch = featured.firstOrNull()
     val nextAnalysisForecast = nextAnalysisMatch?.let { forecastById[it.id] }
     val featuredIncludesForecast = featured.any { it.id in forecastReadyIds }
+    val relevantNews = remember(newsItems, upcoming) {
+        val teams = upcoming.flatMap { listOf(it.home, it.away) }.distinct()
+        newsItems.mapNotNull { item ->
+            val linkedTeams = GdeltNewsProvider.matchHeadline(item, teams)
+            if (linkedTeams.isEmpty()) null else item to linkedTeams
+        }.take(5)
+    }
     val checked = checkedPredictions.asSequence().filter { it.finished && it.homeGoals != null && it.awayGoals != null }.take(3).toList()
     var showHowTo by remember { mutableStateOf(false) }
     var showSyncDetails by remember { mutableStateOf(matches.isEmpty()) }
@@ -150,6 +164,44 @@ internal fun FootballHomeTabContent(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Линия Misli", misliLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
             MetricCard("Линия TOPAZ", topazLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
+        }
+
+        ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                Text("Новости вокруг ближайших матчей", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                val providerStatus = newsSyncSummary?.status ?: "Ожидает первого запроса"
+                Text(
+                    "GDELT · $providerStatus" + (newsSyncSummary?.lastCheckedAtMillis?.let { " · проверено ${newsCaptureTime(it)}" } ?: ""),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                newsSyncSummary?.error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                if (relevantNews.isEmpty()) {
+                    Text(
+                        if (newsItems.isEmpty()) "Пока нет сохранённых заголовков. Данные появятся после доступного ответа источника."
+                        else "Среди сохранённых заголовков нет точного совпадения с командами ближайших матчей.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                } else {
+                    relevantNews.forEach { (item, teams) ->
+                        TextButton(onClick = { onOpenNews(item.url) }, modifier = Modifier.fillMaxWidth()) {
+                            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text(item.title, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                                Text(
+                                    "${teams.joinToString()} · ${item.sourceDomain} · ${GdeltNewsProvider.classifyHeadline(item.title).label}" +
+                                        (item.indexedAtMillis?.let { " · в индексе ${newsCaptureTime(it)}" } ?: "") +
+                                        " · сохранено ${newsCaptureTime(item.capturedAtMillis)}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                }
+                Text("Заголовки и ссылки предоставлены GDELT; открывается первоисточник. Новости не меняют вероятности модели.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                TextButton(onClick = { onOpenNews(GDELT_NEWS_ATTRIBUTION_URL) }) { Text("О проекте GDELT") }
+            }
         }
 
         val misliOverview = remember(misliSyncState, misliLinkedCount, now) {
@@ -237,3 +289,7 @@ internal fun featuredHomeMatches(upcoming: List<Match>, forecastMatchIds: Set<In
     val (forecastReady, awaitingHistory) = upcoming.partition { it.id in forecastMatchIds }
     return (forecastReady + awaitingHistory).take(limit)
 }
+
+private fun newsCaptureTime(epochMillis: Long): String = runCatching {
+    DateTimeFormatter.ofPattern("d MMM HH:mm", Locale("ru")).format(Instant.ofEpochMilli(epochMillis).atZone(BAKU_ZONE))
+}.getOrDefault("время неизвестно")

@@ -84,6 +84,8 @@ import androidx.work.WorkManager
     val theOddsApiPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(TheOddsApiScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     val footballDataStatsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballDataStatsScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
     val footballDataStatsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(FootballDataStatsScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
+    val newsOnceSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(NewsIntelligenceScheduler.UNIQUE_ONCE_NAME) }.observeAsState(emptyList())
+    val newsPeriodicSync by remember(workManager) { workManager.getWorkInfosForUniqueWorkLiveData(NewsIntelligenceScheduler.UNIQUE_PERIODIC_NAME) }.observeAsState(emptyList())
     LaunchedEffect(repository,revision,selected) {
         try {
             val snapshot=repository.readScreenSnapshot(selected.takeIf { it>=0 })
@@ -145,6 +147,7 @@ import androidx.work.WorkManager
     LaunchedEffect(marketReferenceOnceSync.map { it.state },marketReferencePeriodicSync.map { it.state }) { revision++ }
     LaunchedEffect(internationalOddsOnceSync.map { it.state },internationalOddsPeriodicSync.map { it.state },theOddsApiOnceSync.map { it.state },theOddsApiPeriodicSync.map { it.state }) { revision++ }
     LaunchedEffect(footballDataStatsOnceSync.map { it.state },footballDataStatsPeriodicSync.map { it.state }) { revision++ }
+    LaunchedEffect(newsOnceSync.map { it.state },newsPeriodicSync.map { it.state }) { revision++ }
     val matches=storeSnapshot.matches
     val recentResults=storeSnapshot.recentResults
     val importedCompetitionCodes=storeSnapshot.importedCompetitionCodes
@@ -411,6 +414,8 @@ import androidx.work.WorkManager
             destination == FootballDestination.HOME -> FootballHomeTabContent(
               matches = matches,
               forecasts = forecastedMatches,
+              newsItems = storeSnapshot.newsItems,
+              newsSyncSummary = syncSummaries.firstOrNull { it.providerId == az.simplesoft.footballintelligence.data.GDELT_NEWS_PROVIDER_ID },
               misliOdds = misliOdds,
               topazOdds = topazOdds,
               misliSyncState = misliSyncState,
@@ -426,6 +431,7 @@ import androidx.work.WorkManager
               onOpenMatches = { destination = FootballDestination.MATCHES },
               onOpenCoupons = { destination = FootballDestination.COUPONS },
               onSelectMatch = { selected = it; showMatchDetail = true },
+              onOpenNews = { url -> runCatching { activity.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } },
             )
             destination == FootballDestination.MATCHES -> FootballFixtureList(
               matches = matches,

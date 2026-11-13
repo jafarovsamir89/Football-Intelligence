@@ -14,6 +14,9 @@ import az.simplesoft.footballintelligence.data.ProviderSyncSummary
 import az.simplesoft.footballintelligence.data.FootballDataStatsAttempt
 import az.simplesoft.footballintelligence.data.StoredFootballMatchStats
 import az.simplesoft.footballintelligence.data.THE_ODDS_API_PROVIDER_ID
+import az.simplesoft.footballintelligence.data.FootballNewsItem
+import az.simplesoft.footballintelligence.data.GDELT_NEWS_CACHE_KEY
+import az.simplesoft.footballintelligence.data.GdeltNewsProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -22,6 +25,7 @@ import kotlinx.coroutines.withContext
 /** A single, immutable read model for the Compose screen; every SQLite read runs off the UI thread. */
 data class FootballScreenStoreSnapshot(
     val providerSyncSummaries: List<ProviderSyncSummary>,
+    val newsItems: List<FootballNewsItem>,
     val matches: List<Match>,
     val recentResults: List<Match>,
     val recentMatchStats: Map<Int, StoredFootballMatchStats>,
@@ -56,6 +60,7 @@ data class FootballScreenStoreSnapshot(
     companion object {
         fun empty() = FootballScreenStoreSnapshot(
             providerSyncSummaries = emptyList(),
+            newsItems = emptyList(),
             matches = emptyList(),
             recentResults = emptyList(),
             recentMatchStats = emptyMap(),
@@ -103,6 +108,11 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
         fun checkActive() = context.ensureActive()
 
         val summaries = providerSyncSummaries()
+        checkActive()
+        val cachedNews = providerFileCache(GDELT_NEWS_CACHE_KEY)
+        val newsItems = cachedNews?.cachedBody?.let { body ->
+            runCatching { GdeltNewsProvider.parse(body, cachedNews.lastCheckedAtMillis) }.getOrDefault(emptyList())
+        }.orEmpty()
         checkActive()
         val matchRows = matches()
         checkActive()
@@ -162,6 +172,7 @@ suspend fun Store.readFootballScreenSnapshot(selectedMatchId: Int?): FootballScr
 
         FootballScreenStoreSnapshot(
             providerSyncSummaries = summaries,
+            newsItems = newsItems,
             matches = matchRows,
             recentResults = recent,
             recentMatchStats = recentStats,
