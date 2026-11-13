@@ -20,6 +20,7 @@ import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluatio
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEvaluationReport
 import az.simplesoft.footballintelligence.analytics.MetricConfidenceInterval95
 import az.simplesoft.footballintelligence.analytics.MarginMethod
+import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.ProbabilityEngine
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
@@ -106,11 +107,16 @@ internal fun MatchAnalysisTab(
                     if (model != null && misli != null && isFreshBookmakerQuote(misli, nowMillis)) {
                         val fair = fairProbabilities(Quote(0, active.id, "Misli", misli.home, misli.draw, misli.away, misli.capturedAtMillis))
                         Text("Elo − Misli без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LocalModelMarketGapNote("Misli", model, misli.home, misli.draw, misli.away)
                     }
                     OddsRow("topaz", topaz, nowMillis)
                     if (model != null && topaz != null && isFreshBookmakerQuote(topaz, nowMillis)) {
                         val fair = fairProbabilities(Quote(0, active.id, "TOPAZ", topaz.home, topaz.draw, topaz.away, topaz.capturedAtMillis))
                         Text("Elo − TOPAZ без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        LocalModelMarketGapNote("TOPAZ", model, topaz.home, topaz.draw, topaz.away)
+                    }
+                    if (model != null) {
+                        Text("«+» значит, что Elo оценивает исход выше вероятности рынка без маржи; «−» — ниже. Это расхождение для проверки, а не рекомендация: модель не откалибрована и не подтверждает преимущество или прибыль.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     val now = nowMillis
                     val international = internationalOdds.filter {
@@ -162,6 +168,29 @@ internal fun MatchAnalysisTab(
             }
         }
     }
+}
+
+@Composable
+private fun LocalModelMarketGapNote(
+    bookmaker: String,
+    model: OutcomeProbabilities,
+    homeOdds: Double,
+    drawOdds: Double,
+    awayOdds: Double,
+) {
+    val market = ProbabilityEngine.removeMargin(homeOdds, drawOdds, awayOdds, MarginMethod.BASIC)
+    val gap = ProbabilityEngine.largestPositiveModelMarketGap(model, market)
+    val text = if (gap == null) {
+        "$bookmaker: нет положительного расхождения Elo с рынком без маржи."
+    } else {
+        val outcome = when (gap.outcomeCode) {
+            "H" -> "П1"
+            "D" -> "X"
+            else -> "П2"
+        }
+        "$bookmaker: наибольшая положительная разница — $outcome +${"%.1f".format(Locale.US, gap.deltaProbability * 100)} п.п."
+    }
+    Text(text, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable

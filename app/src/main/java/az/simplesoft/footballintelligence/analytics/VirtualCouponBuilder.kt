@@ -78,7 +78,6 @@ data class LoggedCouponPick(
 object VirtualCouponBuilder {
     val supportedAccumulatorSizes = listOf(2, 3, 5, 8, 10)
     const val BOOKMAKER_QUOTE_FRESHNESS_MILLIS = 30L * 60L * 1000L
-    private const val MIN_MARKET_DISAGREEMENT = 1e-12
 
     /** Builds separate model-only drafts. It deliberately does not multiply probabilities or invent odds. */
     fun buildModelOnly(
@@ -196,7 +195,7 @@ object VirtualCouponBuilder {
             Triple("A", probabilities.away, market.away),
         ).maxByOrNull { it.second - it.third } ?: return null
         val difference = choice.second - choice.third
-        if (difference <= MIN_MARKET_DISAGREEMENT) return null
+        if (difference <= ProbabilityEngine.MIN_POSITIVE_MODEL_MARKET_GAP) return null
         val odds = when (choice.first) {
             "H" -> prices.home
             "D" -> prices.draw

@@ -20,8 +20,27 @@ data class OutcomeProbabilities(
 
 enum class MarginMethod { BASIC, POWER, SHIN }
 
+data class PositiveModelMarketGap(val outcomeCode: String, val deltaProbability: Double)
+
 /** Removes the overround from decimal 1X2 odds. Does not establish that a quoted price is available. */
 object ProbabilityEngine {
+    /** Ignore floating-point noise consistently with the virtual model/market draft builder. */
+    const val MIN_POSITIVE_MODEL_MARKET_GAP = 1e-12
+
+    fun largestPositiveModelMarketGap(
+        model: OutcomeProbabilities,
+        market: OutcomeProbabilities,
+    ): PositiveModelMarketGap? {
+        val gaps = listOf(
+            "H" to model.home - market.home,
+            "D" to model.draw - market.draw,
+            "A" to model.away - market.away,
+        )
+        val largest = gaps.maxByOrNull { it.second } ?: return null
+        if (largest.second <= MIN_POSITIVE_MODEL_MARKET_GAP) return null
+        return PositiveModelMarketGap(largest.first, largest.second)
+    }
+
     fun removeMargin(homeOdds: Double, drawOdds: Double, awayOdds: Double, method: MarginMethod): OutcomeProbabilities {
         val odds = listOf(homeOdds, drawOdds, awayOdds)
         require(odds.all { it.isFinite() && it > 1.0 }) { "Decimal odds must be finite and greater than 1." }

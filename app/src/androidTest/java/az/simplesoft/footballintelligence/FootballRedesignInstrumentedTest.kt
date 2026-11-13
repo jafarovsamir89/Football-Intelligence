@@ -183,6 +183,49 @@ class FootballRedesignInstrumentedTest {
     }
 
     @Test
+    fun matchAnalysisExplainsPositiveLocalMarketDifferenceWithoutCallingItARecommendation() {
+        val match = tomorrowMatch()
+        val now = System.currentTimeMillis()
+        val quote = BookmakerOddsSnapshot(
+            providerId = "misli",
+            eventId = "misli-market-gap-test",
+            sourceUrl = "https://www.misli.az/",
+            capturedAtMillis = now,
+            kickoffMillis = java.time.Instant.parse(match.kickoff).toEpochMilli(),
+            market = "1X2",
+            homeTeam = match.home,
+            awayTeam = match.away,
+            home = 2.0,
+            draw = 3.2,
+            away = 4.0,
+            eventDate = match.kickoff.take(10),
+            timeZoneId = "Asia/Baku",
+            matchId = match.id,
+        )
+        composeRule.setContent {
+            FootballTheme {
+                MatchAnalysisTab(
+                    active = match,
+                    eloForecast = EloForecast(
+                        probabilities = OutcomeProbabilities(.55, .25, .20),
+                        matchesUsed = 22,
+                        homeTeamMatches = 7,
+                        awayTeamMatches = 9,
+                    ),
+                    activeMarketReference = null,
+                    marketReferenceSyncState = null,
+                    misliOdds = listOf(quote),
+                    topazOdds = emptyList(),
+                    onOpenTipsAudit = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Misli: наибольшая положительная разница — П1 +7.9 п.п.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("расхождение для проверки, а не рекомендация", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
     fun matchCardLabelsUnavailableModelEstimateAsAnActionableDetail() {
         composeRule.setContent {
             FootballTheme {

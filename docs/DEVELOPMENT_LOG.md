@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — explain model/market differences in match analysis (local passed; Actions pending)
+
+- The user couldn't tell what the app's probability-vs-price comparison meant or whether it implied a decision. The detail screen showed three signed percentage-point differences but no interpretation.
+- Added a tested domain helper that selects the largest positive Elo-minus-no-vig 1X2 gap and shares the same floating-point tolerance with the virtual model/market coupon builder. The match screen now highlights the outcome and gap, states when no outcome is above market, and explains that a positive gap is only a hypothesis to examine: Elo is uncalibrated and the comparison proves no edge or profit.
+- Added unit coverage for outcome selection and the shared noise threshold, plus a Compose regression using a synthetic Misli 1X2 line. No real price or provider claim is added. The first grouped compile caught missing history counts in the new test fixture; those fields were added before the successful full rerun.
+- The successful grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 195 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed. Local debug SHA-256 `f32f8db6999f1ef1ecbcee7ac2ea9ee46402a557d2d43530ab3b7806a218de21`; personal APK SHA-256 `deacdae31fe01d13a4b35178325e4312a35a6e026506744dba0499f7017c2bc1`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the personal API key is absent from debug and present only in the private personal APK. No APK was installed or international quota used.
+- Next: commit/push once, inspect Compose/API 26/34 Actions and record the CI artifact/hash; then continue to the next unresolved daily workflow issue. The physical phone is not connected; do not claim it has this build.
+
 ## 2026-11-13 — keep date-only fixtures visible in the normal schedule (local and Actions passed; phone update pending)
 
 - In response to the report that the installed app feels empty, reviewed the daily workflow. Upcoming fixtures from OpenFootball that contain a calendar date but no exact kickoff were saved in SQLite yet excluded from both Home and the ordinary Matches list. That made some of the imported database invisible and contributed to the impression that the app had no useful content.

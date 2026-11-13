@@ -12,6 +12,24 @@ class ProbabilityEngineTest {
         assertTrue(result.home > result.draw && result.draw > result.away)
     }
 
+    @Test fun largestPositiveModelMarketGapNamesTheHighestOutcomeDifference() {
+        val model = OutcomeProbabilities(.55, .25, .20)
+        val market = ProbabilityEngine.removeMargin(2.0, 3.2, 4.0, MarginMethod.BASIC)
+
+        val gap = ProbabilityEngine.largestPositiveModelMarketGap(model, market)
+
+        assertEquals("H", gap?.outcomeCode)
+        assertEquals(model.home - market.home, gap?.deltaProbability ?: 0.0, 1e-12)
+    }
+
+    @Test fun largestPositiveModelMarketGapIgnoresEqualInputsAndFloatingPointNoise() {
+        val market = OutcomeProbabilities(.5, .3, .2)
+        assertEquals(null, ProbabilityEngine.largestPositiveModelMarketGap(market, market))
+
+        val noiseOnly = OutcomeProbabilities(.5 + 5e-13, .3 - 5e-13, .2)
+        assertEquals(null, ProbabilityEngine.largestPositiveModelMarketGap(noiseOnly, market))
+    }
+
     @Test fun powerAndShinMethodsReturnFiniteNormalizedProbabilities() {
         for (method in listOf(MarginMethod.POWER, MarginMethod.SHIN)) {
             val result = ProbabilityEngine.removeMargin(1.91, 3.6, 4.2, method)
