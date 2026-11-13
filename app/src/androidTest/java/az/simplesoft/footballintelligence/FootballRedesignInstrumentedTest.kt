@@ -130,6 +130,36 @@ class FootballRedesignInstrumentedTest {
     }
 
     @Test
+    fun homeShowsFailedAutomaticSyncInsteadOfAHealthyOldTimestamp() {
+        composeRule.setContent {
+            FootballTheme {
+                FootballHomeTabContent(
+                    matches = listOf(tomorrowMatch()),
+                    forecasts = emptyList(),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    checkedPredictions = emptyList(),
+                    syncBusy = false,
+                    lastSyncLabel = "Ошибка источника",
+                    syncSummaryDetail = "OpenLigaDB: HTTP 503. Ранее сохранённые матчи остаются доступны офлайн.",
+                    syncHealthy = false,
+                    syncDetails = "OpenLigaDB · ERROR · HTTP 503",
+                    storeLoaded = true,
+                    storeError = null,
+                    onOpenMatches = {},
+                    onOpenCoupons = {},
+                    onSelectMatch = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Ошибка источника").assertIsDisplayed()
+        composeRule.onNodeWithText("OpenLigaDB: HTTP 503", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Статус источников").performClick()
+        composeRule.onNodeWithText("OpenLigaDB · ERROR · HTTP 503").assertIsDisplayed()
+    }
+
+    @Test
     fun matchAnalysisExplainsTheExactHistoryGapInsteadOfShowingBlankProbabilities() {
         composeRule.setContent {
             FootballTheme {

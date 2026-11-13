@@ -42,6 +42,8 @@ internal fun FootballHomeTabContent(
     checkedPredictions: List<LoggedCouponPick>,
     syncBusy: Boolean,
     lastSyncLabel: String,
+    syncSummaryDetail: String = "Сохранённая база доступна офлайн.",
+    syncHealthy: Boolean? = null,
     syncDetails: String,
     storeLoaded: Boolean,
     storeError: String?,
@@ -84,8 +86,8 @@ internal fun FootballHomeTabContent(
                 SourceStatus(
                     title = "Автоматическая синхронизация",
                     status = if (syncBusy) "Обновление" else lastSyncLabel,
-                    detail = if (syncBusy) "Матчи и результаты обновляются в фоне" else "Сохранённые данные доступны офлайн",
-                    healthy = if (syncBusy) null else true,
+                    detail = if (syncBusy) "Матчи и результаты обновляются в фоне" else syncSummaryDetail,
+                    healthy = if (syncBusy) null else syncHealthy,
                 )
                 FilterChip(selected = showSyncDetails, onClick = { showSyncDetails = !showSyncDetails }, label = { Text(if (showSyncDetails) "Скрыть детали" else "Статус источников") })
                 if (showSyncDetails) {

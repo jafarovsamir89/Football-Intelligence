@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — expose the latest football sync outcome on Home (local passed; Actions pending)
+
+- Review of the active Home screen found that it always displayed the latest successful sync timestamp and passed `healthy=true`, even after a newer provider failure. Its expanded “source status” text also showed generic WorkManager state without listing provider outcomes.
+- Added a small sync-overview mapper for running, queued, ERROR, PARTIAL, DEFERRED, successful and first-run states. The Home card now marks a current provider failure as unhealthy, identifies the failing source/error, distinguishes resumable/partial imports from failures, and says cached records remain offline. Expanded details list per-provider status, stored row counts, latest check/success time and error.
+- Added unit regressions for failure versus recovery, partial/deferred neutrality, active work precedence, and provider details, plus a Compose regression that shows the failure on Home.
+- The first grouped command caught only an incorrect `kotlin.test` import in the new JUnit 4 test; after correcting the imports, `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 200 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `9fd142a13fee66d724d3e1c0a42526a84796aa6d66688d64b1bfa876de2c4700`; private personal APK SHA-256 `9732ff3e03c3f09d7aee4684043c73d1eed2b9b68d1fdc344468624f39445fa8`. Both verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the personal Odds API key is absent from debug and present only in the personal APK.
+- Next: commit/push once and verify API 26/API 34 UI instrumentation and the keyless CI artifact. No APK installation is possible while ADB has no connected device; no odds quota was used.
+
 ## 2026-11-13 — explain model/market differences in match analysis (local and Actions passed; phone update pending)
 
 - The user couldn't tell what the app's probability-vs-price comparison meant or whether it implied a decision. The detail screen showed three signed percentage-point differences but no interpretation.

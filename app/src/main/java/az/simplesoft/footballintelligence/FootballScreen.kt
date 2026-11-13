@@ -120,15 +120,27 @@ import androidx.work.WorkManager
     val syncQueued=oneTimeSync.any { it.state==WorkInfo.State.ENQUEUED || it.state==WorkInfo.State.BLOCKED }
     val activeSyncStage=(oneTimeSync+periodicSync).firstOrNull { it.state==WorkInfo.State.RUNNING }
         ?.progress?.getString("stage")
-    val lastSuccessfulSync=syncSummaries.mapNotNull { it.lastSuccessAtMillis }.maxOrNull()
-    val syncStatusText=when {
-        storeLoadState.error!=null -> "Ошибка чтения локальной базы: ${storeLoadState.error}"
-        !storeLoadState.loaded -> "Читаю сохранённую локальную базу…"
-        syncBusy -> automaticSyncStageMessage(activeSyncStage)
-        syncQueued -> "Автоматическая синхронизация стоит в очереди WorkManager; возможна системная задержка или ожидание сети. Локальная база доступна."
-        lastSuccessfulSync!=null -> "Последняя синхронизация: ${DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm").withZone(ZoneId.of("Asia/Baku")).format(Instant.ofEpochMilli(lastSuccessfulSync))}"
-        else -> "Автоматическая синхронизация запланирована; ожидается сеть или первый успешный ответ источника."
+    val syncOverview=remember(syncBusy,syncQueued,syncSummaries) {
+        automaticFootballSyncOverview(syncBusy,syncQueued,syncSummaries)
     }
+    val syncStatusLabel=when {
+        storeLoadState.error!=null -> "Ошибка локальной базы"
+        !storeLoadState.loaded -> "Читаю локальную базу"
+        syncBusy -> automaticSyncStageMessage(activeSyncStage)
+        else -> syncOverview.status
+    }
+    val syncSummaryDetail=when {
+        storeLoadState.error!=null -> storeLoadState.error ?: "Не удалось прочитать локальную базу."
+        !storeLoadState.loaded -> "Загружаю сохранённые матчи и результаты."
+        else -> syncOverview.detail
+    }
+    val syncHealthy=when {
+        storeLoadState.error!=null -> false
+        !storeLoadState.loaded || syncBusy || syncQueued -> null
+        else -> syncOverview.healthy
+    }
+    val syncStatusText="$syncStatusLabel · $syncSummaryDetail"
+    val syncHomeDetails=listOf(syncStatusText,providerSyncDetails(syncSummaries)).joinToString("\n")
     LaunchedEffect(
         oneTimeSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
         periodicSync.map { it.state to (it.runAttemptCount to it.progress.getString("stage")) },
@@ -425,8 +437,10 @@ import androidx.work.WorkManager
               topazOdds = topazOdds,
               checkedPredictions = checkedCouponHistory,
               syncBusy = syncBusy,
-              lastSyncLabel = lastSuccessfulSync?.let { "Обновлено ${niceTime(Instant.ofEpochMilli(it).toString())}" } ?: "Ожидается сеть",
-              syncDetails = syncStatusText,
+              lastSyncLabel = syncStatusLabel,
+              syncSummaryDetail = syncSummaryDetail,
+              syncHealthy = syncHealthy,
+              syncDetails = syncHomeDetails,
               storeLoaded = storeLoadState.loaded,
               storeError = storeLoadState.error,
               onOpenMatches = { destination = FootballDestination.MATCHES },
