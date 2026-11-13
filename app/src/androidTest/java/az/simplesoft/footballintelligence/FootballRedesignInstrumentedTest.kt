@@ -172,7 +172,7 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Ошибка источника", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("OpenLigaDB: HTTP 503", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Статус источников").performClick()
+        composeRule.onNodeWithText("Статус источников").performScrollTo().performClick()
         composeRule.onNodeWithText("OpenLigaDB · ERROR · HTTP 503", substring = true).performScrollTo().assertIsDisplayed()
     }
 
