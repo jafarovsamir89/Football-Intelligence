@@ -17,6 +17,24 @@ class TheOddsApiSchedulerTest {
         assertTrue(isTheOddsApiSyncStale(now + TimeUnit.MINUTES.toMillis(2), now))
     }
 
+    @Test fun initialOddsRefreshWaitsUntilForecastBaselineExists() {
+        val now = 1_800_000_000_000L
+
+        assertFalse(shouldScheduleTheOddsApiImmediateRefresh(false, null, now))
+        assertTrue(shouldScheduleTheOddsApiImmediateRefresh(true, null, now))
+        assertFalse(shouldScheduleTheOddsApiImmediateRefresh(true, now - TimeUnit.MINUTES.toMillis(5), now))
+        assertTrue(shouldScheduleTheOddsApiImmediateRefresh(true, now - TimeUnit.HOURS.toMillis(2), now))
+        assertFalse(shouldScheduleTheOddsApiImmediateRefresh(false, now - TimeUnit.HOURS.toMillis(2), now))
+    }
+
+    @Test fun initialOddsRefreshWaitsForCompletedFootballSyncAndSavedForecasts() {
+        assertFalse(shouldScheduleTheOddsApiAfterFootballSync(syncBusy = true, syncQueued = false, forecastCount = 4, apiKeyAvailable = true))
+        assertFalse(shouldScheduleTheOddsApiAfterFootballSync(syncBusy = false, syncQueued = true, forecastCount = 4, apiKeyAvailable = true))
+        assertFalse(shouldScheduleTheOddsApiAfterFootballSync(syncBusy = false, syncQueued = false, forecastCount = 0, apiKeyAvailable = true))
+        assertFalse(shouldScheduleTheOddsApiAfterFootballSync(syncBusy = false, syncQueued = false, forecastCount = 4, apiKeyAvailable = false))
+        assertTrue(shouldScheduleTheOddsApiAfterFootballSync(syncBusy = false, syncQueued = false, forecastCount = 4, apiKeyAvailable = true))
+    }
+
     @Test fun oddsRequestsAreSpacedAndHardLimitedToTwelvePerRollingDay() {
         val now = 1_800_000_000_000L
         val hour = TimeUnit.HOURS.toMillis(1)

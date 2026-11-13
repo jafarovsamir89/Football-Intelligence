@@ -233,6 +233,49 @@ class TheOddsApiWorkerInstrumentedTest {
         }
     }
 
+    @Test fun schedulerDefersFirstOneTimeOddsRequestUntilFootballBaselineIsReady() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val manager = WorkManager.getInstance(context)
+        clearWork(manager)
+        try {
+            TheOddsApiScheduler.enqueueForFreshness(
+                context,
+                lastCheckedAtMillis = null,
+                nowMillis = System.currentTimeMillis(),
+                apiKeyAvailable = true,
+                footballBaselineReady = false,
+            )
+            assertTrue(activeWork(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME).isEmpty())
+            val periodic = awaitPeriodicInterval(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME, TimeUnit.HOURS.toMillis(2))
+            assertEquals(NetworkType.CONNECTED, periodic.constraints.requiredNetworkType)
+
+            TheOddsApiScheduler.enqueueImmediateIfStale(
+                context,
+                lastCheckedAtMillis = null,
+                nowMillis = System.currentTimeMillis(),
+                apiKeyAvailable = true,
+                footballBaselineReady = false,
+            )
+            assertTrue(activeWork(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME).isEmpty())
+
+            TheOddsApiScheduler.enqueueImmediateIfStale(
+                context,
+                lastCheckedAtMillis = null,
+                nowMillis = System.currentTimeMillis(),
+                immediateInitialDelayMillis = TimeUnit.HOURS.toMillis(1),
+                apiKeyAvailable = true,
+                footballBaselineReady = true,
+            )
+            val once = awaitOne(manager, TheOddsApiScheduler.UNIQUE_ONCE_NAME)
+            assertEquals(WorkInfo.State.ENQUEUED, once.state)
+            assertEquals(NetworkType.CONNECTED, once.constraints.requiredNetworkType)
+            val periodicAfter = awaitPeriodicInterval(manager, TheOddsApiScheduler.UNIQUE_PERIODIC_NAME, TimeUnit.HOURS.toMillis(2))
+            assertEquals(periodic.id, periodicAfter.id)
+        } finally {
+            clearWork(manager)
+        }
+    }
+
     @Test fun persistedOddsRequestBudgetCapsTwelveRunsPerRollingDay() {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         val prefs = context.getSharedPreferences("fi-odds-budget-${UUID.randomUUID()}", Context.MODE_PRIVATE)

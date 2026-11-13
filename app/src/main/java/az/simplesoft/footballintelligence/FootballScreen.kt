@@ -220,9 +220,17 @@ import androidx.work.WorkManager
     val accumulatorDrafts=remember(forecastedMatches,misliOdds,topazOdds) {
         VirtualCouponBuilder.buildAccumulators(forecastedMatches,oddsProviders.map { it.providerId to it.displayName },bookmakerCouponPrices)
     }
-    LaunchedEffect(forecastedMatches) {
+    LaunchedEffect(forecastedMatches, syncBusy, syncQueued) {
         val recordsChanged=repository.recordProspectiveForecastsAndSettle(forecastedMatches)
         if(recordsChanged>0) revision++
+        if(shouldScheduleTheOddsApiAfterFootballSync(
+                syncBusy = syncBusy,
+                syncQueued = syncQueued,
+                forecastCount = forecastedMatches.size,
+                apiKeyAvailable = BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
+            )) {
+            TheOddsApiScheduler.scheduleAfterFootballSync(activity)
+        }
     }
     LaunchedEffect(modelPickDrafts,accumulatorDrafts) {
         val recordsAdded=repository.recordCouponDrafts(modelPickDrafts,accumulatorDrafts)

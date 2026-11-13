@@ -54,6 +54,19 @@ internal fun isTheOddsApiSyncStale(lastCheckedAtMillis: Long?, nowMillis: Long):
         lastCheckedAtMillis > nowMillis + 60_000L ||
         nowMillis - lastCheckedAtMillis >= THE_ODDS_API_STALE_WINDOW_MILLIS
 
+internal fun shouldScheduleTheOddsApiImmediateRefresh(
+    footballBaselineReady: Boolean,
+    lastCheckedAtMillis: Long?,
+    nowMillis: Long,
+): Boolean = footballBaselineReady && isTheOddsApiSyncStale(lastCheckedAtMillis, nowMillis)
+
+internal fun shouldScheduleTheOddsApiAfterFootballSync(
+    syncBusy: Boolean,
+    syncQueued: Boolean,
+    forecastCount: Int,
+    apiKeyAvailable: Boolean,
+): Boolean = !syncBusy && !syncQueued && forecastCount > 0 && apiKeyAvailable
+
 internal fun canStartTheOddsApiBatch(
     recentAttemptsMillis: Collection<Long>,
     nowMillis: Long,
@@ -119,18 +132,49 @@ object TheOddsApiScheduler {
             cancelPendingWork(appContext)
             return
         }
-        val lastChecked = runCatching {
+        val scheduleState = runCatching {
             Store(appContext).let { store ->
                 try {
-                    maxOf(
+                    val lastChecked = maxOf(
                         store.internationalOddsSyncState(THE_ODDS_API_PROVIDER_ID)?.lastCheckedAtMillis ?: 0L,
                         appContext.getSharedPreferences(THE_ODDS_API_PREFS, Context.MODE_PRIVATE).getLong(LAST_BATCH_ATTEMPT_KEY, 0L),
                     ).takeIf { it > 0L }
+                    val hasSavedForecasts = store.prospectiveForecastHistory(limit = 1).isNotEmpty()
+                    lastChecked to (hasSavedForecasts || lastChecked != null)
                 }
                 finally { store.close() }
             }
         }.getOrNull()
-        enqueueForFreshness(appContext, lastChecked, System.currentTimeMillis())
+        enqueueForFreshness(
+            appContext,
+            scheduleState?.first,
+            System.currentTimeMillis(),
+            footballBaselineReady = scheduleState?.second == true,
+        )
+    }
+
+    /** Schedules only the first stale one-time request after the football and forecast baseline exists. */
+    fun scheduleAfterFootballSync(context: Context) {
+        val appContext = context.applicationContext
+        if (BuildConfig.THE_ODDS_API_KEY.isBlank()) return
+        val scheduleState = runCatching {
+            Store(appContext).let { store ->
+                try {
+                    val lastChecked = maxOf(
+                        store.internationalOddsSyncState(THE_ODDS_API_PROVIDER_ID)?.lastCheckedAtMillis ?: 0L,
+                        appContext.getSharedPreferences(THE_ODDS_API_PREFS, Context.MODE_PRIVATE).getLong(LAST_BATCH_ATTEMPT_KEY, 0L),
+                    ).takeIf { it > 0L }
+                    val hasSavedForecasts = store.prospectiveForecastHistory(limit = 1).isNotEmpty()
+                    lastChecked to (hasSavedForecasts || lastChecked != null)
+                } finally { store.close() }
+            }
+        }.getOrNull()
+        enqueueImmediateIfStale(
+            appContext,
+            scheduleState?.first,
+            System.currentTimeMillis(),
+            footballBaselineReady = scheduleState?.second == true,
+        )
     }
 
     internal fun enqueueForFreshness(
@@ -139,6 +183,7 @@ object TheOddsApiScheduler {
         nowMillis: Long,
         immediateInitialDelayMillis: Long = 0L,
         apiKeyAvailable: Boolean = BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
+        footballBaselineReady: Boolean = true,
     ) {
         require(immediateInitialDelayMillis >= 0L)
         if (!apiKeyAvailable) {
@@ -154,13 +199,33 @@ object TheOddsApiScheduler {
                 .setConstraints(constraints),
         ).build()
         manager.enqueueUniquePeriodicWork(THE_ODDS_API_PERIODIC_WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, periodic)
-        if (isTheOddsApiSyncStale(lastCheckedAtMillis, nowMillis)) {
-            val onceBuilder = withAutomaticSyncRetryBackoff(
-                OneTimeWorkRequestBuilder<TheOddsApiOddsWorker>().setConstraints(constraints),
-            )
-            if (immediateInitialDelayMillis > 0L) onceBuilder.setInitialDelay(immediateInitialDelayMillis, TimeUnit.MILLISECONDS)
-            manager.enqueueUniqueWork(THE_ODDS_API_ONCE_WORK_NAME, ExistingWorkPolicy.KEEP, onceBuilder.build())
-        }
+        enqueueImmediateIfStale(
+            context,
+            lastCheckedAtMillis,
+            nowMillis,
+            immediateInitialDelayMillis,
+            apiKeyAvailable,
+            footballBaselineReady,
+        )
+    }
+
+    internal fun enqueueImmediateIfStale(
+        context: Context,
+        lastCheckedAtMillis: Long?,
+        nowMillis: Long,
+        immediateInitialDelayMillis: Long = 0L,
+        apiKeyAvailable: Boolean = BuildConfig.THE_ODDS_API_KEY.isNotBlank(),
+        footballBaselineReady: Boolean = true,
+    ) {
+        require(immediateInitialDelayMillis >= 0L)
+        if (!apiKeyAvailable || !shouldScheduleTheOddsApiImmediateRefresh(footballBaselineReady, lastCheckedAtMillis, nowMillis)) return
+        val manager = WorkManager.getInstance(context.applicationContext)
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        val onceBuilder = withAutomaticSyncRetryBackoff(
+            OneTimeWorkRequestBuilder<TheOddsApiOddsWorker>().setConstraints(constraints),
+        )
+        if (immediateInitialDelayMillis > 0L) onceBuilder.setInitialDelay(immediateInitialDelayMillis, TimeUnit.MILLISECONDS)
+        manager.enqueueUniqueWork(THE_ODDS_API_ONCE_WORK_NAME, ExistingWorkPolicy.KEEP, onceBuilder.build())
     }
 
     private fun cancelPendingWork(context: Context) {
