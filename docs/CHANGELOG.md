@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — показывать наблюдаемое движение цен Misli/TOPAZ (local passed; Actions pending)
+## Unreleased — показывать наблюдаемое движение цен Misli/TOPAZ (local and Actions passed)
 
 - Экран разбора матча получает сохранённую историю точного local link отдельно для Misli и TOPAZ, выводит первую/последнюю предматчевые цены, время снимков и процент изменения. Повтор одной строки не удваивает число наблюдений; конфликтующие цены на одном capture-time и несколько внешних event ID не объединяются.
-- Подпись уточняет, что это локально наблюдавшиеся снимки, не официальные opening/closing линии или CLV; источники дают историю только при успешном foreground WebView capture. Добавлены unit, Store persistence и Compose regressions. Локальная групповая команда прошла 204 JVM-теста без ошибок/пропусков, компиляцию Android UI-тестов и сборку обеих APK. Debug hash `12baed2f385f28523c675de3128b37e6c4e479c2e90e39ca5037fc321a393c9d`; personal hash `47cae7f2eab83ef48edcb89f9b42f741611b77334bf8facb3eb9be5db95c1b47`. DEX debug не содержит личный ключ; ключ есть только в приватной personal APK. Actions ещё ожидается; телефон не подключён.
+- Подпись уточняет, что это локально наблюдавшиеся снимки, не официальные opening/closing линии или CLV; источники дают историю только при успешном foreground WebView capture. Добавлены unit, Store persistence и Compose regressions. Локальная групповая команда прошла 204 JVM-теста без ошибок/пропусков, компиляцию Android UI-тестов и сборку обеих APK. Debug hash `12baed2f385f28523c675de3128b37e6c4e479c2e90e39ca5037fc321a393c9d`; personal hash `47cae7f2eab83ef48edcb89f9b42f741611b77334bf8facb3eb9be5db95c1b47`. DEX debug не содержит личный ключ; ключ есть только в приватной personal APK. Actions [43442521483](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43442521483) прошёл 72/72 API 34 и 72/72 API 26 с одним offline-only пропуском, без ошибок; keyless APK загружен как artifact `14047276753`, SHA-256 `bf26c388bf911395751ff19a9681a662cde04bb31e5f5e17ce27fee60a4ba554`. Ключ отсутствует в CI DEX. Телефон не подключён.
 
 ## Unreleased — сделать первый переход к анализу очевидным (local and CI passed)
 

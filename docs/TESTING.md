@@ -1,5 +1,11 @@
 # Testing
 
+## Observed local bookmaker price movement (local and Actions passed)
+
+- Unit coverage checks first/latest snapshot ordering, exact bookmaker/match separation, pre-kickoff time bounds, duplicate suppression, conflicting same-time quote rejection, multiple external event IDs and home/away orientation.
+- API 34/API 26 instrumentation verifies the exact-match history query survives a screen-snapshot read and database reopen; Compose coverage verifies separate Misli/TOPAZ lines and percentage movement with the disclaimer that observations are not official opening/closing prices or CLV.
+- The grouped local command passed 204 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and debug/personal APK assemblies. Actions [43442521483](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43442521483) passed 72/72 API 34 tests and 72/72 API 26 tests with one offline-only skip, zero failures, keyless variants and signing. Artifact `14047276753` is the keyless debug APK, SHA-256 `bf26c388bf911395751ff19a9681a662cde04bb31e5f5e17ce27fee60a4ba554`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938f11c52fa8d935`; DEX contains no local personal key. No phone install or odds quota use occurred.
+
 ## The Odds API distributed free-quota schedule (local and Actions passed)
 
 - Unit tests verify the two-hour app-open gate, rolling 24-hour limit of 12 attempts and exact boundary, refusal to use a future attempt timestamp, monthly release of a persisted ≤20-credit reserve, and respect for a persisted server retry cooldown.
