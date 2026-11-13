@@ -88,6 +88,7 @@ class FootballRedesignInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
+        composeRule.onNodeWithText("Матчи с готовым прогнозом").assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
         composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("1", substring = false).fetchSemanticsNodes().isNotEmpty())

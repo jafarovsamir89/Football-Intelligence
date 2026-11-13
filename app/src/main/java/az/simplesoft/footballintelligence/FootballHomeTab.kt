@@ -62,7 +62,9 @@ internal fun FootballHomeTabContent(
     val todayCount = upcoming.count { kickoffDate(it) == today }
     val freshMisliOdds = remember(misliOdds, now) { misliOdds.filter { isFreshBookmakerQuote(it, now) } }
     val freshTopazOdds = remember(topazOdds, now) { topazOdds.filter { isFreshBookmakerQuote(it, now) } }
-    val featured = upcoming.take(3)
+    val forecastReadyIds = remember(forecasts) { forecasts.mapTo(mutableSetOf()) { it.matchId } }
+    val featured = remember(upcoming, forecastReadyIds) { featuredHomeMatches(upcoming, forecastReadyIds) }
+    val featuredIncludesForecast = featured.any { it.id in forecastReadyIds }
     val checked = checkedPredictions.asSequence().filter { it.finished && it.homeGoals != null && it.awayGoals != null }.take(3).toList()
     var showSyncDetails by remember { mutableStateOf(matches.isEmpty()) }
 
@@ -118,8 +120,11 @@ internal fun FootballHomeTabContent(
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            Text("Ближайшие матчи", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Text(if (featuredIncludesForecast) "Матчи с готовым прогнозом" else "Ближайшие матчи", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             OutlinedButton(onClick = onOpenMatches) { Text("Все матчи") }
+        }
+        if (featuredIncludesForecast) {
+            Text("Сначала показаны игры с оценкой Elo, затем остальные ближайшие матчи.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (featured.isEmpty()) {
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
@@ -173,6 +178,12 @@ internal fun FootballHomeTabContent(
         }
         Spacer(Modifier.height(8.dp))
     }
+}
+
+internal fun featuredHomeMatches(upcoming: List<Match>, forecastMatchIds: Set<Int>, limit: Int = 3): List<Match> {
+    require(limit >= 0)
+    val (forecastReady, awaitingHistory) = upcoming.partition { it.id in forecastMatchIds }
+    return (forecastReady + awaitingHistory).take(limit)
 }
 
 private fun kickoffDate(match: Match): LocalDate? = runCatching {
