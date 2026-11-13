@@ -335,6 +335,7 @@ class FootballTabUiInstrumentedTest {
             }
         }
 
+        composeRule.onNodeWithText("Версия приложения: ${BuildConfig.VERSION_NAME}").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Необязательный код соревнования для CSV").performTextInput("EPL")
         composeRule.onNodeWithText("EPL").assertIsDisplayed()
         composeRule.onNodeWithText("Импорт CSV (дополнительно)").performScrollTo().performClick()
