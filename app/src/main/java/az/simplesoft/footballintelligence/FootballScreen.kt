@@ -413,6 +413,8 @@ import androidx.work.WorkManager
               forecasts = forecastedMatches,
               misliOdds = misliOdds,
               topazOdds = topazOdds,
+              misliSyncState = misliSyncState,
+              topazSyncState = topazSyncState,
               checkedPredictions = checkedCouponHistory,
               syncBusy = syncBusy,
               lastSyncLabel = syncStatusLabel,

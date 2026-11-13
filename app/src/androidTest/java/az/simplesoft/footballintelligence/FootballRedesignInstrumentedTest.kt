@@ -19,6 +19,7 @@ import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
+import az.simplesoft.footballintelligence.data.OddsProviderStatus
 import java.time.LocalDate
 import java.time.ZoneId
 import org.junit.Assert.assertEquals
@@ -78,6 +79,8 @@ class FootballRedesignInstrumentedTest {
                     forecasts = listOf(ForecastedMatch(match.id, match.home, match.away, kickoff, OutcomeProbabilities(.55, .25, .20), competition = match.league)),
                     misliOdds = listOf(linkedLine, unmatchedLine),
                     topazOdds = emptyList(),
+                    misliSyncState = BookmakerSyncState("misli", OddsProviderStatus.LIVE, now, now, 2, null),
+                    topazSyncState = BookmakerSyncState("topaz", OddsProviderStatus.UNAVAILABLE, now, now, 0, "Нет будущих линий"),
                     checkedPredictions = emptyList(),
                     syncBusy = false,
                     lastSyncLabel = "Обновлено 12.11 10:00",
@@ -106,6 +109,9 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
         composeRule.onNodeWithText("Линия Misli").assertIsDisplayed()
+        composeRule.onNodeWithText("Проверка коэффициентов").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("свежих точных совпадений: 1", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Нет будущих линий", substring = true).performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("1", substring = false).fetchSemanticsNodes().isNotEmpty())
         assertTrue(composeRule.onAllNodesWithText("2", substring = false).fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()

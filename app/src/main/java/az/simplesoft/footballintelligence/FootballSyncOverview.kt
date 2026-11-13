@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence
 
 import az.simplesoft.footballintelligence.data.ProviderSyncSummary
+import az.simplesoft.footballintelligence.data.OddsProviderStatus
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -11,6 +12,56 @@ internal data class AutomaticFootballSyncOverview(
     val detail: String,
     val healthy: Boolean?,
 )
+
+internal data class HomeOddsProviderOverview(
+    val status: String,
+    val detail: String,
+    val healthy: Boolean?,
+)
+
+/** Explains what the last public-page capture found without implying background refresh. */
+internal fun homeOddsProviderOverview(
+    state: BookmakerSyncState?,
+    freshExactLinkedCount: Int,
+    nowMillis: Long,
+): HomeOddsProviderOverview {
+    require(freshExactLinkedCount >= 0)
+    val checkedAt = state?.lastCheckedAtMillis
+    val checkedInFuture = checkedAt != null && checkedAt > nowMillis + 60_000L
+    val captureIsFresh = checkedAt != null && !checkedInFuture && nowMillis - checkedAt <= 30L * 60 * 1000
+    val status = when {
+        state == null -> "Ещё не проверялся"
+        checkedAt == null -> "Нет времени проверки"
+        checkedInFuture -> "Время проверки некорректно"
+        state.status == OddsProviderStatus.ERROR -> "Ошибка проверки"
+        state.status == OddsProviderStatus.BLOCKED -> "Доступ ограничен источником"
+        state.status == OddsProviderStatus.STALE || !captureIsFresh -> "Последняя проверка устарела"
+        state.status == OddsProviderStatus.LIVE && state.recordsStored > 0 -> "Видимые линии получены"
+        else -> "Будущих линий не найдено"
+    }
+    val detail = if (state == null) {
+        "Проверка открытой страницы выполняется при работе приложения; Android не гарантирует её в фоне."
+    } else {
+        val checked = checkedAt?.takeUnless { checkedInFuture }?.let(::formatHomeOddsTime)
+        val timestamp = checked?.let { "Проверка $it" } ?: "Время проверки неизвестно"
+        val rows = "видимых линий: ${state.recordsStored}"
+        val linked = "свежих точных совпадений: $freshExactLinkedCount"
+        val sourceDetail = state.error?.takeIf(String::isNotBlank)
+        listOfNotNull(timestamp, rows, linked, sourceDetail).joinToString(" · ")
+    }
+    val healthy = when {
+        state == null -> null
+        state.status == OddsProviderStatus.ERROR || state.status == OddsProviderStatus.BLOCKED -> false
+        captureIsFresh && state.status == OddsProviderStatus.LIVE && freshExactLinkedCount > 0 -> true
+        else -> null
+    }
+    return HomeOddsProviderOverview(status, detail, healthy)
+}
+
+private fun formatHomeOddsTime(timestampMillis: Long): String =
+    DateTimeFormatter.ofPattern("dd.MM HH:mm", Locale("ru"))
+        .withZone(ZoneId.of("Asia/Baku"))
+        .format(Instant.ofEpochMilli(timestampMillis))
 
 /** A short, truthful Home summary derived from the latest persisted state of football providers. */
 internal fun automaticFootballSyncOverview(

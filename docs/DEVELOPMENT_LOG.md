@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — explain local bookmaker quote availability on Home (local checks passed; CI pending)
+
+- After reviewing the actual daily flow, the main screen showed only a count of fresh prices linked to fixtures. When that count was zero, it did not distinguish an unqueried provider, empty page, page error, stale capture, visible rows without exact fixture matches, or current usable quotes.
+- Home now shows the latest Misli and TOPAZ public-page status separately: capture time in Baku, rows parsed during that check, fresh exact-linked upcoming fixtures, and the source's empty/error detail. It states that public WebView capture happens while the app is active and Android does not guarantee bookmaker refreshes in the background. “Healthy” is reserved for a recent capture with at least one exact-linked fresh fixture.
+- Added unit cases for never-checked, rows without fixture links, linked fresh quotes, stale captures, and provider errors, plus a Home Compose regression that asserts the count distinction. Updated README, roadmap, limitations, and changelog.
+- Grouped local run `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 212 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. APK SHA-256: debug `c8bda2892f8a0cb5bd7a99084a5f7120187c926f92f859351044a5b651037cba`; personal `15039f08b303387a9782c0448d8719c3ab76e9fcf08f8199bf7b3eabbf921517`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`; DEX inspection found the local API key absent from debug and present only in the owner-only personal APK. `git diff --check` passed.
+- No phone is connected to ADB, so this screen has not been installed or visually verified on the user's handset. Next: push and verify Actions API 26/API 34 Compose behavior; later update-install the private APK without clearing data when the phone reconnects. Do not claim continuous background odds access, explicit reuse rights, or current availability based on old captures.
+
 ## 2026-11-13 — put the model output on the first screen (CI/API 26/API 34 passed)
 
 - User says the app feels like it has no function after three days of work. Confirmed the real gap: it contains data/model/coupon/analytics workflows, but the Home screen asked the user to open another screen before showing the nearest match's actual 1X2 output. The product is currently a local football analysis notebook, not a validated “bet/skip” service.

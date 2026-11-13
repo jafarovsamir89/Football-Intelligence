@@ -41,6 +41,8 @@ internal fun FootballHomeTabContent(
     forecasts: List<ForecastedMatch>,
     misliOdds: List<BookmakerOddsSnapshot>,
     topazOdds: List<BookmakerOddsSnapshot>,
+    misliSyncState: BookmakerSyncState? = null,
+    topazSyncState: BookmakerSyncState? = null,
     checkedPredictions: List<LoggedCouponPick>,
     syncBusy: Boolean,
     lastSyncLabel: String,
@@ -148,6 +150,25 @@ internal fun FootballHomeTabContent(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Линия Misli", misliLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
             MetricCard("Линия TOPAZ", topazLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
+        }
+
+        val misliOverview = remember(misliSyncState, misliLinkedCount, now) {
+            homeOddsProviderOverview(misliSyncState, misliLinkedCount, now)
+        }
+        val topazOverview = remember(topazSyncState, topazLinkedCount, now) {
+            homeOddsProviderOverview(topazSyncState, topazLinkedCount, now)
+        }
+        ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
+            Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Проверка коэффициентов", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                SourceStatus("Misli · публичная линия", misliOverview.status, misliOverview.detail, misliOverview.healthy)
+                SourceStatus("TOPAZ · публичная линия", topazOverview.status, topazOverview.detail, topazOverview.healthy)
+                Text(
+                    "Видимая страница проверяется автоматически при работе приложения. Android не гарантирует обновление коэффициентов в фоне; цена старше 30 минут не считается свежей.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
