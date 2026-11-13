@@ -16,6 +16,7 @@ import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
+import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
 import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
@@ -562,6 +563,49 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("0 / 1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("Расчёт модели пока недоступен", substring = true).fetchSemanticsNodes().size >= 2)
+    }
+
+    @Test
+    fun priceEdgeCouponExplainsRawBreakEvenProbabilityAgainstFreshOdds() {
+        val now = System.currentTimeMillis()
+        val candidate = VirtualCouponCandidate(
+            providerId = "topaz",
+            providerName = "TOPAZ",
+            picks = listOf(
+                VirtualCouponPick(901101,"Home FC","Away FC",now+86_400_000L,"H",.60,1.75,now,.55,.05),
+                VirtualCouponPick(901102,"Home Two FC","Away Two FC",now+172_800_000L,"H",.58,1.85,now,.53,.05),
+            ),
+            combinedDecimalOdds = 1.75*1.85,
+            requestedLegCount = 2,
+            jointProbabilityBounds = JointProbabilityBounds(.18,.58),
+            selectionBasis = CouponSelectionBasis.MODEL_PRICE_EDGE,
+        )
+        composeRule.setContent { FootballTheme { CouponCard(candidate, showDetails = true) } }
+
+        composeRule.onNodeWithText("порог 1/цена 57.1% · модель выше на +2.9 п.п.", substring = true)
+            .performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun expiredPriceEdgeCouponDoesNotShowTheOldBreakEvenGapAsCurrent() {
+        val now = System.currentTimeMillis()
+        val stalePick = VirtualCouponPick(
+            901201,"Home FC","Away FC",now+86_400_000L,"H",.60,1.75,
+            now-VirtualCouponBuilder.BOOKMAKER_QUOTE_FRESHNESS_MILLIS-1,
+        )
+        val candidate = VirtualCouponCandidate(
+            providerId = "topaz",
+            providerName = "TOPAZ",
+            picks = listOf(stalePick, stalePick.copy(matchId=901202, kickoffMillis=now+172_800_000L)),
+            combinedDecimalOdds = 1.75*1.75,
+            requestedLegCount = 2,
+            jointProbabilityBounds = JointProbabilityBounds(.20,.60),
+            selectionBasis = CouponSelectionBasis.MODEL_PRICE_EDGE,
+        )
+        composeRule.setContent { FootballTheme { CouponCard(candidate, showDetails = true) } }
+
+        composeRule.onNodeWithText("котировка устарела", substring = true).performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("порог 1/цена", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
     private fun tomorrowMatch(): Match {

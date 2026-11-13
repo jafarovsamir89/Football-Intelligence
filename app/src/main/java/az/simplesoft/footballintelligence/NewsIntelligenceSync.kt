@@ -42,6 +42,16 @@ object NewsIntelligenceScheduler {
                 .setConstraints(constraints)
                 .build(),
         )
+        enqueueOnce(manager, constraints)
+    }
+
+    /** Runs again after a complete football import so a first-run empty database cannot strand news. */
+    fun scheduleAfterFootballSync(context: Context) {
+        val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+        enqueueOnce(WorkManager.getInstance(context.applicationContext), constraints)
+    }
+
+    private fun enqueueOnce(manager: WorkManager, constraints: Constraints) {
         manager.enqueueUniqueWork(
             UNIQUE_ONCE_NAME,
             ExistingWorkPolicy.KEEP,
@@ -49,6 +59,11 @@ object NewsIntelligenceScheduler {
         )
     }
 }
+
+internal fun shouldDeferNewsAttempt(previous: ProviderSyncSummary?, nowMillis: Long): Boolean =
+    previous != null && previous.status != "NO_FIXTURES" &&
+        (nowMillis < previous.lastCheckedAtMillis ||
+            nowMillis - previous.lastCheckedAtMillis < NEWS_MIN_ATTEMPT_INTERVAL_MILLIS)
 
 class NewsIntelligenceWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     internal var providerHttpClient: ProviderHttpClient = PublicJsonClient()
@@ -59,7 +74,7 @@ class NewsIntelligenceWorker(context: Context, params: WorkerParameters) : Corou
         try {
             val now = System.currentTimeMillis()
             val previous = store.providerSyncSummaries().firstOrNull { it.providerId == GDELT_NEWS_PROVIDER_ID }
-            if (previous != null && now - previous.lastCheckedAtMillis < NEWS_MIN_ATTEMPT_INTERVAL_MILLIS) {
+            if (shouldDeferNewsAttempt(previous, now)) {
                 setProgress(androidx.work.workDataOf("stage" to "news_cooldown"))
                 return@withContext Result.success()
             }

@@ -102,7 +102,7 @@ class AccumulatorEngineTest {
         assertTrue(topazPriced.all { it.combinedDecimalOdds!=null })
         assertTrue(misliPriced.isEmpty())
         assertEquals(listOf(2,3),topazModel.map { it.requestedLegCount })
-        assertEquals(CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS,drafts.first().selectionBasis)
+        assertEquals(CouponSelectionBasis.MODEL_PRICE_EDGE,drafts.first().selectionBasis)
     }
 
     @Test fun marketDisagreementDraftUsesOnlyFreshSameBookPricesAndRanksPositiveGaps() {
@@ -279,6 +279,24 @@ class AccumulatorEngineTest {
         assertNull(report.virtualRoi)
         assertNull(report.profitFactor)
         assertNull(report.maximumDrawdown)
+    }
+
+    @Test fun priceEdgePerformanceUsesOnlySettledSavedQuotesAndLabelsNoFutureGuarantee() {
+        val entries = listOf(
+            history(21,AccumulatorSettlementState.WON,3.0,210,21).copy(selectionBasis=CouponSelectionBasis.MODEL_PRICE_EDGE),
+            history(22,AccumulatorSettlementState.LOST,4.0,220,23).copy(selectionBasis=CouponSelectionBasis.MODEL_PRICE_EDGE),
+            history(23,AccumulatorSettlementState.PENDING,null,230,25).copy(selectionBasis=CouponSelectionBasis.MODEL_PRICE_EDGE),
+        )
+
+        val report = AccumulatorPerformanceEngine.evaluate(
+            entries,"misli",2,CouponSelectionBasis.MODEL_PRICE_EDGE,emptyList(),
+        )
+
+        assertEquals(2,report.settledCoupons)
+        assertEquals(1,report.wonCoupons)
+        assertEquals(2,report.pricedSettledCoupons)
+        assertEquals(.5,report.virtualRoi!!,1e-12)
+        assertEquals(.25,report.maximumDrawdown!!,1e-12)
     }
 
     @Test fun performanceLeavesRoiUnavailableWhenASettledCouponHadNoCompletePrice() {

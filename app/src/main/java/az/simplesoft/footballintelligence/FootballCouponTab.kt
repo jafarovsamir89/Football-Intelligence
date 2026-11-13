@@ -102,22 +102,28 @@ internal fun FootballCouponTabContent(
                                     val quoteTime=pick.bookmakerOddsCapturedAtMillis?.let { DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(it)) }
                                     " · ${draft.providerName} $odds${quoteTime?.let { " (снимок $it)" }.orEmpty()}"
                                 }.orEmpty()
-                                val modelMarket=if(draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
+                                val modelMarket=if(draft.selectionBasis in setOf(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,CouponSelectionBasis.MODEL_PRICE_EDGE)) {
                                     val marketProbability=pick.marketFairProbability
                                     val difference=pick.modelMinusMarket
                                     if(marketProbability!=null&&difference!=null) " · рынок без маржи ${"%.1f".format(marketProbability*100)}% · Δ ${signedPercentagePoints(difference)} п.п." else ""
                                 } else ""
-                                Text("${niceTime(Instant.ofEpochMilli(pick.kickoffMillis).toString())} · ${pick.homeTeam} — ${pick.awayTeam}: ${labelOutcome(pick.outcome)} · модель ${"%.1f".format(pick.modelProbability*100)}%$modelMarket$price")
+                                val priceBreakEven=if(draft.selectionBasis==CouponSelectionBasis.MODEL_PRICE_EDGE) {
+                                    val breakEven=pick.breakEvenProbability
+                                    val gap=pick.modelMinusBreakEvenProbability
+                                    if(breakEven!=null&&gap!=null) " · порог цены ${"%.1f".format(breakEven*100)}% · выше на ${signedPercentagePoints(gap)} п.п." else " · нет проверенной свежей цены"
+                                } else ""
+                                Text("${niceTime(Instant.ofEpochMilli(pick.kickoffMillis).toString())} · ${pick.homeTeam} — ${pick.awayTeam}: ${labelOutcome(pick.outcome)} · модель ${"%.1f".format(pick.modelProbability*100)}%$modelMarket$price$priceBreakEven")
                             }
                             draft.jointProbabilityBounds?.let { bounds ->
                                 Text("Совместная вероятность: только математические границы ${(bounds.lower*100).roundToInt()}–${(bounds.upper*100).roundToInt()}%; зависимость матчей не смоделирована.",style=MaterialTheme.typography.bodySmall)
-                                if(draft.combinedDecimalOdds!=null && draft.selectionBasis!=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
-                                    Text("Оценку выгодности купона не рассчитываем: активная модель ещё не прошла независимую проверку на будущих матчах. Коэффициент — только цена букмекера.",style=MaterialTheme.typography.bodySmall)
+                                if(draft.combinedDecimalOdds!=null && draft.selectionBasis !in setOf(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,CouponSelectionBasis.MODEL_PRICE_EDGE)) {
+                                    Text("Оценку выгодности экспресса не рассчитываем: модельный шанс пересечения матчей неизвестен без модели зависимости. Общий коэффициент — цена букмекера.",style=MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if(draft.combinedDecimalOdds!=null) Text("Условный общий коэффициент ${"%.2f".format(draft.combinedDecimalOdds)} — произведение только свежих линий ${draft.providerName}.",fontWeight=FontWeight.SemiBold)
                             Text(when {
                                 draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "Положительное расхождение активной модели с линией без маржи — только исследовательский фильтр. EV/ROI скрыты и прибыль не оценивается."
+                                draft.selectionBasis==CouponSelectionBasis.MODEL_PRICE_EDGE -> "Отбор требует модельную вероятность выше 1/коэффициент. Это арифметическая точка безубыточности, не подтверждённое преимущество и не обещание результата; совместная вероятность экспресса остаётся только в указанных границах."
                                 draft.combinedDecimalOdds!=null -> "Снимки коэффициентов фиксируются вместе с виртуальным купоном до матчей. Это не прогнозируемая прибыль: активная модель не откалибрована, а совместный шанс известен лишь в указанном диапазоне."
                                 else -> "Нет полной свежей линии ${draft.providerName} для каждого исхода; общий коэффициент и денежная доходность недоступны. Виртуальный черновик сохраняет только модельные вероятности."
                             },style=MaterialTheme.typography.labelSmall)
@@ -141,10 +147,16 @@ internal fun FootballCouponTabContent(
                         AccumulatorSettlementState.INVALID -> "Некорректная запись"
                     }
                     Text("$checked · $provider · ${entry.legCount} исхода $basisLabel · $stateLabel${entry.combinedDecimalOdds?.let { " · общий коэффициент ${"%.2f".format(it)}" }.orEmpty()}",style=MaterialTheme.typography.bodySmall)
-                    if(entry.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) entry.picks.forEach pickLoop@ { pick ->
+                    if(entry.selectionBasis in setOf(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT,CouponSelectionBasis.MODEL_PRICE_EDGE)) entry.picks.forEach pickLoop@ { pick ->
                         val market=pick.marketFairProbability ?: return@pickLoop
                         val delta=pick.modelMinusMarket ?: return@pickLoop
-                        Text("${pick.homeTeam} — ${pick.awayTeam}: модель ${"%.1f".format(pick.modelProbability*100)}%, линия без маржи ${"%.1f".format(market*100)}%, Δ ${signedPercentagePoints(delta)} п.п.",style=MaterialTheme.typography.labelSmall)
+                        val breakEven=pick.breakEvenProbability
+                        val priceGap=pick.modelMinusBreakEvenProbability
+                        Text(
+                            "${pick.homeTeam} — ${pick.awayTeam}: модель ${"%.1f".format(pick.modelProbability*100)}%, линия без маржи ${"%.1f".format(market*100)}%, Δ ${signedPercentagePoints(delta)} п.п." +
+                                if(entry.selectionBasis==CouponSelectionBasis.MODEL_PRICE_EDGE&&breakEven!=null&&priceGap!=null) "; порог ${"%.1f".format(breakEven*100)}%, выше на ${signedPercentagePoints(priceGap)} п.п." else "",
+                            style=MaterialTheme.typography.labelSmall,
+                        )
                     }
                 }
                 accumulatorEvaluationHistory.groupBy { Triple(it.providerId,it.legCount,it.selectionBasis) }.forEach { (key, entries) ->
@@ -238,4 +250,5 @@ private fun couponSelectionBasisLabel(basis:CouponSelectionBasis):String = when(
     CouponSelectionBasis.MODEL_RANKED -> "по вероятности модели"
     CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "по вероятности модели среди матчей со свежими линиями"
     CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "по расхождению модели с линией"
+    CouponSelectionBasis.MODEL_PRICE_EDGE -> "выше точки безубыточности цены"
 }

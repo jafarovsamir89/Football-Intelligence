@@ -104,6 +104,9 @@ internal fun <B : WorkRequest.Builder<B, W>, W : WorkRequest> withAutomaticSyncR
 
 internal enum class SyncNextStep { CONTINUE, SUCCESS, RETRY }
 
+internal fun shouldScheduleNewsAfterFootballSync(nextStep: SyncNextStep, anyProviderSucceeded: Boolean): Boolean =
+    nextStep == SyncNextStep.SUCCESS && anyProviderSucceeded
+
 internal fun decideSyncNextStep(retryNeeded: Boolean, continuationNeeded: Boolean, anySuccess: Boolean): SyncNextStep = when {
     retryNeeded -> SyncNextStep.RETRY
     continuationNeeded -> SyncNextStep.CONTINUE
@@ -406,6 +409,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val store = Store(applicationContext)
         var syncLockAcquired = false
+        var scheduleNewsAfterSync = false
         try {
         if (!store.tryAcquireProviderSyncLock(System.currentTimeMillis(), TimeUnit.MINUTES.toMillis(9))) {
             setProgress(workDataOf("stage" to "waiting_for_sync_lock"))
@@ -510,14 +514,23 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
                 val delayMillis = retryAfterDelayMillis
                 if (delayMillis != null && enqueueDelayedAutomaticRetry(delayMillis)) Result.success() else Result.retry()
             }
-            SyncNextStep.SUCCESS -> Result.success()
+            SyncNextStep.SUCCESS -> {
+                scheduleNewsAfterSync = shouldScheduleNewsAfterFootballSync(nextStep, anySuccess)
+                Result.success()
+            }
             SyncNextStep.CONTINUE -> if (enqueueContinuation()) Result.success() else Result.retry()
         }
         } finally {
             try {
                 if (syncLockAcquired) store.releaseProviderSyncLock()
             } finally {
-                store.close()
+                try {
+                    store.close()
+                } finally {
+                    if (scheduleNewsAfterSync) {
+                        runCatching { NewsIntelligenceScheduler.scheduleAfterFootballSync(applicationContext) }
+                    }
+                }
             }
         }
     }

@@ -46,6 +46,7 @@ import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
+import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import java.time.Instant
 import java.time.ZoneId
@@ -302,7 +303,16 @@ internal fun CouponCard(candidate: VirtualCouponCandidate, modifier: Modifier = 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text("${pick.homeTeam} — ${pick.awayTeam}", style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("${labelOutcome(pick.outcome)} · модель ${"%.1f".format(Locale.US, pick.modelProbability * 100)}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val priceEdgeDetail = if (candidate.selectionBasis == CouponSelectionBasis.MODEL_PRICE_EDGE && !isFreshCouponPrice(pick, nowMillis)) {
+                            " · котировка устарела"
+                        } else if (candidate.selectionBasis == CouponSelectionBasis.MODEL_PRICE_EDGE) {
+                            val breakEven = pick.breakEvenProbability
+                            val gap = pick.modelMinusBreakEvenProbability
+                            if (breakEven != null && gap != null) {
+                                " · порог 1/цена ${"%.1f".format(Locale.US, breakEven * 100)}% · модель выше на ${"%+.1f".format(Locale.US, gap * 100)} п.п."
+                            } else " · нет проверенной свежей цены"
+                        } else ""
+                        Text("${labelOutcome(pick.outcome)} · модель ${"%.1f".format(Locale.US, pick.modelProbability * 100)}%$priceEdgeDetail", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     val freshPrice = pick.bookmakerDecimalOdds.takeIf { isFreshCouponPrice(pick, nowMillis) }
                     Text(freshPrice?.let { "%.2f".format(Locale.US, it) } ?: "—", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)

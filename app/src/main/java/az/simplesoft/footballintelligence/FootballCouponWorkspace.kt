@@ -28,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.AccumulatorSettlementState
 import az.simplesoft.footballintelligence.analytics.AccumulatorPerformanceEngine
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
-import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.LoggedCouponPick
 import az.simplesoft.footballintelligence.analytics.SettledSinglePrediction
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
@@ -69,9 +68,10 @@ internal fun FootballCouponWorkspace(
     val sizedCandidates = candidates.filter { it.providerId == provider && it.requestedLegCount == legCount }
         .sortedBy { candidate ->
             when (candidate.selectionBasis) {
-                CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> 0
-                CouponSelectionBasis.MODEL_RANKED -> 1
+                CouponSelectionBasis.MODEL_PRICE_EDGE -> 0
+                CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> 1
                 CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> 2
+                CouponSelectionBasis.MODEL_RANKED -> 3
             }
         }
     val selectedCandidate = sizedCandidates.firstOrNull()
@@ -92,7 +92,7 @@ internal fun FootballCouponWorkspace(
     ) {
         Text("Виртуальные купоны", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Исходы рассчитываются отдельно для каждой БК", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text("Оценку выгодности купона не рассчитываем: Elo ещё не прошёл независимую проверку на будущих матчах. Коэффициент — только цена букмекера.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Рабочий расчёт — Poisson, резервный — Elo. Исторический holdout не доказывает будущую прибыль. Ценовой отбор требует модельную вероятность выше 1/коэффициент и показывает этот разрыв отдельно; это эксперимент, не рекомендация.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("misli" to "Misli", "topaz" to "TOPAZ").forEach { (id, name) ->
                 FilterChip(selected = provider == id, onClick = { provider = id }, label = { Text(name) }, modifier = Modifier.weight(1f))
@@ -118,7 +118,7 @@ internal fun FootballCouponWorkspace(
                     Text("Экспресс из $legCount исходов пока не собран", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     val explanation = when {
                         upcomingFixtureCount == 0 -> "В локальной базе сейчас нет предстоящих матчей с точным временем. После автоматической загрузки расписания оценки появятся здесь."
-                        modelForecastCount == 0 -> "Готовых прогнозов: 0. В базе есть $upcomingFixtureCount предстоящих матчей, но Elo требует минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до kickoff и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды."
+                        modelForecastCount == 0 -> "Готовых прогнозов: 0. В базе есть $upcomingFixtureCount предстоящих матчей, но основной Poisson требует минимум ${az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine.MINIMUM_LEAGUE_MATCHES} результатов лиги и ${az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine.MINIMUM_MATCHES_PER_TEAM} появлений у каждой команды. При нехватке истории используется резервный Elo."
                         modelForecastCount < legCount -> "Готовых прогнозов: $modelForecastCount. Для купона на $legCount исходов нужно минимум $legCount; пока прогнозов меньше."
                         else -> "Расчётов достаточно, но черновик купона пока недоступен. Открой список матчей и проверь детали оценок."
                     }
@@ -141,6 +141,8 @@ internal fun FootballCouponWorkspace(
                     selectedCandidate.selectionBasis == CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS && !candidateHasFreshPrices -> "Снимок цен устарел. Сейчас показаны только вероятности модели; цены вернутся после следующей проверки."
                     selectedCandidate.selectionBasis == CouponSelectionBasis.MODEL_RANKED -> "Подбор по наибольшим модельным вероятностям."
                     selectedCandidate.selectionBasis == CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "Подбор среди матчей с полной свежей линией этого букмекера."
+                    selectedCandidate.selectionBasis == CouponSelectionBasis.MODEL_PRICE_EDGE && !candidateHasFreshPrices -> "Котировка устарела: ценовой разрыв больше не показывается как актуальный; после обновления он будет пересчитан."
+                    selectedCandidate.selectionBasis == CouponSelectionBasis.MODEL_PRICE_EDGE -> "Экспериментальный отбор по модельной вероятности выше порога 1/свежий коэффициент; математический разрыв не подтверждён будущими результатами."
                     else -> "Исследовательский подбор по сравнению модели и линии без маржи; это не EV."
                 },
                 style = MaterialTheme.typography.bodySmall,
@@ -153,6 +155,7 @@ internal fun FootballCouponWorkspace(
                         CouponSelectionBasis.MODEL_RANKED -> "по модели"
                         CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "по матчам с линиями"
                         CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "по расхождению модели и рынка"
+                        CouponSelectionBasis.MODEL_PRICE_EDGE -> "по превышению точки безубыточности"
                     }}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     CouponCard(alternative, showDetails = true)
                 }
@@ -230,6 +233,7 @@ private fun CouponPerformanceSummary(
                             CouponSelectionBasis.MODEL_RANKED -> "По вероятности модели"
                             CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "По модели среди матчей со свежими линиями"
                             CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "По расхождению модели с линией"
+                            CouponSelectionBasis.MODEL_PRICE_EDGE -> "Модель выше точки безубыточности цены"
                         }
                         val details = if (report.settledCoupons == 0) {
                             "Сохранено ${cohort.size}; завершено 0; ждут результата $pending; требуют проверки $needsReview"

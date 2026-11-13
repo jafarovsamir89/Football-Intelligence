@@ -27,7 +27,15 @@ data class VirtualCouponPick(
     val marketFairProbability: Double? = null,
     /** Signed model probability minus same-book de-vigged probability. Not expected value. */
     val modelMinusMarket: Double? = null,
-)
+) {
+    /** Raw decimal-price break-even probability (1 / odds); null without an evidenced price. */
+    val breakEvenProbability: Double?
+        get() = bookmakerDecimalOdds?.takeIf { it.isFinite() && it > 1.0 }?.let { 1.0 / it }
+
+    /** Model probability minus the raw price break-even probability; not a validated edge. */
+    val modelMinusBreakEvenProbability: Double?
+        get() = breakEvenProbability?.let { modelProbability - it }
+}
 
 data class ThreeWayDecimalOdds(
     val home: Double,
@@ -41,13 +49,15 @@ data class JointProbabilityBounds(val lower: Double, val upper: Double)
 enum class CouponSelectionBasis {
     MODEL_RANKED,
     MATCHED_FRESH_BOOKMAKER_ODDS,
-    MODEL_MARKET_DISAGREEMENT;
+    MODEL_MARKET_DISAGREEMENT,
+    MODEL_PRICE_EDGE;
 
     val strategyVersion: String
         get() = when (this) {
             MODEL_RANKED -> "model-max-1x2-frechet-v2"
             MATCHED_FRESH_BOOKMAKER_ODDS -> "model-priced-max-1x2-frechet-v2"
             MODEL_MARKET_DISAGREEMENT -> "model-vs-local-devig-positive-delta-frechet-v1"
+            MODEL_PRICE_EDGE -> "model-vs-raw-price-breakeven-positive-gap-frechet-v1"
         }
 }
 
@@ -139,15 +149,20 @@ object VirtualCouponBuilder {
             val disagreementPool = eligible.mapNotNull { forecast ->
                 forecast.toMarketDisagreementPick(providerOdds[forecast.matchId])
             }
+            val priceEdgePool = eligible.mapNotNull { forecast ->
+                forecast.toModelPriceEdgePick(providerOdds[forecast.matchId])
+            }
             buildSizedDrafts(providerId,providerName,pricedPool,CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS) +
+                buildSizedDrafts(providerId,providerName,priceEdgePool,CouponSelectionBasis.MODEL_PRICE_EDGE) +
                 buildSizedDrafts(providerId,providerName,disagreementPool,CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) +
                 buildSizedDrafts(providerId,providerName,modelPool,CouponSelectionBasis.MODEL_RANKED)
         }
             .sortedBy {
                 when (it.selectionBasis) {
-                    CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> 0
-                    CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> 1
-                    CouponSelectionBasis.MODEL_RANKED -> 2
+                    CouponSelectionBasis.MODEL_PRICE_EDGE -> 0
+                    CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> 1
+                    CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> 2
+                    CouponSelectionBasis.MODEL_RANKED -> 3
                 }
             }
     }
@@ -160,10 +175,10 @@ object VirtualCouponBuilder {
     ):List<VirtualCouponCandidate> {
         val ordered=pool.sortedWith(
             compareByDescending<VirtualCouponPick> {
-                if (selectionBasis == CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
-                    it.modelMinusMarket ?: Double.NEGATIVE_INFINITY
-                } else {
-                    it.modelProbability
+                when (selectionBasis) {
+                    CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> it.modelMinusMarket ?: Double.NEGATIVE_INFINITY
+                    CouponSelectionBasis.MODEL_PRICE_EDGE -> it.modelMinusBreakEvenProbability ?: Double.NEGATIVE_INFINITY
+                    else -> it.modelProbability
                 }
             }.thenByDescending { it.modelProbability }.thenBy { it.kickoffMillis },
         )
@@ -214,6 +229,37 @@ object VirtualCouponBuilder {
             bookmakerOddsCapturedAtMillis = prices.capturedAtMillis,
             marketFairProbability = choice.third,
             modelMinusMarket = difference,
+        )
+    }
+
+    /** Requires both a fresh complete same-book line and model probability above raw price break-even. */
+    private fun ForecastedMatch.toModelPriceEdgePick(prices: ThreeWayDecimalOdds?): VirtualCouponPick? {
+        if (prices == null) return null
+        val market = ProbabilityEngine.removeMargin(prices.home, prices.draw, prices.away, MarginMethod.BASIC)
+        val choices = listOf(
+            Triple("H", probabilities.home, prices.home to market.home),
+            Triple("D", probabilities.draw, prices.draw to market.draw),
+            Triple("A", probabilities.away, prices.away to market.away),
+        )
+        val choice = choices.maxByOrNull { (_, probability, priceAndFair) ->
+            probability - (1.0 / priceAndFair.first)
+        } ?: return null
+        val (outcome, probability, priceAndFair) = choice
+        val odds = priceAndFair.first
+        val modelMinusBreakEven = probability - 1.0 / odds
+        if (modelMinusBreakEven <= ProbabilityEngine.MIN_POSITIVE_MODEL_MARKET_GAP) return null
+        val modelMinusMarket = probability - priceAndFair.second
+        return VirtualCouponPick(
+            matchId = matchId,
+            homeTeam = homeTeam,
+            awayTeam = awayTeam,
+            kickoffMillis = kickoffMillis,
+            outcome = outcome,
+            modelProbability = probability,
+            bookmakerDecimalOdds = odds,
+            bookmakerOddsCapturedAtMillis = prices.capturedAtMillis,
+            marketFairProbability = priceAndFair.second,
+            modelMinusMarket = modelMinusMarket,
         )
     }
 
