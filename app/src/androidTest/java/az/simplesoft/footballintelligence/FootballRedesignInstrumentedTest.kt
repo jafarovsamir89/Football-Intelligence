@@ -91,12 +91,12 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Прогноз Elo").assertIsDisplayed()
-        composeRule.onNodeWithText("Начните с ближайшего матча").assertIsDisplayed()
-        composeRule.onNodeWithText("Как получить результат").assertIsDisplayed()
-        composeRule.onNodeWithText("Нет котировки — приложение её не придумывает.", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("не совет ставить", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Открыть анализ").performClick()
+        composeRule.onNodeWithText("Прогноз Elo").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Начните с ближайшего матча").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Как получить результат").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Нет котировки — приложение её не придумывает.", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("не совет ставить", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Открыть анализ").performScrollTo().performClick()
         assertEquals(match.id, selectedMatch)
         composeRule.onNodeWithText("Матчи с готовым прогнозом").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("1 / 1").assertIsDisplayed()
