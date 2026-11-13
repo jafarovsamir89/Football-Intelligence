@@ -3,7 +3,7 @@
 ## Unreleased — сравнивать Elo с частотной базой той же лиги
 
 - Автоматический walk-forward теперь считает сглаженные частоты П1/X/П2 только по результатам, доступным до каждого cutoff, и оценивает их на тех же матчах, что и Elo. Главный отчёт и сезонные группы показывают Brier/Log Loss baseline и разницу Elo−baseline; live-прогнозы и купоны не изменены.
-- Добавлены регрессии на строгую временную отсечку, совместную доступность, правильный score и группировку по точным меткам сезона. Локальный групповой цикл прошёл: 218 JVM-тестов, Android-test Kotlin compilation, debug/personal APK assembly, подписи и проверка изоляции личного API-ключа. GitHub Actions ещё ожидается.
+- Добавлены регрессии на строгую временную отсечку, совместную доступность, proper score и группировку по точным меткам сезона. Локальный групповой цикл прошёл: 218 JVM-тестов, Android-test Kotlin compilation, debug/personal APK assembly, подписи и проверка изоляции личного API-ключа. Actions [43497133844](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43497133844) прошёл unit tests и Android API 34/API 26 instrumentation (API 26: 75 тестов, один offline-only skip, ноль ошибок), обе сборки и подпись. Keyless APK artifact `14073302202`, SHA-256 `8d0cc75ae4d276cb9a519f82537e0c5d65db20a92145f463841444d2d3b2fd4b`; локальный личный API-ключ отсутствует. Обновление на физический телефон ожидает подключения ADB.
 
 ## Unreleased — ограничить Misli/TOPAZ WebView активным окном приложения
 
