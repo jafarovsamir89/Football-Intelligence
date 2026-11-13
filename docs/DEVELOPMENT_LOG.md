@@ -1,5 +1,13 @@
 # Development log
 
+## 2026-11-13 — restrict bookmaker WebViews to the resumed Activity (local checks passed; CI pending)
+
+- A lifecycle audit found the 30-minute `Handler` reload was only guarded against Activity destruction; it could still request a public bookmaker page after the Activity was paused. This did not satisfy the documented foreground-only collection boundary.
+- Misli and TOPAZ collectors now start, read and schedule public-page requests only while `Activity.RESUMED`. `ON_PAUSE` invalidates any pending capture generation, cancels posted callbacks, and pauses/stops the WebView. `ON_RESUME` schedules the next request using the remaining 30-minute capture window. Old JavaScript callbacks cannot persist prices after a pause.
+- Added regression coverage for lifecycle eligibility, refresh-delay handling of missing/stale/future timestamps, capture cancellation, rate-limit preservation, and stale callback generations. Updated the source/release/limitations/roadmap docs. A separate read-only browser request to the two pages failed with `ERR_SOCKS_CONNECTION_FAILED` at the browser transport; no source availability or restriction inference was made.
+- Grouped local run `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 215 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. APK SHA-256: debug `2c31780f92d714f606325d06ce177aa1227d1feaef5b87b5960e92948b75e5b4`; personal `abd92f2c75d3db707e11ed04c2c58d011b88fceb34d2ddc8321b0cc8990e83cf`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`; DEX inspection found the local API key absent from debug and present only in the owner-only personal APK. `git diff --check` passed.
+- No phone is connected to ADB. Next: verify API 26/API 34 lifecycle/UI behavior, keyless APK and artifact in Actions. Physical on-device pause/resume and Azerbaijan source reachability remain unverified.
+
 ## 2026-11-13 — explain local bookmaker quote availability on Home (CI/API 26/API 34 passed)
 
 - After reviewing the actual daily flow, the main screen showed only a count of fresh prices linked to fixtures. When that count was zero, it did not distinguish an unqueried provider, empty page, page error, stale capture, visible rows without exact fixture matches, or current usable quotes.

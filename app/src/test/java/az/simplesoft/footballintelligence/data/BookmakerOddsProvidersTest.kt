@@ -1,6 +1,8 @@
 package az.simplesoft.footballintelligence.data
 
+import androidx.lifecycle.Lifecycle
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -38,6 +40,38 @@ class BookmakerOddsProvidersTest {
         assertEquals(30_000L,gate.millisUntilAllowed(1_010))
         assertEquals(false,gate.tryStart(31_009))
         assertTrue(gate.tryStart(31_010))
+    }
+
+    @Test fun pausedActivityCancelsPendingCaptureButKeepsCompletedRateLimit() {
+        val gate=ForegroundBookmakerCaptureGate(intervalMillis=30_000)
+        assertTrue(gate.tryStart(1_000))
+        gate.cancelInProgress()
+        assertFalse(gate.isCaptureInProgress())
+        assertTrue(gate.tryStart(1_001))
+        gate.finish(1_010)
+        assertFalse(gate.tryStart(1_011))
+    }
+
+    @Test fun publicOddsCaptureRequiresResumedActivityAndRespectsFreshnessOnResume() {
+        assertTrue(shouldCollectPublicOdds(Lifecycle.State.RESUMED))
+        assertFalse(shouldCollectPublicOdds(Lifecycle.State.STARTED))
+        assertFalse(shouldCollectPublicOdds(Lifecycle.State.CREATED))
+
+        val now=1_800_000_000_000L
+        assertEquals(0L,bookmakerCaptureDelayMillis(null,now))
+        assertEquals(20L*60*1000,bookmakerCaptureDelayMillis(now-10L*60*1000,now))
+        assertEquals(0L,bookmakerCaptureDelayMillis(now-31L*60*1000,now))
+        assertEquals(0L,bookmakerCaptureDelayMillis(now+5L*60*1000,now))
+    }
+
+    @Test fun pausingActivityInvalidatesCallbacksFromAnOlderCaptureGeneration() {
+        val session=ForegroundBookmakerCaptureSession(intervalMillis=30_000)
+        val original=session.currentGeneration()
+        assertTrue(session.gate.tryStart(1_000))
+        session.invalidate()
+        assertFalse(session.isCurrent(original))
+        assertFalse(session.gate.isCaptureInProgress())
+        assertTrue(session.gate.tryStart(1_001))
     }
 
     @Test fun newestSnapshotReplacesRepeatedRefreshForSameEventButKeepsOperatorsSeparate() {

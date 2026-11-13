@@ -8,6 +8,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.util.Locale
+import androidx.lifecycle.Lifecycle
+import java.util.concurrent.atomic.AtomicLong
 
 /** Status of the most recent parsed page capture; local model linking remains a separate exact-match check. */
 enum class OddsProviderStatus { LIVE, STALE, UNAVAILABLE, BLOCKED, ERROR }
@@ -60,6 +62,17 @@ fun latestBookmakerSnapshotsPerEvent(snapshots:List<BookmakerOddsSnapshot>):List
 
 internal const val BOOKMAKER_CAPTURE_INTERVAL_MILLIS = 30L * 60 * 1000
 
+/** Enforces one WebView capture window across Activity pause/resume transitions. */
+internal fun shouldCollectPublicOdds(lifecycleState: Lifecycle.State): Boolean =
+    lifecycleState.isAtLeast(Lifecycle.State.RESUMED)
+
+/** Delay before the next public-page request; malformed future timestamps never delay it over a window. */
+internal fun bookmakerCaptureDelayMillis(lastCheckedAtMillis: Long?, nowMillis: Long): Long {
+    if (lastCheckedAtMillis == null || lastCheckedAtMillis > nowMillis + 60_000L) return 0L
+    val age = (nowMillis - lastCheckedAtMillis).coerceAtLeast(0L)
+    return (BOOKMAKER_CAPTURE_INTERVAL_MILLIS - age).coerceAtLeast(0L)
+}
+
 /** Coalesces duplicate WebView page-finished callbacks into one capture per freshness window. */
 internal class ForegroundBookmakerCaptureGate(
     private val intervalMillis: Long = BOOKMAKER_CAPTURE_INTERVAL_MILLIS,
@@ -82,10 +95,31 @@ internal class ForegroundBookmakerCaptureGate(
         nextAllowedAtMillis = capturedAtMillis + intervalMillis
     }
 
+    @Synchronized fun cancelInProgress() {
+        captureInProgress = false
+    }
+
     @Synchronized fun isCaptureInProgress(): Boolean = captureInProgress
 
     @Synchronized fun millisUntilAllowed(nowMillis: Long): Long =
         (nextAllowedAtMillis - nowMillis).coerceAtLeast(0L)
+}
+
+/** Invalidates a page read when the Activity pauses, without losing the completed refresh limit. */
+internal class ForegroundBookmakerCaptureSession(
+    intervalMillis: Long = BOOKMAKER_CAPTURE_INTERVAL_MILLIS,
+) {
+    val gate = ForegroundBookmakerCaptureGate(intervalMillis)
+    private val generation = AtomicLong(0L)
+
+    fun currentGeneration(): Long = generation.get()
+
+    fun isCurrent(token: Long): Boolean = token == generation.get()
+
+    fun invalidate() {
+        generation.incrementAndGet()
+        gate.cancelInProgress()
+    }
 }
 
 private fun publicRouteLabel(rawUrl:String):String = runCatching {
