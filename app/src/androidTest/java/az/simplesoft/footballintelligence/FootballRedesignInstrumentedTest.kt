@@ -227,7 +227,7 @@ class FootballRedesignInstrumentedTest {
         val intermediate = localQuote(match, "misli", "misli-event", captured - 6 * 60_000L, kickoff, 2.1, 3.1, 4.2)
         val laterIntermediate = localQuote(match, "misli", "misli-event", captured - 3 * 60_000L, kickoff, 2.15, 2.9, 4.3)
         val latest = localQuote(match, "misli", "misli-event", captured - 60_000L, kickoff, 2.2, 2.7, 4.4)
-        val topaz = localQuote(match, "topaz", "topaz-event", captured - 60_000L, kickoff, 2.1, 3.1, 4.2)
+        val topaz = localQuote(match, "topaz", "topaz-event", captured - 60_000L, kickoff, 3.3, 4.4, 5.5)
 
         composeRule.setContent {
             FootballTheme {
