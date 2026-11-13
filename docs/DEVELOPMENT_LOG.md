@@ -1,5 +1,14 @@
 # Development log
 
+## 2026-11-13 — add a transparent virtual-coupon results summary (implementation complete; grouped checks pending)
+
+- Product review found the active Compose coupon workspace showed recent coupon cards but no aggregate outcome rate/sample size, and the separate history query used a 100-header limit. The redesigned workspace did not call the older component that contained a report, so the user-facing screen lacked the information entirely.
+- Reworked accumulator history loading into one joined SQLite query. `virtualAccumulatorHistory()` still returns up to 100 recent records for compact views; `virtualAccumulatorHistory(0)` returns every valid saved coupon for evaluation. The screen snapshot keeps both collections.
+- Added the live coupon summary for the selected bookmaker and leg count, grouped by model-only, price-linked and model/market-difference selection. It shows settled wins/sample size, hit rate, Wilson interval, pending records, and optional same-fixture single-pick comparison. Copy labels these as historical virtual outcomes and does not claim future hit probability or profit.
+- Added an Android instrumentation test with 120 fully settled coupons to protect both the bounded visible history and full evaluation ledger, plus a Compose regression for displayed sample size/rate.
+- The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 204 JVM tests (zero failures/errors/skips), Android-test Kotlin compilation and both APK assemblies. `git diff --check` passed. Debug APK SHA-256 `c87242ef4a51d2cfc08da4fed58800398db51c65e1c0b7a072a59c5a2badb5f9`; personal APK SHA-256 `0e7f34ec3003f11550c6d2d6f88e73051175ccad7be514c5fb5756ef52e8a752`. Both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX inspection found the Odds API key absent from debug and present only in the owner-only personal APK. One final wording-only adjustment to the pending/review labels was made after this local cycle; Actions must build/test the final tree.
+- `adb devices -l` shows no devices. No APK was installed and no odds request/quota was used. Next: commit and push the milestone, wait for API 34/API 26 instrumentation and CI APK checks, then update AGENTS.md with the verified continuation point. Do not install unless the physical phone reappears; never clear local app data.
+
 ## 2026-11-13 — audit API-Football for Azerbaijan odds (research only)
 
 - The Odds API catalog was queried through its documented quota-free endpoint using the existing local key in an HTTP header (the key was not printed). HTTP 200 returned 80 total catalogs / 46 soccer competitions and no Azerbaijan soccer entry; this call used no odds credits.

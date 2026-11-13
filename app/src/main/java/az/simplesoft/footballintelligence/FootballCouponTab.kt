@@ -29,6 +29,7 @@ internal fun FootballCouponTabContent(
     oddsProviders: List<BookmakerOddsProvider>,
     accumulatorDrafts: List<VirtualCouponCandidate>,
     accumulatorHistory: List<VirtualAccumulatorHistoryEntry>,
+    accumulatorEvaluationHistory: List<VirtualAccumulatorHistoryEntry>,
     checkedCouponHistory: List<LoggedCouponPick>,
     prospectiveForecastHistory: List<ProspectiveForecastObservation>,
     prospectiveForecastReport: ProspectiveForecastReport,
@@ -146,7 +147,7 @@ internal fun FootballCouponTabContent(
                         Text("${pick.homeTeam} — ${pick.awayTeam}: модель ${"%.1f".format(pick.modelProbability*100)}%, линия без маржи ${"%.1f".format(market*100)}%, Δ ${signedPercentagePoints(delta)} п.п.",style=MaterialTheme.typography.labelSmall)
                     }
                 }
-                accumulatorHistory.groupBy { Triple(it.providerId,it.legCount,it.selectionBasis) }.forEach { (key, entries) ->
+                accumulatorEvaluationHistory.groupBy { Triple(it.providerId,it.legCount,it.selectionBasis) }.forEach { (key, entries) ->
                     val singles=checkedCouponHistory.asSequence().filter { it.providerId==key.first }
                         .mapNotNull { pick ->
                             val home=pick.homeGoals ?: return@mapNotNull null

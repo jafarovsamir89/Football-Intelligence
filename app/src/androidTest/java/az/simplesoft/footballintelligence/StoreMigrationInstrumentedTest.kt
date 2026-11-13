@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteDatabase
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
+import az.simplesoft.footballintelligence.analytics.AccumulatorPerformanceEngine
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
@@ -566,6 +567,55 @@ class StoreMigrationInstrumentedTest {
                     assertTrue(cursor.moveToFirst())
                     assertEquals(CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT.strategyVersion,cursor.getString(0))
                 }
+            }
+        } finally {
+            context.deleteDatabase(databaseName)
+        }
+    }
+
+    @Test fun accumulatorEvaluationLoadsEverySavedCouponWhileVisibleHistoryStaysBounded() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-accumulator-evaluation-${UUID.randomUUID()}.db"
+        context.deleteDatabase(databaseName)
+        val capturedAt = 1_700_000_000_000L
+        val firstKickoff = capturedAt + TimeUnit.DAYS.toMillis(2)
+        val secondKickoff = firstKickoff + TimeUnit.MINUTES.toMillis(90)
+        try {
+            Store(context, databaseName).use { store ->
+                store.upsert(
+                    listOf(
+                        Match(930201, "test", "Alpha FC", "Beta FC", Instant.ofEpochMilli(firstKickoff).toString(), true, 2, 1),
+                        Match(930202, "test", "Gamma FC", "Delta FC", Instant.ofEpochMilli(secondKickoff).toString(), true, 1, 0),
+                    ),
+                )
+                val drafts = (0 until 120).map { index ->
+                    val firstProbability = .51 + index * .001
+                    VirtualCouponCandidate(
+                        providerId = "misli",
+                        providerName = "Misli",
+                        picks = listOf(
+                            VirtualCouponPick(930201, "Alpha FC", "Beta FC", firstKickoff, "H", firstProbability),
+                            VirtualCouponPick(930202, "Gamma FC", "Delta FC", secondKickoff, "H", .60),
+                        ),
+                        requestedLegCount = 2,
+                        jointProbabilityBounds = JointProbabilityBounds(.0, .60),
+                    )
+                }
+
+                assertEquals(120, store.recordAccumulatorDrafts(drafts, capturedAt))
+                assertEquals(100, store.virtualAccumulatorHistory().size)
+                val fullHistory = store.virtualAccumulatorHistory(limit = 0)
+                assertEquals(120, fullHistory.size)
+
+                val report = AccumulatorPerformanceEngine.evaluate(
+                    entries = fullHistory,
+                    providerId = "misli",
+                    legCount = 2,
+                    selectionBasis = CouponSelectionBasis.MODEL_RANKED,
+                    settledSingles = emptyList(),
+                )
+                assertEquals(120, report.settledCoupons)
+                assertEquals(120, report.wonCoupons)
             }
         } finally {
             context.deleteDatabase(databaseName)

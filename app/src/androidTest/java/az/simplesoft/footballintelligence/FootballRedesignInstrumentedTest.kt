@@ -9,12 +9,15 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
+import az.simplesoft.footballintelligence.analytics.AccumulatorSettlement
+import az.simplesoft.footballintelligence.analytics.AccumulatorSettlementState
 import az.simplesoft.footballintelligence.analytics.EloForecast
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponPick
+import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.data.BookmakerOddsSnapshot
 import java.time.LocalDate
 import java.time.ZoneId
@@ -338,6 +341,7 @@ class FootballRedesignInstrumentedTest {
                     topazOdds = emptyList(),
                     candidates = listOf(candidate("misli", "Misli"), candidate("topaz", "TOPAZ")),
                     history = emptyList(),
+                    evaluationHistory = emptyList(),
                     checkedPicks = emptyList(),
                 )
             }
@@ -368,6 +372,7 @@ class FootballRedesignInstrumentedTest {
                     topazOdds = emptyList(),
                     candidates = emptyList(),
                     history = emptyList(),
+                    evaluationHistory = emptyList(),
                     checkedPicks = emptyList(),
                     onOpenMatches = { openedMatches = true },
                 )
@@ -378,6 +383,43 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("без них показываются только исходы и их вероятности", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Посмотреть матчи").performScrollTo().performClick()
         assertTrue(openedMatches)
+    }
+
+    @Test
+    fun couponWorkspaceShowsSettledHitRateAndSampleSize() {
+        val now = System.currentTimeMillis()
+        val history = listOf(
+            VirtualAccumulatorHistoryEntry(
+                id = 1,
+                providerId = "misli",
+                legCount = 2,
+                capturedAtMillis = now,
+                combinedDecimalOdds = null,
+                jointProbabilityBounds = JointProbabilityBounds(.0, .3),
+                settlement = AccumulatorSettlement(AccumulatorSettlementState.WON, 2, 0, 0),
+                picks = listOf(
+                    VirtualCouponPick(201, "Alpha FC", "Beta FC", now + 86_400_000, "H", .61),
+                    VirtualCouponPick(202, "Gamma FC", "Delta FC", now + 172_800_000, "A", .48),
+                ),
+                selectionBasis = CouponSelectionBasis.MODEL_RANKED,
+            ),
+        )
+        composeRule.setContent {
+            FootballTheme {
+                FootballCouponWorkspace(
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    candidates = emptyList(),
+                    history = history,
+                    evaluationHistory = history,
+                    checkedPicks = emptyList(),
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Проверка прошлых купонов · 2 исхода").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("1/1 завершённых выиграно", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("95% интервал", substring = true).assertExists()
     }
 
     @Test

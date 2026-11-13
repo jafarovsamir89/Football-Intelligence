@@ -1063,39 +1063,64 @@ class Store(context: Context, databaseName:String="football_intelligence.db") : 
         return inserted
     }
     fun virtualAccumulatorHistory(limit:Int=100):List<VirtualAccumulatorHistoryEntry> {
-        data class Header(val id:Long,val providerId:String,val size:Int,val capturedAt:Long,val combinedOdds:Double?,val lower:Double,val upper:Double,val selectionBasis:CouponSelectionBasis)
-        val headers=mutableListOf<Header>()
+        data class HistoryBuilder(
+            val id:Long,
+            val providerId:String,
+            val size:Int,
+            val capturedAt:Long,
+            val combinedOdds:Double?,
+            val lower:Double,
+            val upper:Double,
+            val selectionBasis:CouponSelectionBasis,
+            val picks:MutableList<az.simplesoft.footballintelligence.analytics.VirtualCouponPick> = mutableListOf(),
+            val results:MutableMap<Int,AccumulatorMatchResult> = mutableMapOf(),
+        )
+        val boundedLimit=if(limit==0) null else limit.coerceIn(1,500)
+        val sqlLimit=if(boundedLimit==null) "" else " LIMIT ?"
+        val args=boundedLimit?.let { arrayOf(it.toString()) }
+        val grouped=linkedMapOf<Long,HistoryBuilder>()
         readableDatabase.rawQuery(
-            "SELECT id,provider_id,leg_count,captured_at,combined_decimal_odds,joint_probability_lower,joint_probability_upper,selection_basis FROM virtual_accumulators ORDER BY captured_at DESC,id DESC LIMIT ?",
-            arrayOf(limit.coerceIn(1,500).toString()),
-        ).use { c -> while(c.moveToNext()) headers+=Header(c.getLong(0),c.getString(1),c.getInt(2),c.getLong(3),if(c.isNull(4)) null else c.getDouble(4),c.getDouble(5),c.getDouble(6),runCatching { CouponSelectionBasis.valueOf(c.getString(7)) }.getOrDefault(CouponSelectionBasis.MODEL_RANKED)) }
-        return headers.mapNotNull { header ->
-            val picks=mutableListOf<az.simplesoft.footballintelligence.analytics.VirtualCouponPick>()
-            val results=mutableMapOf<Int,AccumulatorMatchResult>()
-            readableDatabase.rawQuery(
-                "SELECT l.match_id,l.home_team,l.away_team,l.scheduled_kickoff,l.outcome,l.model_probability,l.bookmaker_decimal_odds,l.bookmaker_odds_captured_at,l.market_fair_probability,l.model_minus_market,m.kickoff,m.finished,m.home_score,m.away_score FROM virtual_accumulator_legs l LEFT JOIN matches m ON m.id=l.match_id WHERE l.accumulator_id=? ORDER BY l.scheduled_kickoff",
-                arrayOf(header.id.toString()),
-            ).use { c ->
-                while(c.moveToNext()) {
-                    val matchId=c.getInt(0)
-                    picks+=az.simplesoft.footballintelligence.analytics.VirtualCouponPick(
-                        matchId,c.getString(1),c.getString(2),c.getLong(3),c.getString(4),c.getDouble(5),
-                        if(c.isNull(6)) null else c.getDouble(6),if(c.isNull(7)) null else c.getLong(7),
-                        if(c.isNull(8)) null else c.getDouble(8),if(c.isNull(9)) null else c.getDouble(9),
+            "SELECT a.id,a.provider_id,a.leg_count,a.captured_at,a.combined_decimal_odds,a.joint_probability_lower,a.joint_probability_upper,a.selection_basis,"+
+                "l.match_id,l.home_team,l.away_team,l.scheduled_kickoff,l.outcome,l.model_probability,l.bookmaker_decimal_odds,l.bookmaker_odds_captured_at,l.market_fair_probability,l.model_minus_market,"+
+                "m.kickoff,m.finished,m.home_score,m.away_score FROM ("+
+                "SELECT id,provider_id,leg_count,captured_at,combined_decimal_odds,joint_probability_lower,joint_probability_upper,selection_basis FROM virtual_accumulators "+
+                "ORDER BY captured_at DESC,id DESC$sqlLimit) a "+
+                "LEFT JOIN virtual_accumulator_legs l ON l.accumulator_id=a.id "+
+                "LEFT JOIN matches m ON m.id=l.match_id "+
+                "ORDER BY a.captured_at DESC,a.id DESC,l.scheduled_kickoff",
+            args,
+        ).use { c ->
+            while(c.moveToNext()) {
+                val id=c.getLong(0)
+                val header=grouped.getOrPut(id) {
+                    HistoryBuilder(
+                        id,c.getString(1),c.getInt(2),c.getLong(3),if(c.isNull(4)) null else c.getDouble(4),
+                        c.getDouble(5),c.getDouble(6),runCatching { CouponSelectionBasis.valueOf(c.getString(7)) }
+                            .getOrDefault(CouponSelectionBasis.MODEL_RANKED),
                     )
-                    if(!c.isNull(10)) {
-                        val actualKickoff=runCatching { Instant.parse(c.getString(10)).toEpochMilli() }.getOrNull()
-                        if(actualKickoff!=null) results[matchId]=AccumulatorMatchResult(
-                            matchId,actualKickoff,c.getInt(11)==1,if(c.isNull(12)) null else c.getInt(12),if(c.isNull(13)) null else c.getInt(13),
+                }
+                if(!c.isNull(8)) {
+                    val matchId=c.getInt(8)
+                    header.picks+=az.simplesoft.footballintelligence.analytics.VirtualCouponPick(
+                        matchId,c.getString(9),c.getString(10),c.getLong(11),c.getString(12),c.getDouble(13),
+                        if(c.isNull(14)) null else c.getDouble(14),if(c.isNull(15)) null else c.getLong(15),
+                        if(c.isNull(16)) null else c.getDouble(16),if(c.isNull(17)) null else c.getDouble(17),
+                    )
+                    if(!c.isNull(18)) {
+                        val actualKickoff=runCatching { Instant.parse(c.getString(18)).toEpochMilli() }.getOrNull()
+                        if(actualKickoff!=null) header.results[matchId]=AccumulatorMatchResult(
+                            matchId,actualKickoff,c.getInt(19)==1,if(c.isNull(20)) null else c.getInt(20),if(c.isNull(21)) null else c.getInt(21),
                         )
                     }
                 }
             }
-            if(picks.size!=header.size) return@mapNotNull null
+        }
+        return grouped.values.mapNotNull { header ->
+            if(header.picks.size!=header.size) return@mapNotNull null
             VirtualAccumulatorHistoryEntry(
                 header.id,header.providerId,header.size,header.capturedAt,header.combinedOdds,
                 az.simplesoft.footballintelligence.analytics.JointProbabilityBounds(header.lower,header.upper),
-                AccumulatorEngine.settle(picks,results),picks,header.selectionBasis,
+                AccumulatorEngine.settle(header.picks,header.results),header.picks,header.selectionBasis,
             )
         }
     }

@@ -254,6 +254,7 @@ import androidx.work.WorkManager
     val internationalMarketEvaluation=screenAnalytics.internationalMarketEvaluation
     val prospectiveForecastReport=screenAnalytics.prospectiveForecastReport
     val accumulatorHistory=storeSnapshot.accumulatorHistory
+    val accumulatorEvaluationHistory=storeSnapshot.accumulatorEvaluationHistory
     val csvLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if(uri!=null&&!importingCsv) {
             importingCsv=true
@@ -464,6 +465,7 @@ import androidx.work.WorkManager
               topazOdds = topazOdds,
               candidates = accumulatorDrafts,
               history = accumulatorHistory,
+              evaluationHistory = accumulatorEvaluationHistory,
               checkedPicks = checkedCouponHistory,
               onOpenMatches = { destination = FootballDestination.MATCHES },
             )

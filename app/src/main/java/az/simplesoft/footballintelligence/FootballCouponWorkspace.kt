@@ -26,9 +26,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.AccumulatorSettlementState
+import az.simplesoft.footballintelligence.analytics.AccumulatorPerformanceEngine
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.analytics.EloEngine
 import az.simplesoft.footballintelligence.analytics.LoggedCouponPick
+import az.simplesoft.footballintelligence.analytics.SettledSinglePrediction
 import az.simplesoft.footballintelligence.analytics.VirtualAccumulatorHistoryEntry
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
 import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
@@ -46,6 +48,7 @@ internal fun FootballCouponWorkspace(
     topazOdds: List<BookmakerOddsSnapshot>,
     candidates: List<VirtualCouponCandidate>,
     history: List<VirtualAccumulatorHistoryEntry>,
+    evaluationHistory: List<VirtualAccumulatorHistoryEntry>,
     checkedPicks: List<LoggedCouponPick>,
     onOpenMatches: () -> Unit = {},
 ) {
@@ -74,6 +77,14 @@ internal fun FootballCouponWorkspace(
     val selectedCandidate = sizedCandidates.firstOrNull()
     val providerHistory = history.filter { it.providerId == provider }.take(8)
     val providerPicks = checkedPicks.filter { it.providerId == provider }.take(8)
+    val providerEvaluationHistory = evaluationHistory.filter { it.providerId == provider }
+    val settledSingles = checkedPicks.asSequence().filter { it.providerId == provider && it.finished }
+        .mapNotNull { pick ->
+            val home = pick.homeGoals ?: return@mapNotNull null
+            val away = pick.awayGoals ?: return@mapNotNull null
+            val actual = when { home > away -> "H"; home < away -> "A"; else -> "D" }
+            SettledSinglePrediction(pick.matchId, actual == pick.outcome)
+        }.toList()
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
@@ -100,6 +111,7 @@ internal fun FootballCouponWorkspace(
                 Spacer(Modifier.weight(1f))
             }
         }
+        CouponPerformanceSummary(provider, legCount, providerEvaluationHistory, settledSingles)
         if (selectedCandidate == null) {
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -184,6 +196,58 @@ internal fun FootballCouponWorkspace(
             }
         }
         Text("Все купоны виртуальные. Вероятности не являются рекомендацией и не доказывают доходность.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun CouponPerformanceSummary(
+    providerId: String,
+    legCount: Int,
+    history: List<VirtualAccumulatorHistoryEntry>,
+    settledSingles: List<SettledSinglePrediction>,
+) {
+    val saved = history.filter { it.legCount == legCount }
+    ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text("Проверка прошлых купонов · $legCount исхода", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+            Text("Показываются все сохранённые купоны, не только последние записи. Это история попаданий, не вероятность будущего выигрыша.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (saved.isEmpty()) {
+                Text("Завершённых купонов пока нет. Приложение будет сверять виртуальные черновики с результатами матчей автоматически.", style = MaterialTheme.typography.bodySmall)
+            } else {
+                CouponSelectionBasis.values().forEach { basis ->
+                    val cohort = saved.filter { it.selectionBasis == basis }
+                    if (cohort.isNotEmpty()) {
+                        val report = AccumulatorPerformanceEngine.evaluate(cohort, providerId, legCount, basis, settledSingles)
+                        val pending = cohort.count {
+                            it.settlement.state == AccumulatorSettlementState.PENDING ||
+                                it.settlement.state == AccumulatorSettlementState.IN_PROGRESS
+                        }
+                        val needsReview = cohort.count {
+                            it.settlement.state == AccumulatorSettlementState.SCHEDULE_CHANGED ||
+                                it.settlement.state == AccumulatorSettlementState.INVALID
+                        }
+                        val heading = when (basis) {
+                            CouponSelectionBasis.MODEL_RANKED -> "По вероятности модели"
+                            CouponSelectionBasis.MATCHED_FRESH_BOOKMAKER_ODDS -> "По модели среди матчей со свежими линиями"
+                            CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "По расхождению модели с линией"
+                        }
+                        val details = if (report.settledCoupons == 0) {
+                            "Сохранено ${cohort.size}; завершено 0; ждут результата $pending; требуют проверки $needsReview"
+                        } else {
+                            val rate = report.couponHitRate?.let { " · ${"%.1f".format(Locale.US, it * 100)}% попаданий" }.orEmpty()
+                            val interval = if (report.couponHitRate95Low != null && report.couponHitRate95High != null) {
+                                " · 95% интервал ${"%.1f".format(Locale.US, report.couponHitRate95Low * 100)}–${"%.1f".format(Locale.US, report.couponHitRate95High * 100)}%"
+                            } else ""
+                            "${report.wonCoupons}/${report.settledCoupons} завершённых выиграно$rate$interval · ждут результата $pending; требуют проверки $needsReview"
+                        }
+                        Text("$heading: $details", style = MaterialTheme.typography.bodySmall)
+                        if (report.matchingSinglePicks > 0 && report.singlePickHitRate != null && report.settledCoupons > 0) {
+                            Text("Одиночные прогнозы на тех же матчах: ${report.matchingSinglePicks}, ${"%.1f".format(Locale.US, report.singlePickHitRate * 100)}% совпадений", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
