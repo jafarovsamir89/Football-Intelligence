@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — align TOPAZ collector with its public pre-match page (local checks passed; CI pending)
+## Unreleased — align TOPAZ collector with its public pre-match page (CI/API 26/API 34 passed)
 
 - Changed the foreground WebView to open eTopaz's publicly rendered English `Pre-match` route observed in a browser. Parser now handles date/time on separate lines, home and away labels on separate lines, English month abbreviations, and the first three decimal prices after the visible `1` marker; later markets are ignored. Existing Azerbaijani-format parser coverage remains.
-- Added a regression fixture from the observed visible row and strict route validation. The grouped local cycle passed 205 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug/personal APK assembly; signatures and local-key isolation were checked. No post-change Android quote capture or GitHub Actions run is claimed yet. Source reuse rights and Azerbaijan-device availability remain unverified.
+- Added a regression fixture from the observed visible row and strict route validation. The grouped local cycle passed 205 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation and debug/personal APK assembly; signatures and local-key isolation were checked. Actions [43460492534](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43460492534) passed unit, API 34/API 26 instrumentation, keyless assembly/signing and artifact upload `14056283335` (CI APK SHA-256 `5d8c6dff6fe6e33903d8b17154ad1b068de7fa50b39c1bcc97de6b6ce803d57c`; signer `da1506fd2e896c67c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`; personal API key absent from DEX). API 26 had one offline-only skip and no failures; API 34 task passed, with the final runner progress reporting 73/74 and no failure/skip. No post-change Android quote capture has been made because ADB has no connected phone. Source reuse rights and Azerbaijan-device availability remain unverified.
 
 ## Unreleased — показывать проверяемый результат виртуальных купонов (CI/API 26/API 34 passed)
 
