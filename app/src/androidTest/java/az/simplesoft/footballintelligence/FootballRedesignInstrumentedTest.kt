@@ -110,7 +110,7 @@ class FootballRedesignInstrumentedTest {
         assertTrue(composeRule.onAllNodesWithText("2", substring = false).fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("П1 55%").fetchSemanticsNodes().size >= 2)
-        composeRule.onNodeWithText("Misli").performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Misli").fetchSemanticsNodes().size >= 2)
         assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().size >= 2)
     }
 
@@ -477,7 +477,7 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Ожидается · время начала не указано").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).performScrollTo().assertIsDisplayed()
+        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().size >= 2)
         composeRule.onNodeWithText("Завтра").performClick()
         composeRule.onNodeWithText("Source Away FC").performScrollTo().performClick()
         assertEquals(match.id, selectedMatch)
