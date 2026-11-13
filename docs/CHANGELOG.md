@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — показывать расписание с датой без выдуманного времени (local passed; Actions pending)
+## Unreleased — показывать расписание с датой без выдуманного времени (CI/API 26/API 34 passed)
 
 - Главная и список матчей больше не скрывают будущие матчи, для которых источник передал дату, но не точное время. Такие матчи фильтруются по дате Баку и явно помечаются «время начала не указано»; Elo и точные котировки для них по-прежнему недоступны.
-- Добавлены unit- и Compose-регрессии на отображение, фильтр даты, счётчик сегодняшних матчей и переход к карточке. Групповая локальная команда прошла: 193 JVM-теста, компиляция Android UI-тестов и сборка debug/personal APK. API 26/34 Compose instrumentation ещё ждёт Actions; APK не устанавливался.
+- Добавлены unit- и Compose-регрессии на отображение, фильтр даты, счётчик сегодняшних матчей и переход к карточке. Локально прошли 193 JVM-теста, Android UI-test compilation и debug/personal APK assembly. Actions [43419141410](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43419141410) прошёл API 34 (69/69), API 26 (70 reported, один offline-only skip, 0 failures), keyless-сборки и stable signing; artifact `14033986274` загружен. CI APK SHA-256 и подпись внесены в дневник; DEX не содержит личный ключ. Телефон не подключён, новая ревизия не устанавливалась.
 
 ## Unreleased — показывать готовые оценки вверху главного списка (local and Actions passed; phone update pending)
 
