@@ -6,6 +6,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
@@ -70,6 +71,36 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("П1 55%").assertIsDisplayed()
         composeRule.onNodeWithText("Misli").assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("нет линии").fetchSemanticsNodes().isNotEmpty())
+    }
+
+    @Test
+    fun emptyHomeExplainsFirstRunAndLinksToMainWorkflows() {
+        var openedMatches = false
+        composeRule.setContent {
+            FootballTheme {
+                FootballHomeTabContent(
+                    matches = emptyList(),
+                    forecasts = emptyList(),
+                    misliOdds = emptyList(),
+                    topazOdds = emptyList(),
+                    checkedPredictions = emptyList(),
+                    syncBusy = false,
+                    lastSyncLabel = "Ожидается сеть",
+                    syncDetails = "Нет успешной синхронизации",
+                    storeLoaded = true,
+                    storeError = null,
+                    onOpenMatches = { openedMatches = true },
+                    onOpenCoupons = {},
+                    onSelectMatch = {},
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Приложение само собирает результаты", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("В этой установке база пока пустая", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Виртуальные купоны").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Открыть матчи").performScrollTo().performClick()
+        assertTrue(openedMatches)
     }
 
     @Test

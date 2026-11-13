@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased — объяснить назначение приложения на пустом первом запуске
+
+- Главный экран прямо описывает рабочий сценарий Football Intelligence. Если будущих матчей пока нет, он сообщает состояние локальной базы/первого импорта, показывает количество сохранённой истории, объясняет путь «Матчи → разбор → виртуальные купоны» и даёт быстрый переход к матчам и купонам. При пустой базе статусы источников раскрыты по умолчанию.
+- Добавлена Compose-регрессия для пустой установки и перехода в основной сценарий. Локальный групповой прогон прошёл 184 JVM-теста без пропусков/ошибок, компиляцию Android-тестов и обе APK-сборки; новая instrumentation проверка ждёт API 26/API 34 Actions. Телефон в ADB пока не подключён, поэтому физическую синхронизацию подтвердить нельзя.
+
 ## Unreleased — wait for the first football and Elo baseline before international odds
 
 - API 34 first-run acceptance showed the key-enabled Odds API Worker could spend a credit before multi-season sync completed and before a saved forecast existed. Gate the initial one-time request on an idle/unqueued football sync and at least one persisted forecast; keep the ordinary two-hour periodic schedule intact. A dedicated post-sync path queues only one-time work, so forecast refresh does not reset the periodic timer.

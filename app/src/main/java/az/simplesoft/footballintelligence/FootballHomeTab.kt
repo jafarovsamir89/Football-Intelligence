@@ -64,7 +64,7 @@ internal fun FootballHomeTabContent(
     val freshTopazOdds = remember(topazOdds, now) { topazOdds.filter { isFreshBookmakerQuote(it, now) } }
     val featured = upcoming.take(3)
     val checked = checkedPredictions.asSequence().filter { it.finished && it.homeGoals != null && it.awayGoals != null }.take(3).toList()
-    var showSyncDetails by remember { mutableStateOf(false) }
+    var showSyncDetails by remember { mutableStateOf(matches.isEmpty()) }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp),
@@ -74,6 +74,11 @@ internal fun FootballHomeTabContent(
             Text("FOOTBALL INTELLIGENCE", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
             Text("Матчи и модельный обзор", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
             Text(DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale("ru")).format(today), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                "Приложение само собирает результаты, оценивает вероятность победы, ничьей и поражения и сравнивает её со свежими линиями. Здесь только виртуальный анализ.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
 
         ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(24.dp)) {
@@ -103,11 +108,25 @@ internal fun FootballHomeTabContent(
             OutlinedButton(onClick = onOpenMatches) { Text("Все матчи") }
         }
         if (featured.isEmpty()) {
-            Text(
-                if (!storeLoaded) "Загружаю локальную базу…" else storeError ?: "Ближайшие матчи появятся после автоматической синхронизации.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        when {
+                            !storeLoaded -> "Открываю сохранённую базу матчей…"
+                            storeError != null -> storeError
+                            matches.isEmpty() && syncBusy -> "Первый автоматический импорт уже идёт. Он загрузит доступные сезоны, результаты и расписание."
+                            matches.isEmpty() -> "В этой установке база пока пустая. При подключении к интернету приложение само запросит доступные матчи и результаты."
+                            else -> "В базе ${matches.size} матчей, завершённых: ${matches.count { it.finished }}. Сейчас нет ближайших будущих игр; история остаётся доступна для анализа моделей."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text("Как пользоваться: откройте «Матчи», выберите игру и посмотрите её вероятности. В «Купонах» доступны виртуальные варианты; коэффициенты показываются только при наличии свежей линии источника.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onOpenMatches, modifier = Modifier.weight(1f)) { Text("Открыть матчи") }
+                        OutlinedButton(onClick = onOpenCoupons, modifier = Modifier.weight(1f)) { Text("Виртуальные купоны") }
+                    }
+                }
+            }
         } else {
             featured.forEach { match ->
                 MatchCard(
