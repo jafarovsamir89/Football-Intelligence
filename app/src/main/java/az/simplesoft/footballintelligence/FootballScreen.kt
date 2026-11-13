@@ -33,14 +33,11 @@ import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
 import az.simplesoft.footballintelligence.analytics.EloChronologicalExperimentReport
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
-import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
-import az.simplesoft.footballintelligence.analytics.historyAvailableAt
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.VirtualCouponBuilder
 import az.simplesoft.footballintelligence.analytics.ThreeWayDecimalOdds
 import az.simplesoft.footballintelligence.analytics.WalkForwardTarget
-import az.simplesoft.footballintelligence.analytics.TeamDataQuality
 import az.simplesoft.footballintelligence.data.FootballDataCsvImporter
 import az.simplesoft.footballintelligence.data.FootballScreenRepository
 import az.simplesoft.footballintelligence.data.MisliOddsProvider
@@ -196,28 +193,7 @@ import androidx.work.WorkManager
         val now=System.currentTimeMillis()
         forecastedMatches=withContext(Dispatchers.Default) {
             val linkedOddsMatchIds=oddsSnapshot.mapNotNull { it.matchId }.toSet()
-            val futureMatches=matchSnapshot.filter { !it.finished&&it.exactKickoff&&TeamDataQuality.isValidFixture(it.home,it.away) }
-                .sortedBy { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrDefault(Long.MAX_VALUE) }
-            val orderedMatches=(futureMatches.filter { it.id in linkedOddsMatchIds }+futureMatches.filterNot { it.id in linkedOddsMatchIds })
-                .distinctBy { it.id }.take(80)
-            orderedMatches.mapNotNull { match ->
-                val kickoff=runCatching { Instant.parse(match.kickoff).toEpochMilli() }.getOrNull() ?: return@mapNotNull null
-                if(kickoff<=now) return@mapNotNull null
-                val history=historyAvailableAt(historySnapshot[match.league].orEmpty(),now)
-                val forecast=EloEngine.forecast(history,now,match.home,match.away)
-                val probabilities=forecast.probabilities ?: return@mapNotNull null
-                ForecastedMatch(
-                    matchId=match.id,
-                    homeTeam=match.home,
-                    awayTeam=match.away,
-                    kickoffMillis=kickoff,
-                    probabilities=probabilities,
-                    forecastedAtMillis=now,
-                    historyMatchCount=forecast.matchesUsed,
-                    modelVersion=CURRENT_ELO_MODEL_VERSION,
-                    competition=match.league,
-                )
-            }
+            buildProspectiveEloForecasts(matchSnapshot,historySnapshot,now,linkedOddsMatchIds)
         }
     }
     val bookmakerCouponPrices=remember(misliOdds,topazOdds) {

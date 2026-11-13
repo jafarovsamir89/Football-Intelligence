@@ -19,6 +19,7 @@ import az.simplesoft.footballintelligence.data.ProviderMatch
 import java.io.File
 import java.io.IOException
 import java.time.LocalDate
+import java.time.Instant
 import java.time.ZoneOffset
 import java.util.UUID
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -32,6 +33,39 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AutomaticFootballSyncWorkerInstrumentedTest {
+    @Test fun workerRecordsForecastFromCachedResultsWhenProviderRefreshFails() = runBlocking {
+        val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val databaseName = "fi-worker-prospective-${UUID.randomUUID()}.db"
+        baseContext.deleteDatabase(databaseName)
+        val isolatedContext = IsolatedDatabaseContext(baseContext, databaseName)
+        val now = System.currentTimeMillis()
+
+        try {
+            Store(isolatedContext, databaseName).use { store ->
+                store.upsertProviderMatches(cachedHistoryAndFixture(now))
+            }
+            val worker = TestListenableWorkerBuilder<AutomaticFootballSyncWorker>(isolatedContext)
+                .setRunAttemptCount(1)
+                .build()
+            worker.providerHttpClient = AlwaysFailingProviderHttpClient()
+
+            val result = worker.doWork()
+
+            assertEquals(ListenableWorker.Result.retry().javaClass, result.javaClass)
+            Store(isolatedContext, databaseName).use { store ->
+                val snapshot = store.prospectiveForecastHistory().single()
+                assertEquals(9999, snapshot.matchId)
+                assertEquals("Home FC", snapshot.homeTeam)
+                assertEquals("Away FC", snapshot.awayTeam)
+                assertEquals(10, snapshot.historyMatchCount)
+                assertEquals(1.0, snapshot.probabilities.values().sum(), 1e-9)
+                assertNull(snapshot.actualOutcome)
+            }
+        } finally {
+            baseContext.deleteDatabase(databaseName)
+        }
+    }
+
     @Test fun notModifiedCatalogAndFilesRetainRowsAndRefreshCacheChecks() {
         val baseContext = InstrumentationRegistry.getInstrumentation().targetContext
         val databaseName = "fi-openfootball-304-${UUID.randomUUID()}.db"
@@ -296,6 +330,62 @@ class AutomaticFootballSyncWorkerInstrumentedTest {
             Thread.sleep(100)
         }
         throw AssertionError("No delayed retry was queued for $uniqueName.")
+    }
+
+    private fun cachedHistoryAndFixture(nowMillis: Long): List<ProviderMatch> {
+        val competition = "worker-prospective-test"
+        val season = "${Instant.ofEpochMilli(nowMillis).atZone(ZoneOffset.UTC).year}"
+        val teams = listOf(
+            "Home FC" to "Other FC",
+            "Away FC" to "Another FC",
+            "Other FC" to "Away FC",
+            "Another FC" to "Home FC",
+            "Home FC" to "Away FC",
+            "Other FC" to "Another FC",
+            "Away FC" to "Home FC",
+            "Another FC" to "Other FC",
+            "Home FC" to "Another FC",
+            "Away FC" to "Other FC",
+        )
+        val history = teams.mapIndexed { index, (home, away) ->
+            val kickoff = nowMillis - TimeUnit.DAYS.toMillis(20L - index)
+            ProviderMatch(
+                providerId = "openligadb",
+                providerMatchId = (20000 + index).toString(),
+                competitionCode = competition,
+                competitionName = "Worker prospective test",
+                season = season,
+                eventDate = Instant.ofEpochMilli(kickoff).atZone(ZoneOffset.UTC).toLocalDate(),
+                kickoffMillis = kickoff,
+                kickoffPrecision = KickoffPrecision.INSTANT,
+                homeTeam = home,
+                awayTeam = away,
+                homeGoals = index % 3,
+                awayGoals = (index + 1) % 3,
+                safeAvailableAtMillis = kickoff + TimeUnit.HOURS.toMillis(3),
+                sourceUrl = "https://example.org/worker-history/$index",
+                capturedAtMillis = nowMillis - TimeUnit.MINUTES.toMillis(1),
+            )
+        }
+        val kickoff = nowMillis + TimeUnit.DAYS.toMillis(1)
+        val futureFixture = ProviderMatch(
+            providerId = "openligadb",
+            providerMatchId = "29999",
+            competitionCode = competition,
+            competitionName = "Worker prospective test",
+            season = season,
+            eventDate = Instant.ofEpochMilli(kickoff).atZone(ZoneOffset.UTC).toLocalDate(),
+            kickoffMillis = kickoff,
+            kickoffPrecision = KickoffPrecision.INSTANT,
+            homeTeam = "Home FC",
+            awayTeam = "Away FC",
+            homeGoals = null,
+            awayGoals = null,
+            safeAvailableAtMillis = null,
+            sourceUrl = "https://example.org/worker-fixture",
+            capturedAtMillis = nowMillis - TimeUnit.MINUTES.toMillis(1),
+        )
+        return history + futureFixture
     }
 
     private class RateLimitedProviderHttpClient(

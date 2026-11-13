@@ -120,6 +120,7 @@ internal fun automaticSyncStageMessage(stage: String?): String = when (stage) {
     "waiting_for_sync_lock" -> "Ожидается завершение другой синхронизации; локальная база остаётся доступной."
     "OpenFootball" -> "Загружается история и расписание OpenFootball…"
     "OpenLigaDB" -> "Обновляются футбольные лиги OpenLigaDB…"
+    "prospective_forecasts" -> "Сохраняются прогнозы для последующей проверки…"
     "continuation_queued" -> "Сегмент завершён; импорт продолжится автоматически."
     "complete" -> "Синхронизация источников завершена."
     else -> "Идёт автоматическая синхронизация источников…"
@@ -483,8 +484,27 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
 
         val linkedOdds = runCatching { store.relinkUnmatchedBookmakerOdds() }.getOrDefault(0)
         val linkedMarketReferences = runCatching { store.relinkUnmatchedMarketReferences() }.getOrDefault(0)
+        setProgress(workDataOf("stage" to "prospective_forecasts"))
+        val forecastAtMillis = System.currentTimeMillis()
+        var prospectiveSnapshotsSaved = 0
+        var prospectiveSnapshotsSettled = 0
+        runCatching {
+            val forecasts = buildProspectiveEloForecasts(
+                matches = store.matches(),
+                historicalByLeague = store.historicalResultsByLeague(),
+                forecastedAtMillis = forecastAtMillis,
+            )
+            prospectiveSnapshotsSaved = store.recordProspectiveForecastSnapshots(forecasts, forecastAtMillis)
+            prospectiveSnapshotsSettled = store.settleProspectiveForecastSnapshots(forecastAtMillis)
+        }.onFailure { error ->
+            retryNeeded = true
+            summaryText += "Прогнозы: ${safeError(error)}"
+        }
+        if (prospectiveSnapshotsSaved > 0 || prospectiveSnapshotsSettled > 0) {
+            summaryText += "Прогнозы сохранены: $prospectiveSnapshotsSaved; сверены: $prospectiveSnapshotsSettled"
+        }
         val nextStep = decideSyncNextStep(retryNeeded, continuationNeeded, anySuccess)
-        setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds, "marketFixturesLinked" to linkedMarketReferences))
+        setProgress(workDataOf("stage" to if (nextStep == SyncNextStep.CONTINUE) "continuation_queued" else "complete", "summary" to summaryText.joinToString(" · "), "bookmakerFixturesLinked" to linkedOdds, "marketFixturesLinked" to linkedMarketReferences, "prospectiveSnapshotsSaved" to prospectiveSnapshotsSaved, "prospectiveSnapshotsSettled" to prospectiveSnapshotsSettled))
         when (nextStep) {
             SyncNextStep.RETRY -> {
                 val delayMillis = retryAfterDelayMillis
