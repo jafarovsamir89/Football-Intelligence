@@ -1,10 +1,10 @@
 # Changelog
 
-## Unreleased — объяснить, откуда берётся прогноз Elo на выбранный матч (local checks passed; Actions pending)
+## Unreleased — объяснить, откуда берётся прогноз Elo на выбранный матч (local and Actions passed; phone update pending)
 
 - Экран матча показывает самый вероятный исход модели и численные основания: текущие до игры рейтинги Elo обеих команд, домашний фактор, объём доступной истории и сглаженный исторический ориентир ничьих.
 - Объяснение прямо говорит, что вероятность не является советом ставить, модель не проверена на преимущество/прибыль и прогноз сохраняется для последующей сверки с фактическим счётом.
-- Unit regression проверяет, что раскрытые параметры не используют результаты после cutoff; Compose regression проверяет экран. Локальная групповая команда прошла 190 JVM tests, Android-test Kotlin compilation и debug/personal APK assembly. CI и проверка UI на телефоне ожидаются.
+- Unit regression проверяет, что раскрытые параметры не используют результаты после cutoff; Compose regression проверяет экран. Локальная групповая команда прошла 190 JVM tests, Android-test Kotlin compilation и debug/personal APK assembly. Actions [43411924260](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43411924260) прошёл API 34 (67/67) и API 26 (68 reported, 1 offline-only skip, 0 failures), собрал keyless-варианты и загрузил APK `14030352072`. Проверенный hash APK и подпись записаны в дневнике; личного ключа в DEX нет. Телефон ожидает подключения.
 
 ## Unreleased — объяснить границы вероятности виртуального экспресса (local and Actions passed; phone update pending)
 
