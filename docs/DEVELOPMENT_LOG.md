@@ -1,9 +1,10 @@
 # Development log
 
-## 2026-11-13 — explain the limits of a coupon's combined probability (local checks passed; Actions pending)
+## 2026-11-13 — explain the limits of a coupon's combined probability (local and Actions passed; phone update pending)
 
 - The active coupon details showed a model-derived range as a “calculated joint probability” without saying it was only a Fréchet bound or that match dependence is unknown. That wording could be read as a calibrated chance of an accumulator.
 - Changed the expanded card to name the Fréchet bounds, state that event dependence is unknown, and say the range is not a confirmed coupon probability. Added an API 34/API 26 Compose regression that opens the details and checks the explanation. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 190 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug SHA-256 `2e8ef5acaf8da6779e681075c38ff669b98c3dbf0b7b89e1872473f31e9e0dd8`; personal SHA-256 `c7ff9440efecf55db43e287bface85da47511557823dbcaebf46204883847b48`; both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the personal API key is absent from debug. `git diff --check` passed. No provider requests, quota use, or APK install. Next: commit/push once and verify API 34/26 Compose tests and CI artifacts.
+- Commit `334d672` passed Actions [43408831675](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43408831675): unit task passed, API 34 instrumentation 66/66 without skips/failures, API 26 completed 66 with one offline-only skip and zero failures, both keyless variants built, stable signing passed, and artifact `14029076919` uploaded. Downloaded APK SHA-256 `1cf349e394dfaaf7367cb8584875a4c275f31bda12a16fca3881a546892c955f`; signer SHA-256 `da1506fd2e896c67d3eafc8b3ab7f33824e759e092adf938fdf11c52fa8d935`; DEX audit found no personal API key. No APK was installed and no external quota was used. Next: update-install the owner-only personal APK when the phone reconnects and verify the coupon explanation on-device.
 
 ## 2026-11-13 — make the daily match-analysis path legible (local and CI checks passed; phone update pending)
 
