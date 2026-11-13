@@ -1,5 +1,11 @@
 # Development log
 
+## 2026-11-13 — keep model EV out of live coupon views (local checks passed; Actions pending)
+
+- Audit found a legacy coupon tab (not wired into `FootballScreen`) displayed a conditional EV interval from uncalibrated Elo marginals. The active coupon workspace already omitted EV, but its UI regression did not explicitly protect that behavior. Align the legacy component with the product gate: no prospective EV/ROI display until independent prospective model validation, and explain that real odds are a price, not an edge.
+- Added a visible limitation on the active coupon screen and a Compose regression confirming its candidate card shows Frechet bounds but no conditional EV. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 200 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug SHA-256 `4f0562bfe3249415e1f85ed844a0270098982f2408fe91218a36c94df3b33791`; personal SHA-256 `8813c82e5f812e22b73ebd3049581b1a23065eb0bfc364d8daa3a27aa4b1f626`; both show versionCode 2, versions 0.2.0 / 0.2.0-personal, and verify with the local signer. DEX audit found the personal key absent from debug and present only in the private APK. `git diff --check` passed.
+- CI API 26/API 34 instrumentation and keyless artifact verification are pending. ADB remains empty; no phone APK was installed and no odds quota was used.
+
 ## 2026-11-13 — identify the installed app version (local and Actions passed; phone update pending)
 
 - The user's phone install predates current repository UI changes, but there was no in-app version string to distinguish an old installation. Bumped Android `versionCode` 1→2 and `versionName` 0.1.0→0.2.0; Settings → About now displays the variant's `BuildConfig.VERSION_NAME` (the private APK reads `0.2.0-personal`). Added an Android Compose regression for the displayed version.

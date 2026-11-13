@@ -81,6 +81,7 @@ internal fun FootballCouponWorkspace(
     ) {
         Text("Виртуальные купоны", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Text("Исходы рассчитываются отдельно для каждой БК", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Оценку выгодности купона не рассчитываем: Elo ещё не прошёл независимую проверку на будущих матчах. Коэффициент — только цена букмекера.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf("misli" to "Misli", "topaz" to "TOPAZ").forEach { (id, name) ->
                 FilterChip(selected = provider == id, onClick = { provider = id }, label = { Text(name) }, modifier = Modifier.weight(1f))

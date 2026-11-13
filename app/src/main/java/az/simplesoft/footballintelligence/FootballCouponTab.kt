@@ -110,10 +110,8 @@ internal fun FootballCouponTabContent(
                             }
                             draft.jointProbabilityBounds?.let { bounds ->
                                 Text("Совместная вероятность: только математические границы ${(bounds.lower*100).roundToInt()}–${(bounds.upper*100).roundToInt()}%; зависимость матчей не смоделирована.",style=MaterialTheme.typography.bodySmall)
-                                draft.combinedDecimalOdds?.takeIf { draft.selectionBasis!=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT }?.let { odds ->
-                                    val evLower=(odds*bounds.lower-1.0)*100.0
-                                    val evUpper=(odds*bounds.upper-1.0)*100.0
-                                    Text("Условный EV по этим модельным границам: ${"%.1f".format(evLower)}–${"%.1f".format(evUpper)}% на условную единицу; Elo не откалиброван, это не оценка реальной прибыли.",style=MaterialTheme.typography.bodySmall)
+                                if(draft.combinedDecimalOdds!=null && draft.selectionBasis!=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
+                                    Text("Оценку выгодности купона не рассчитываем: Elo ещё не прошёл независимую проверку на будущих матчах. Коэффициент — только цена букмекера.",style=MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if(draft.combinedDecimalOdds!=null) Text("Условный общий коэффициент ${"%.2f".format(draft.combinedDecimalOdds)} — произведение только свежих линий ${draft.providerName}.",fontWeight=FontWeight.SemiBold)
