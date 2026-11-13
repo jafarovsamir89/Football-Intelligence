@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — сделать первый переход к анализу очевидным (local passed; CI pending)
+## Unreleased — сделать первый переход к анализу очевидным (local and CI passed)
 
 - Главная кратко описывает назначение приложения и помечает проценты как экспериментальные. Карточка «Твой следующий шаг» открывает анализ ближайшего матча; вверху выбирается игра с готовым прогнозом, если такая есть.
-- Compose-регрессия проверяет текст и переход по кнопке. Локально прошли 200 JVM-тестов, компиляция Android UI-тестов и debug/personal APK assembly. API 26/API 34 Actions ещё ожидаются.
+- Compose-регрессия проверяет текст и переход по кнопке. Локально прошли 200 JVM-тестов, компиляция Android UI-тестов и debug/personal APK assembly. Actions [43438458641](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43438458641) прошёл API 34 (71/71, без skip/failure) и API 26 (один offline-only skip, без ошибок), keyless-сборки, stable signing и загрузил artifact `14044907855`. Keyless APK SHA-256 `07c2d76db8efac3aca85c49f2df60018d331e4d17616d45718d667b55e36827f`; личного ключа в DEX нет. Физический телефон не подключён, runtime-проверка CTA не выполнялась.
 
 ## Unreleased — не показывать условный EV до проспективной проверки (local and CI passed)
 
