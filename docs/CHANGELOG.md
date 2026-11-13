@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — показывать версию установленного приложения (local passed; Actions pending)
+## Unreleased — показывать версию установленного приложения (CI/API 26/API 34 passed)
 
 - В разделе «Настройки → О приложении» теперь виден `versionName` сборки. Подняты `versionCode` 1→2 и версия 0.1.0→0.2.0, чтобы установленную personal-сборку можно было отличить от прежней и проверить успешное обновление.
-- Compose-регрессия проверяет строку версии. Локально прошли 200 JVM-тестов, компиляция Android UI-тестов и обе APK-сборки. API 26/API 34 CI-проверки ещё ожидаются; ADB не видит физический телефон.
+- Compose-регрессия проверяет строку версии. Локально прошли 200 JVM-тестов, компиляция Android UI-тестов и обе APK-сборки. Actions [43431931141](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43431931141) прошёл API 34 (71/71) и API 26 (один offline-only skip, без ошибок), keyless-сборки и stable signing; artifact `14041876397`. CI APK — versionCode 2 / `0.2.0`; его SHA-256 и отсутствие personal key в DEX записаны в журнале. ADB не видит физический телефон, поэтому update-install не выполнен.
 
 ## Unreleased — показывать честное состояние автоматической синхронизации (CI/API 26/API 34 passed)
 

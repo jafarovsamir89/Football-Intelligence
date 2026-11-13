@@ -1,10 +1,10 @@
 # Development log
 
-## 2026-11-13 — identify the installed app version (local checks passed; Actions pending)
+## 2026-11-13 — identify the installed app version (local and Actions passed; phone update pending)
 
 - The user's phone install predates current repository UI changes, but there was no in-app version string to distinguish an old installation. Bumped Android `versionCode` 1→2 and `versionName` 0.1.0→0.2.0; Settings → About now displays the variant's `BuildConfig.VERSION_NAME` (the private APK reads `0.2.0-personal`). Added an Android Compose regression for the displayed version.
 - The grouped local command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed 200 JVM tests (0 failures/errors/skips), compiled Android-test Kotlin and assembled both APKs. Debug package `az.simplesoft.footballintelligence` reports versionCode 2 / `0.2.0`; personal package `az.simplesoft.footballintelligence.personal` reports versionCode 2 / `0.2.0-personal`. Debug SHA-256 `39384927db4afbdf33d1289161508f4e76b051cee34c9db733203069b16d3ee1`; personal SHA-256 `aba444b47b6cb703bcc5fd12d597e59a622ee0039f13316e0cd1c591fb64ca50`; both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the Odds API key is absent from debug and present only in the private personal APK. `git diff --check` passed.
-- ADB still lists no connected phone. No APK was installed; CI instrumentation and artifact verification remain pending. Preserve the phone's existing personal database on update; never clear app data.
+- Actions [43431931141](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43431931141) passed unit tests, API 34 instrumentation (71/71, zero skips/failures), API 26 instrumentation (zero failures, one offline-only skip), keyless debug/personal builds, stable signing, and artifact upload `14041876397`. Downloaded keyless APK SHA-256 `aa7d3a184eaa5c4cd8d76d5a74ec4e56d6ac840c175ca32c2af987c05619674d`; signer SHA-256 `da1506fd2e896c67d3ceafc8b3ab7f33824e759e092adf938f11c52fa8d935`; it reports versionCode 2 / `0.2.0`, and its DEX contains no personal API key. No APK was installed because ADB lists no connected phone. Preserve the phone's existing personal database on update; never clear app data.
 
 ## 2026-11-13 — expose the latest football sync outcome on Home (local and Actions passed; phone update pending)
 
