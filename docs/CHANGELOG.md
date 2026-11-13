@@ -1,9 +1,9 @@
 # Changelog
 
-## Unreleased — добавить temperature scaling и ECE для исследовательской смеси (local checks passed; Actions pending)
+## Unreleased — добавить temperature scaling и ECE для исследовательской смеси (CI/API 26/API 34 passed)
 
 - Расширить прежний выбор веса Elo/Poisson фиксированной сеткой multiclass temperature scaling; температуру подбирать только по validation Log Loss. Выводить one-vs-rest ECE компонентов и кандидата отдельно на validation и holdout. Оба порога улучшения и минимум 500 прогнозов на каждом срезе остаются обязательными; модель не подключается к live-пути.
-- Регрессионные тесты проверяют преобразование, holdout-gate и отсутствие влияния holdout на выбор параметров. Первый прогон обнаружил, что температурная коррекция закономерно улучшает две одинаковые, но неверно калиброванные модели; регрессия уточнена на модели, чьи вероятности уже равны частотам исходов. Команда `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` прошла: 190 JVM-тестов (0 failures/errors/skips), Android-test Kotlin compilation и обе APK-сборки. Подписи и локальный аудит ключа прошли; подробности и хэши APK — в журнале. GitHub Actions и установка не запускались.
+- Регрессионные тесты проверяют преобразование, holdout-gate и отсутствие влияния holdout на выбор параметров. Первый прогон обнаружил, что температурная коррекция закономерно улучшает две одинаковые, но неверно калиброванные модели; регрессия уточнена на модели, чьи вероятности уже равны частотам исходов. Команда `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` прошла: 190 JVM-тестов (0 failures/errors/skips), Android-test Kotlin compilation и обе APK-сборки. После обновления устаревшей Compose-подписи Actions [43401920604](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43401920604) прошёл 63/63 API 34 и API 26 с 63 завершёнными тестами, одним offline-only skip и нулём ошибок, затем собрал, подписал и загрузил keyless APK `14026510973`. Подробные хэши и аудит ключа — в журнале. APK не устанавливался.
 
 ## Unreleased — исследовать смесь вероятностей Elo + Poisson (CI/API 26/API 34 passed)
 
