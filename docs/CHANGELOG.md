@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased — исследовать смесь вероятностей Elo + Poisson (локально пройдено; CI ожидается)
+## Unreleased — исследовать смесь вероятностей Elo + Poisson (CI/API 26/API 34 passed)
 
 - Подбирать девять заранее заданных весов Elo/Poisson по общим validation-прогнозам; требовать минимум 500 строк и превосходство обоих компонентов одновременно по Brier и Log Loss. Отдельный holdout получает только уже выбранный вес, без настройки на тестовой части, и проходит отдельный порог 500 прогнозов и те же два критерия улучшения. Добавлены метрики и прозрачные статусы обоих gate на экране сравнения моделей. Смесь остаётся исследовательской и не влияет на live-прогнозы/купоны.
 - Добавлены unit-проверки отбора, минимальных выборок, отрицательного gate, нормировки вероятностей и неизменности validation-решения при изменении holdout-исходов; Compose проверяет отображение результатов validation/holdout.
+- Локально прошли 189 JVM-тестов (0 failures/errors/skips), Android-test Kotlin compilation и обе APK-сборки. Actions [43396717001](https://github.com/jafarovsamir89/Football-Intelligence/actions/runs/43396717001) прошёл 63/63 API 34 теста и API 26 с 63 завершёнными тестами, одним offline-only skip и нулём failures; keyless builds, stable signing и artifact `14023542416` прошли. SHA-256 скачанного APK и DEX-аудит записаны в `docs/DEVELOPMENT_LOG.md`.
 
 ## Unreleased — объяснить назначение приложения на пустом первом запуске (CI/API 26/API 34 passed)
 
