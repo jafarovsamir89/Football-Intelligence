@@ -163,8 +163,7 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Оценка Elo пока недоступна", substring = true).assertIsDisplayed()
-        composeRule.onNodeWithText("Открой матч, чтобы увидеть причину", substring = true).assertIsDisplayed()
+        composeRule.onNodeWithText("Оценка Elo пока недоступна · открой матч, чтобы увидеть причину").assertIsDisplayed()
     }
 
     @Test
