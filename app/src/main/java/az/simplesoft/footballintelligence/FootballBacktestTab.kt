@@ -197,6 +197,10 @@ internal fun FootballBacktestTabContent(
                             } else {
                                 val blendMetrics = candidate.metrics
                                 Text(
+                                    "Temperature scaling T=" + "%.2f".format(candidate.temperature) + ": T>1 смягчает вероятности, T<1 делает их резче; T подбирается на validation по Log Loss.",
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
                                     "На validation выбраны веса Elo ${"%.1f".format(candidate.eloWeight)} / Poisson ${"%.1f".format(1.0-candidate.eloWeight)} из сетки 0.1–0.9 (n=${combined.validationPairedForecastCount}). Elo: Brier ${combined.validationEloMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${combined.validationEloMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; Poisson: ${combined.validationPoissonMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, ${combined.validationPoissonMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; смесь: ${blendMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, ${blendMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}.",
                                     style=MaterialTheme.typography.bodySmall,
                                 )
@@ -210,7 +214,15 @@ internal fun FootballBacktestTabContent(
                                 )
                                 val holdout = combined.holdoutMetrics
                                 Text(
+                                    "Validation ECE (меньше — лучше; описательная калибровка, n=" + combined.validationCalibration.forecastCount + "): Elo " + (combined.validationCalibration.eloMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ", Poisson " + (combined.validationCalibration.poissonMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ", смесь " + (combined.validationCalibration.blendMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ".",
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
                                     "Отдельный holdout для validation-выбранного веса: смесь ${holdout?.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${holdout?.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Elo ${combined.holdoutEloMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${combined.holdoutEloMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; Poisson ${combined.holdoutPoissonMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${combined.holdoutPoissonMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${combined.holdoutPairedForecastCount}/${combined.minimumHoldoutForecasts}).",
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    "Holdout ECE (меньше — лучше; описательная калибровка, n=" + combined.holdoutCalibration.forecastCount + "): Elo " + (combined.holdoutCalibration.eloMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ", Poisson " + (combined.holdoutCalibration.poissonMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ", смесь " + (combined.holdoutCalibration.blendMeanOneVsRestEce?.let { "%.4f".format(it) } ?: "—") + ".",
                                     style=MaterialTheme.typography.bodySmall,
                                 )
                                 Text(

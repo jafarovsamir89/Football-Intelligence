@@ -221,6 +221,14 @@ class GoalExpectationEngineTest {
             changedHoldout.combinedModel.validationCandidate?.eloWeight,
         )
         assertEquals(
+            originalWithCombined.combinedModel.validationCandidate?.temperature,
+            changedHoldout.combinedModel.validationCandidate?.temperature,
+        )
+        assertEquals(
+            originalWithCombined.combinedModel.validationCalibration,
+            changedHoldout.combinedModel.validationCalibration,
+        )
+        assertEquals(
             originalWithCombined.combinedModel.validationCandidate?.metrics,
             changedHoldout.combinedModel.validationCandidate?.metrics,
         )

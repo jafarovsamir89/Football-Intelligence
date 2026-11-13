@@ -26,6 +26,7 @@ import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
 import az.simplesoft.footballintelligence.analytics.CombinedModelCandidate
+import az.simplesoft.footballintelligence.analytics.CombinedModelCalibrationMetrics
 import az.simplesoft.footballintelligence.analytics.CombinedModelResearchReport
 import az.simplesoft.footballintelligence.analytics.HomeAwayPerformanceConfig
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
@@ -276,6 +277,8 @@ class FootballTabUiInstrumentedTest {
                 holdoutPoissonMetrics = metrics,
                 holdoutMetrics = metrics.copy(meanBrierScore = 0.42, meanLogLoss = 0.95),
                 holdoutGatePassed = true,
+                validationCalibration = CombinedModelCalibrationMetrics(600, 0.12, 0.13, 0.10),
+                holdoutCalibration = CombinedModelCalibrationMetrics(2, 0.20, 0.22, 0.18),
             ),
         )
         composeRule.setContent {
@@ -312,6 +315,8 @@ class FootballTabUiInstrumentedTest {
         composeRule.onNodeWithText("Порог validation пройден", substring = true).assertExists()
         composeRule.onNodeWithText("Отдельный holdout для validation-выбранного веса", substring = true).assertExists()
         composeRule.onNodeWithText("Holdout-gate пройден", substring = true).assertExists()
+        composeRule.onNodeWithText("Temperature scaling", substring = true).assertExists()
+        composeRule.onNodeWithText("One-vs-rest ECE holdout", substring = true).assertExists()
     }
 
     @Test
