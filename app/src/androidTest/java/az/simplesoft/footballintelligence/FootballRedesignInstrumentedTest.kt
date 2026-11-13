@@ -1,5 +1,10 @@
 package az.simplesoft.footballintelligence
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
@@ -411,7 +416,7 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("Показать расчёты и другие варианты").performScrollTo().performClick()
         composeRule.onNodeWithText("Границы Фреше по модельным вероятностям: 0–33%", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Зависимость матчей неизвестна", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Оценку выгодности купона не рассчитываем", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Оценку выгодности экспресса не рассчитываем", substring = true).performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("Условный EV", substring = true).fetchSemanticsNodes().isEmpty())
         composeRule.onNodeWithText("TOPAZ").performClick()
         composeRule.onNodeWithText("TOPAZ · 2 исхода").assertIsDisplayed()
@@ -580,7 +585,13 @@ class FootballRedesignInstrumentedTest {
             jointProbabilityBounds = JointProbabilityBounds(.18,.58),
             selectionBasis = CouponSelectionBasis.MODEL_PRICE_EDGE,
         )
-        composeRule.setContent { FootballTheme { CouponCard(candidate, showDetails = true) } }
+        composeRule.setContent {
+            FootballTheme {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    CouponCard(candidate, showDetails = true)
+                }
+            }
+        }
 
         composeRule.onNodeWithText("порог 1/цена 57.1% · модель выше на +2.9 п.п.", substring = true)
             .performScrollTo().assertIsDisplayed()
@@ -602,9 +613,18 @@ class FootballRedesignInstrumentedTest {
             jointProbabilityBounds = JointProbabilityBounds(.20,.60),
             selectionBasis = CouponSelectionBasis.MODEL_PRICE_EDGE,
         )
-        composeRule.setContent { FootballTheme { CouponCard(candidate, showDetails = true) } }
+        composeRule.setContent {
+            FootballTheme {
+                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                    CouponCard(candidate, showDetails = true)
+                }
+            }
+        }
 
-        composeRule.onNodeWithText("котировка устарела", substring = true).performScrollTo().assertIsDisplayed()
+        val staleLabels = composeRule.onAllNodesWithText("котировка устарела", substring = true)
+        assertEquals(2, staleLabels.fetchSemanticsNodes().size)
+        staleLabels.get(0).performScrollTo().assertIsDisplayed()
+        staleLabels.get(1).performScrollTo().assertIsDisplayed()
         assertTrue(composeRule.onAllNodesWithText("порог 1/цена", substring = true).fetchSemanticsNodes().isEmpty())
     }
 
