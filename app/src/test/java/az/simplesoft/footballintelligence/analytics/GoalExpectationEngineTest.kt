@@ -208,8 +208,26 @@ class GoalExpectationEngineTest {
         )
         val changedHoldout = GoalModelComparisonEngine.evaluate(
             listOf(changedDataset), eloReport, config, minimumValidationForecastsForRhoSelection = 1,
+            minimumValidationForecastsForCombinedModel = 1,
+        )
+        val originalWithCombined = GoalModelComparisonEngine.evaluate(
+            listOf(dataset), eloReport, config, minimumValidationForecastsForRhoSelection = 1,
+            minimumValidationForecastsForCombinedModel = 1,
         )
 
         assertEquals(original.selectedDixonColesRho, changedHoldout.selectedDixonColesRho)
+        assertEquals(
+            originalWithCombined.combinedModel.validationCandidate?.eloWeight,
+            changedHoldout.combinedModel.validationCandidate?.eloWeight,
+        )
+        assertEquals(
+            originalWithCombined.combinedModel.validationCandidate?.metrics,
+            changedHoldout.combinedModel.validationCandidate?.metrics,
+        )
+        assertEquals(
+            originalWithCombined.combinedModel.validationGatePassed,
+            changedHoldout.combinedModel.validationGatePassed,
+        )
+        assertTrue(originalWithCombined.combinedModel.holdoutMetrics != changedHoldout.combinedModel.holdoutMetrics)
     }
 }

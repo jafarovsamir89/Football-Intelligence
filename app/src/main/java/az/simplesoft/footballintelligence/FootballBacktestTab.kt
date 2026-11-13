@@ -183,6 +183,53 @@ internal fun FootballBacktestTabContent(
                             "Elo-параметры ${if(comparison.usedValidationSelectedEloConfig) "выбраны на validation" else "оставлены по умолчанию"}. Poisson использует общие голы команды, Home/Away отдельно считает домашние и гостевые голы и сглаживает их на ${comparison.homeAwayConfig.smoothingMatches.toInt()} псевдоматчах. Для Home/Away нужно ${comparison.homeAwayConfig.minimumLeagueMatches} матчей лиги и минимум ${comparison.homeAwayConfig.minimumMatchesPerSplit} домашних матчей хозяев и гостевых матчей гостей. Holdout не используется для выбора параметров.",
                             style=MaterialTheme.typography.labelSmall,
                         )
+                        val combined = comparison.combinedModel
+                        Text("Elo + Poisson: экспериментальная смесь",fontWeight=FontWeight.SemiBold)
+                        if(combined.validationPairedForecastCount < combined.minimumValidationForecasts) {
+                            Text(
+                                "Вес не выбран: общих прогнозов на validation ${combined.validationPairedForecastCount}; требуется ${combined.minimumValidationForecasts}. Holdout смеси не рассчитывался.",
+                                style=MaterialTheme.typography.bodySmall,
+                            )
+                        } else {
+                            val candidate = combined.validationCandidate
+                            if(candidate == null) {
+                                Text("Не удалось выбрать смесь по доступным validation-прогнозам.",style=MaterialTheme.typography.bodySmall)
+                            } else {
+                                val blendMetrics = candidate.metrics
+                                Text(
+                                    "На validation выбраны веса Elo ${"%.1f".format(candidate.eloWeight)} / Poisson ${"%.1f".format(1.0-candidate.eloWeight)} из сетки 0.1–0.9 (n=${combined.validationPairedForecastCount}). Elo: Brier ${combined.validationEloMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, Log Loss ${combined.validationEloMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; Poisson: ${combined.validationPoissonMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, ${combined.validationPoissonMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; смесь: ${blendMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"}, ${blendMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}.",
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    if(combined.validationGatePassed) {
+                                        "Порог validation пройден: смесь лучше Elo и Poisson одновременно по Brier и Log Loss."
+                                    } else {
+                                        "Порог validation не пройден: смесь не улучшила оба простых метода одновременно по обоим показателям."
+                                    },
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                val holdout = combined.holdoutMetrics
+                                Text(
+                                    "Отдельный holdout для validation-выбранного веса: смесь ${holdout?.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} Brier / ${holdout?.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} Log Loss; Elo ${combined.holdoutEloMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${combined.holdoutEloMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"}; Poisson ${combined.holdoutPoissonMetrics.meanBrierScore?.let { "%.4f".format(it) } ?: "—"} / ${combined.holdoutPoissonMetrics.meanLogLoss?.let { "%.4f".format(it) } ?: "—"} (n=${combined.holdoutPairedForecastCount}/${combined.minimumHoldoutForecasts}).",
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                                Text(
+                                    when {
+                                        combined.holdoutPairedForecastCount < combined.minimumHoldoutForecasts ->
+                                            "Holdout-порог не достигнут: для проверки нужно не менее ${combined.minimumHoldoutForecasts} общих прогнозов."
+                                        combined.holdoutGatePassed ->
+                                            "Holdout-gate пройден: validation-выбранная смесь лучше Elo и Poisson по обоим показателям. Это всё ещё одна ретроспективная проверка."
+                                        else ->
+                                            "Holdout-gate не пройден: смесь не превзошла оба базовых метода одновременно по Brier и Log Loss."
+                                    },
+                                    style=MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
+                        Text(
+                            "Смесь остаётся только исследовательской: веса выбираются на validation, holdout не настраивается, live-прогнозы и купоны не меняются. Один исторический split не подтверждает будущую точность.",
+                            style=MaterialTheme.typography.labelSmall,
+                        )
                     }
                     Text("Все сравниваемые модели используют только результаты, доступные до cutoff. Bootstrap независимо пересэмплирует матчи; повторяющиеся команды и туры могут занижать неопределённость. Это одна проверка текущих исторических файлов, не подтверждение будущей точности или преимущества. Home/Away пока исследовательская модель и не влияет на live-прогнозы или купоны.",style=MaterialTheme.typography.labelSmall)
                 }

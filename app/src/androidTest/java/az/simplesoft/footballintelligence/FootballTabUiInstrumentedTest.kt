@@ -25,6 +25,8 @@ import az.simplesoft.footballintelligence.analytics.GoalExpectationConfig
 import az.simplesoft.footballintelligence.analytics.GoalModelComparisonReport
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
+import az.simplesoft.footballintelligence.analytics.CombinedModelCandidate
+import az.simplesoft.footballintelligence.analytics.CombinedModelResearchReport
 import az.simplesoft.footballintelligence.analytics.HomeAwayPerformanceConfig
 import az.simplesoft.footballintelligence.data.InternationalOddsSnapshot
 import az.simplesoft.footballintelligence.data.InternationalOddsQuoteSide
@@ -261,6 +263,20 @@ class FootballTabUiInstrumentedTest {
             usedValidationSelectedEloConfig = true,
             goalConfig = GoalExpectationConfig(),
             homeAwayConfig = HomeAwayPerformanceConfig(),
+            combinedModel = CombinedModelResearchReport(
+                validationPairedForecastCount = 600,
+                minimumValidationForecasts = 500,
+                validationEloMetrics = metrics,
+                validationPoissonMetrics = metrics,
+                validationCandidate = CombinedModelCandidate(0.5, metrics.copy(meanBrierScore = 0.40, meanLogLoss = 0.90)),
+                validationGatePassed = true,
+                minimumHoldoutForecasts = 1,
+                holdoutPairedForecastCount = 2,
+                holdoutEloMetrics = metrics,
+                holdoutPoissonMetrics = metrics,
+                holdoutMetrics = metrics.copy(meanBrierScore = 0.42, meanLogLoss = 0.95),
+                holdoutGatePassed = true,
+            ),
         )
         composeRule.setContent {
             MaterialTheme {
@@ -292,6 +308,10 @@ class FootballTabUiInstrumentedTest {
                 .fetchSemanticsNodes().isNotEmpty(),
         )
         composeRule.onNodeWithText("Home/Away пока исследовательская модель", substring = true).assertExists()
+        composeRule.onNodeWithText("Elo + Poisson: экспериментальная смесь").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Порог validation пройден", substring = true).assertExists()
+        composeRule.onNodeWithText("Отдельный holdout для validation-выбранного веса", substring = true).assertExists()
+        composeRule.onNodeWithText("Holdout-gate пройден", substring = true).assertExists()
     }
 
     @Test

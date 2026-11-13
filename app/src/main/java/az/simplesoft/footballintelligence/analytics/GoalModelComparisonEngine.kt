@@ -34,6 +34,7 @@ data class GoalModelComparisonReport(
     val usedValidationSelectedEloConfig: Boolean,
     val goalConfig: GoalExpectationConfig,
     val homeAwayConfig: HomeAwayPerformanceConfig,
+    val combinedModel: CombinedModelResearchReport = CombinedModelResearchReport(),
 )
 
 data class GoalRhoGridCandidate(
@@ -70,8 +71,12 @@ object GoalModelComparisonEngine {
         goalConfig: GoalExpectationConfig = GoalExpectationConfig(),
         minimumValidationForecastsForRhoSelection: Int = DEFAULT_MINIMUM_VALIDATION_FORECASTS_FOR_RHO_SELECTION,
         homeAwayConfig: HomeAwayPerformanceConfig = HomeAwayPerformanceConfig(),
+        minimumValidationForecastsForCombinedModel: Int = CombinedModelResearch.DEFAULT_MINIMUM_VALIDATION_FORECASTS,
+        minimumHoldoutForecastsForCombinedModel: Int = CombinedModelResearch.DEFAULT_MINIMUM_HOLDOUT_FORECASTS,
     ): GoalModelComparisonReport {
         require(minimumValidationForecastsForRhoSelection >= 1)
+        require(minimumValidationForecastsForCombinedModel >= 1)
+        require(minimumHoldoutForecastsForCombinedModel >= 1)
         val baseGoalConfig = goalConfig.copy(dixonColesRho = null)
         val eloConfig = eloExperiment.selectedConfig ?: EloConfig()
         val validationStart = eloExperiment.validationStartMillis
@@ -108,6 +113,12 @@ object GoalModelComparisonEngine {
                 usedValidationSelectedEloConfig = eloExperiment.selectionAvailable,
                 goalConfig = baseGoalConfig,
                 homeAwayConfig = homeAwayConfig,
+                combinedModel = CombinedModelResearch.evaluate(
+                    validation = emptyList(),
+                    holdout = emptyList(),
+                    minimumValidationForecasts = minimumValidationForecastsForCombinedModel,
+                    minimumHoldoutForecasts = minimumHoldoutForecastsForCombinedModel,
+                ),
             )
         }
 
@@ -135,6 +146,7 @@ object GoalModelComparisonEngine {
         val eloScores = mutableMapOf<FixtureKey, ModelScore>()
         val goalScores = mutableMapOf<FixtureKey, ModelScore>()
         val homeAwayScores = mutableMapOf<FixtureKey, ModelScore>()
+        val holdoutCombinedForecasts = mutableListOf<PairedModelForecast>()
         var eloForecastCount = 0
         var goalForecastCount = 0
         var homeAwayForecastCount = 0
@@ -165,6 +177,17 @@ object GoalModelComparisonEngine {
                 goalScores[FixtureKey(dataset.competition, prediction.targetId)] =
                     ModelScore(prediction.brierScore, prediction.logLoss)
             }
+            val goalById = goalReport.predictions.associateBy { it.targetId }
+            val targetsById = dataset.targets.associateBy { it.id }
+            eloReport.predictions.forEach { eloPrediction ->
+                val goalPrediction = goalById[eloPrediction.targetId] ?: return@forEach
+                val target = targetsById[eloPrediction.targetId] ?: return@forEach
+                holdoutCombinedForecasts += PairedModelForecast(
+                    elo = eloPrediction.probabilities,
+                    poisson = goalPrediction.probabilities,
+                    observed = observed(target.homeGoals, target.awayGoals),
+                )
+            }
             homeAwayReport.predictions.forEach { prediction ->
                 homeAwayScores[FixtureKey(dataset.competition, prediction.targetId)] =
                     ModelScore(prediction.brierScore, prediction.logLoss)
@@ -182,6 +205,13 @@ object GoalModelComparisonEngine {
         val homeAwayPaired = pairedMetrics(commonHomeAwayKeys.size, commonHomeAway)
         val eloMinusPoissonIntervals = pairedBootstrapIntervals("elo-poisson", commonKeys, eloScores, goalScores)
         val eloMinusHomeAwayIntervals = pairedBootstrapIntervals("elo-home-away", commonHomeAwayKeys, eloScores, homeAwayScores)
+        val validationCombinedForecasts = pairedForecasts(validationDatasets, eloConfig, selectedGoalConfig)
+        val combinedModel = CombinedModelResearch.evaluate(
+            validation = validationCombinedForecasts,
+            holdout = holdoutCombinedForecasts,
+            minimumValidationForecasts = minimumValidationForecastsForCombinedModel,
+            minimumHoldoutForecasts = minimumHoldoutForecastsForCombinedModel,
+        )
         return GoalModelComparisonReport(
             validationStartMillis = validationStart,
             holdoutStartMillis = holdoutStart,
@@ -212,7 +242,34 @@ object GoalModelComparisonEngine {
             minimumValidationForecastsForRhoSelection = minimumValidationForecastsForRhoSelection,
             goalConfig = selectedGoalConfig,
             homeAwayConfig = homeAwayConfig,
+            combinedModel = combinedModel,
         )
+    }
+
+    private fun pairedForecasts(
+        datasets: List<EloExperimentDataset>,
+        eloConfig: EloConfig,
+        goalConfig: GoalExpectationConfig,
+    ): List<PairedModelForecast> = datasets.flatMap { dataset ->
+        val elo = EloWalkForwardEngine.evaluate(dataset.history, dataset.targets, eloConfig)
+        val poisson = GoalExpectationWalkForwardEngine.evaluate(dataset.history, dataset.targets, goalConfig)
+        val poissonById = poisson.predictions.associateBy { it.targetId }
+        val targetsById = dataset.targets.associateBy { it.id }
+        elo.predictions.mapNotNull { eloPrediction ->
+            val poissonPrediction = poissonById[eloPrediction.targetId] ?: return@mapNotNull null
+            val target = targetsById[eloPrediction.targetId] ?: return@mapNotNull null
+            PairedModelForecast(
+                elo = eloPrediction.probabilities,
+                poisson = poissonPrediction.probabilities,
+                observed = observed(target.homeGoals, target.awayGoals),
+            )
+        }
+    }
+
+    private fun observed(homeGoals: Int, awayGoals: Int): OutcomeProbabilities = when {
+        homeGoals > awayGoals -> OutcomeProbabilities(1.0, 0.0, 0.0)
+        homeGoals == awayGoals -> OutcomeProbabilities(0.0, 1.0, 0.0)
+        else -> OutcomeProbabilities(0.0, 0.0, 1.0)
     }
 
     private fun summarizeGoals(
