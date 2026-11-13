@@ -1,5 +1,10 @@
 # Development log
 
+## 2026-11-13 — explain the limits of a coupon's combined probability (local checks passed; Actions pending)
+
+- The active coupon details showed a model-derived range as a “calculated joint probability” without saying it was only a Fréchet bound or that match dependence is unknown. That wording could be read as a calibrated chance of an accumulator.
+- Changed the expanded card to name the Fréchet bounds, state that event dependence is unknown, and say the range is not a confirmed coupon probability. Added an API 34/API 26 Compose regression that opens the details and checks the explanation. The grouped command `./gradlew --no-daemon :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug :app:assemblePersonal` passed: 190 JVM tests (0 failures/errors/skips), Android-test Kotlin compilation, and both APK assemblies. Debug SHA-256 `2e8ef5acaf8da6779e681075c38ff669b98c3dbf0b7b89e1872473f31e9e0dd8`; personal SHA-256 `c7ff9440efecf55db43e287bface85da47511557823dbcaebf46204883847b48`; both signatures verify with local signer SHA-256 `1d5bf81541d66c56c79c3a7c36bbeca06c353e4604abca671e2207ef88f7370`. DEX audit confirms the personal API key is absent from debug. `git diff --check` passed. No provider requests, quota use, or APK install. Next: commit/push once and verify API 34/26 Compose tests and CI artifacts.
+
 ## 2026-11-13 — make the daily match-analysis path legible (local and CI checks passed; phone update pending)
 
 - The owner said the installed app feels like it has no functionality. Inspecting the current screen showed the central issue: the dashboard counted fresh bookmaker rows even when they were not linked to a local future fixture, cards rendered an unexplained blank probability row when Elo had no estimate, and an empty coupon showed a generic explanation without readiness counts or a route to the matches.

@@ -307,7 +307,11 @@ internal fun CouponCard(candidate: VirtualCouponCandidate, modifier: Modifier = 
                 }
             }
             if (showDetails) candidate.jointProbabilityBounds?.let { bounds: JointProbabilityBounds ->
-                Text("Расчётная совместная вероятность: ${(bounds.lower * 100).roundToInt()}–${(bounds.upper * 100).roundToInt()}%", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Границы Фреше по модельным вероятностям: ${(bounds.lower * 100).roundToInt()}–${(bounds.upper * 100).roundToInt()}%. Зависимость матчей неизвестна; это диапазон, а не подтверждённый шанс купона.",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }

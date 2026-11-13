@@ -197,6 +197,9 @@ class FootballRedesignInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Misli · 2 исхода").assertIsDisplayed()
+        composeRule.onNodeWithText("Показать расчёты и другие варианты").performScrollTo().performClick()
+        composeRule.onNodeWithText("Границы Фреше по модельным вероятностям: 0–33%", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Зависимость матчей неизвестна", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("TOPAZ").performClick()
         composeRule.onNodeWithText("TOPAZ · 2 исхода").assertIsDisplayed()
         composeRule.onNodeWithText("3 исхода").performClick()
