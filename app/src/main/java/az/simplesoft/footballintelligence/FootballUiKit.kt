@@ -41,6 +41,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.VirtualCouponCandidate
@@ -192,11 +193,12 @@ internal fun MetricCard(title: String, value: String, subtitle: String? = null, 
 @Composable
 internal fun ProbabilityBar(forecast: ForecastedMatch?) {
     if (forecast == null) {
-        Text("Оценка Elo пока недоступна · открой матч, чтобы увидеть причину", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Расчёт модели пока недоступен · открой матч, чтобы увидеть причину", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         return
     }
     val values = listOf("П1" to forecast.probabilities.home, "X" to forecast.probabilities.draw, "П2" to forecast.probabilities.away)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(AdvancedPredictionEngine.displayName(forecast.modelVersion), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             values.forEach { (label, value) ->
                 Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {

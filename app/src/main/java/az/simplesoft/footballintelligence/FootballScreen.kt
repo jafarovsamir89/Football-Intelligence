@@ -26,8 +26,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import az.simplesoft.footballintelligence.analytics.EloEngine
-import az.simplesoft.footballintelligence.analytics.EloForecast
+import az.simplesoft.footballintelligence.analytics.AdvancedPrediction
+import az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardEngine
 import az.simplesoft.footballintelligence.analytics.EloWalkForwardReport
 import az.simplesoft.footballintelligence.analytics.CompetitionSeasonWalkForwardMetrics
@@ -151,16 +151,16 @@ import androidx.work.WorkManager
     val activeBacktestCode=selectedBacktestCode.takeIf { it in importedCompetitionCodes }
         ?: importedCompetitionCodes.firstOrNull().orEmpty()
     val active=matches.firstOrNull { it.id==selected }
-    var eloForecast by remember { mutableStateOf<EloForecast?>(null) }
+    var activePrediction by remember { mutableStateOf<AdvancedPrediction?>(null) }
     LaunchedEffect(active?.id,revision) {
         val match=active
         val kickoff=match?.let { runCatching { Instant.parse(it.kickoff).toEpochMilli() }.getOrNull() }
         if(match==null||match.finished||kickoff==null||!match.exactKickoff) {
-            eloForecast=null
+            activePrediction=null
         } else {
             val history=repository.historicalResultsBefore(match.league,kickoff)
-            eloForecast=withContext(Dispatchers.Default) {
-                EloEngine.forecast(history,kickoff,match.home,match.away)
+            activePrediction=withContext(Dispatchers.Default) {
+                AdvancedPredictionEngine.forecast(history,kickoff,match.home,match.away)
             }
         }
     }
@@ -193,7 +193,7 @@ import androidx.work.WorkManager
         val now=System.currentTimeMillis()
         forecastedMatches=withContext(Dispatchers.Default) {
             val linkedOddsMatchIds=oddsSnapshot.mapNotNull { it.matchId }.toSet()
-            buildProspectiveEloForecasts(matchSnapshot,historySnapshot,now,linkedOddsMatchIds)
+            buildProspectiveForecasts(matchSnapshot,historySnapshot,now,linkedOddsMatchIds)
         }
     }
     val bookmakerCouponPrices=remember(misliOdds,topazOdds) {
@@ -399,7 +399,7 @@ import androidx.work.WorkManager
           when {
             showMatchDetail -> MatchAnalysisTab(
               active = active,
-              eloForecast = eloForecast,
+              activePrediction = activePrediction,
               activeMarketReference = activeMarketReference,
               marketReferenceSyncState = marketReferenceSyncState,
               misliOdds = misliOdds,

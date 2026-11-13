@@ -29,17 +29,17 @@ data class InternationalBookmakerEvaluationReport(
     val modelBrierScore: Double?,
     val modelLogLoss: Double?,
     val modelTopOutcomeAccuracy: Double?,
-    /** Paired Elo-minus-market differences; negative loss differences favor Elo. */
+    /** Paired model-minus-market differences; negative loss differences favor the model. */
     val eloMinusMarketBrier95: MetricConfidenceInterval95?,
     val eloMinusMarketLogLoss95: MetricConfidenceInterval95?,
-    /** Positive accuracy differences favor Elo. */
+    /** Positive accuracy differences favor the model. */
     val eloMinusMarketTopAccuracy95: MetricConfidenceInterval95?,
 )
 
 data class InternationalMarketEvaluationReport(
     /** One selected last-observed pre-kickoff quote per linked fixture and underlying bookmaker. */
     val quoteFixtureCount: Int,
-    /** Quotes for which an eligible saved Elo forecast existed by the quote capture time. */
+    /** Quotes for which an eligible saved production-model forecast existed by capture time. */
     val pairedFixtureCount: Int,
     val settledFixtureCount: Int,
     val pendingFixtureCount: Int,
@@ -47,10 +47,10 @@ data class InternationalMarketEvaluationReport(
 )
 
 /**
- * Compares market and Elo probabilities on the same saved fixture/bookmaker cohort.
+ * Compares market and production-model probabilities on the same saved fixture/bookmaker cohort.
  * Only linked, complete 1X2 quotes captured before kickoff and within the provider freshness
  * window are used. One quote per underlying bookmaker/fixture is selected, so repeated polls and
- * intermediary duplicates cannot increase the sample. The paired Elo snapshot must have existed
+ * intermediary duplicates cannot increase the sample. The paired model snapshot must have existed
  * by quote capture; result data must have become available after kickoff.
  */
 object InternationalMarketEvaluationEngine {
@@ -75,7 +75,7 @@ object InternationalMarketEvaluationEngine {
     fun evaluate(
         marketHistory: Collection<InternationalOddsSnapshot>,
         forecastHistory: Collection<ProspectiveForecastObservation>,
-        modelVersion: String = CURRENT_ELO_MODEL_VERSION,
+        modelVersion: String = CURRENT_PRODUCTION_MODEL_VERSION,
     ): InternationalMarketEvaluationReport {
         val validForecasts = forecastHistory.filter { forecast ->
             forecast.modelVersion == modelVersion &&

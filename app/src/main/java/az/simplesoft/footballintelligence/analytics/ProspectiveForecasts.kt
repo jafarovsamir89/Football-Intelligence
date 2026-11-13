@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence.analytics
 
 const val CURRENT_ELO_MODEL_VERSION = "elo-1x2-v1"
+const val CURRENT_PRODUCTION_MODEL_VERSION = CURRENT_ADVANCED_MODEL_VERSION
 
 data class ProspectiveForecastObservation(
     val snapshotId: Long,
@@ -37,14 +38,14 @@ data class ProspectiveFrequencyBaselineReport(
     val baselineVersion: String,
     val fixtureCount: Int,
     val settledCount: Int,
-    val eloMeanBrierScore: Double?,
+    val modelMeanBrierScore: Double?,
     val baselineMeanBrierScore: Double?,
-    /** Negative difference means Elo scored lower on the same settled fixtures. */
-    val eloMinusBaselineBrierScore: Double?,
-    val eloMeanLogLoss: Double?,
+    /** Negative difference means the model scored lower on the same settled fixtures. */
+    val modelMinusBaselineBrierScore: Double?,
+    val modelMeanLogLoss: Double?,
     val baselineMeanLogLoss: Double?,
-    /** Negative difference means Elo scored lower on the same settled fixtures. */
-    val eloMinusBaselineLogLoss: Double?,
+    /** Negative difference means the model scored lower on the same settled fixtures. */
+    val modelMinusBaselineLogLoss: Double?,
 )
 
 data class ProspectiveModelForecastReport(
@@ -104,11 +105,11 @@ object ProspectiveForecastEvaluator {
                     val baselineSettled = rows.mapNotNull { observation ->
                         observation.observedOutcomeOrNull()?.let { observation to it }
                     }
-                    val eloBrier = meanBrier(baselineSettled)
+                    val modelBrier = meanBrier(baselineSettled)
                     val baselineBrier = baselineSettled.map { (row, observed) ->
                         ForecastMetrics.brierScore(requireNotNull(row.frequencyBaselineProbabilities), observed)
                     }.average().takeIf { baselineSettled.isNotEmpty() }
-                    val eloLogLoss = meanLogLoss(baselineSettled)
+                    val modelLogLoss = meanLogLoss(baselineSettled)
                     val baselineLogLoss = baselineSettled.map { (row, observed) ->
                         ForecastMetrics.logLoss(requireNotNull(row.frequencyBaselineProbabilities), observed)
                     }.average().takeIf { baselineSettled.isNotEmpty() }
@@ -116,12 +117,12 @@ object ProspectiveForecastEvaluator {
                         baselineVersion = baselineVersion,
                         fixtureCount = rows.size,
                         settledCount = baselineSettled.size,
-                        eloMeanBrierScore = eloBrier,
+                        modelMeanBrierScore = modelBrier,
                         baselineMeanBrierScore = baselineBrier,
-                        eloMinusBaselineBrierScore = if (eloBrier != null && baselineBrier != null) eloBrier - baselineBrier else null,
-                        eloMeanLogLoss = eloLogLoss,
+                        modelMinusBaselineBrierScore = if (modelBrier != null && baselineBrier != null) modelBrier - baselineBrier else null,
+                        modelMeanLogLoss = modelLogLoss,
                         baselineMeanLogLoss = baselineLogLoss,
-                        eloMinusBaselineLogLoss = if (eloLogLoss != null && baselineLogLoss != null) eloLogLoss - baselineLogLoss else null,
+                        modelMinusBaselineLogLoss = if (modelLogLoss != null && baselineLogLoss != null) modelLogLoss - baselineLogLoss else null,
                     )
                 }
             ProspectiveModelForecastReport(

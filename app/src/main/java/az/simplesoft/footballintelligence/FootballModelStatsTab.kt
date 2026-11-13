@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastObservation
 import az.simplesoft.footballintelligence.analytics.ProspectiveForecastReport
+import az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine
 import java.util.Locale
 
 @Composable
@@ -38,7 +39,7 @@ internal fun FootballModelStatsTab(
             report.modelReports.forEach { model ->
                 androidx.compose.material3.ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(model.modelVersion, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                        Text(AdvancedPredictionEngine.displayName(model.modelVersion), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricCard("Проверено", model.settledCount.toString(), "матчей", Modifier.weight(1f))
                             MetricCard("Ожидают", model.pendingCount.toString(), "результатов", Modifier.weight(1f))
@@ -62,24 +63,24 @@ internal fun FootballModelStatsTab(
                         } else {
                             model.frequencyBaselineReports.forEach { baseline ->
                                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                    Text("Проверка Elo против простой базы",fontWeight=FontWeight.SemiBold,style=MaterialTheme.typography.bodyMedium)
+                                    Text("Модель против простой базы",fontWeight=FontWeight.SemiBold,style=MaterialTheme.typography.bodyMedium)
                                     Text("База — доли побед хозяев, ничьих и побед гостей в той же лиге до этого прогноза.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                     Text("Одинаковая выборка: проверено ${baseline.settledCount} / ${baseline.fixtureCount} матчей.",style=MaterialTheme.typography.bodySmall)
                                     if(baseline.settledCount==0) {
                                         Text("Снимки сохранены до матчей; сравнение появится после получения результатов.",style=MaterialTheme.typography.bodySmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                     } else {
                                         if(baseline.settledCount<30) {
-                                            Text("Мало завершённых наблюдений: пока нельзя делать вывод, что Elo лучше базы.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                            Text("Мало завершённых наблюдений: пока нельзя делать вывод, что модель лучше базы.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Text(
-                                            "Brier: Elo ${baseline.eloMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ Elo−база ${baseline.eloMinusBaselineBrierScore?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
+                                            "Brier: модель ${baseline.modelMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanBrierScore?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ модель−база ${baseline.modelMinusBaselineBrierScore?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
                                             style=MaterialTheme.typography.bodySmall,
                                         )
                                         Text(
-                                            "Log Loss: Elo ${baseline.eloMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ Elo−база ${baseline.eloMinusBaselineLogLoss?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
+                                            "Log Loss: модель ${baseline.modelMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · база ${baseline.baselineMeanLogLoss?.let { "%.4f".format(Locale.US,it) } ?: "—"} · Δ модель−база ${baseline.modelMinusBaselineLogLoss?.let { "%+.4f".format(Locale.US,it) } ?: "—"} (ниже лучше).",
                                             style=MaterialTheme.typography.bodySmall,
                                         )
-                                        Text("Δ = ошибка Elo минус ошибка базы: отрицательное значение означает меньшую ошибку Elo. Это не совет ставить и не расчёт прибыли.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text("Δ = ошибка модели минус ошибка базы: отрицательное значение означает меньшую ошибку модели. Это не совет ставить и не расчёт прибыли.",style=MaterialTheme.typography.labelSmall,color=MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -101,7 +102,7 @@ internal fun FootballModelStatsTab(
                 SourceStatus(
                     title = "${snapshot.homeTeam} — ${snapshot.awayTeam}",
                     status = actual,
-                    detail = "${snapshot.competition} · модель ${snapshot.modelVersion} · ${"%.0f".format(Locale.US, snapshot.probabilities.home * 100)} / ${"%.0f".format(Locale.US, snapshot.probabilities.draw * 100)} / ${"%.0f".format(Locale.US, snapshot.probabilities.away * 100)}%",
+                    detail = "${snapshot.competition} · ${AdvancedPredictionEngine.displayName(snapshot.modelVersion)} · ${"%.0f".format(Locale.US, snapshot.probabilities.home * 100)} / ${"%.0f".format(Locale.US, snapshot.probabilities.draw * 100)} / ${"%.0f".format(Locale.US, snapshot.probabilities.away * 100)}%",
                     healthy = when {
                         snapshot.actualOutcome == null -> null
                         else -> snapshot.probabilities.values().indices.maxBy { snapshot.probabilities.values()[it] }.let { listOf("H", "D", "A")[it] == snapshot.actualOutcome }

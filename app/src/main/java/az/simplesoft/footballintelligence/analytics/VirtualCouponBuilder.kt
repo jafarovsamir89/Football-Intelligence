@@ -8,7 +8,7 @@ data class ForecastedMatch(
     val probabilities: OutcomeProbabilities,
     val forecastedAtMillis: Long = 0L,
     val historyMatchCount: Int = 0,
-    val modelVersion: String = CURRENT_ELO_MODEL_VERSION,
+    val modelVersion: String = CURRENT_PRODUCTION_MODEL_VERSION,
     val competition: String = "",
     val frequencyBaselineVersion: String? = null,
     val frequencyBaselineProbabilities: OutcomeProbabilities? = null,
@@ -45,8 +45,8 @@ enum class CouponSelectionBasis {
 
     val strategyVersion: String
         get() = when (this) {
-            MODEL_RANKED -> "elo-max-1x2-frechet-v1"
-            MATCHED_FRESH_BOOKMAKER_ODDS -> "elo-priced-max-1x2-frechet-v1"
+            MODEL_RANKED -> "model-max-1x2-frechet-v2"
+            MATCHED_FRESH_BOOKMAKER_ODDS -> "model-priced-max-1x2-frechet-v2"
             MODEL_MARKET_DISAGREEMENT -> "model-vs-local-devig-positive-delta-frechet-v1"
         }
 }

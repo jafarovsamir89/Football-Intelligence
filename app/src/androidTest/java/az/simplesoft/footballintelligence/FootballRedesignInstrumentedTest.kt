@@ -11,7 +11,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import az.simplesoft.footballintelligence.analytics.CouponSelectionBasis
 import az.simplesoft.footballintelligence.analytics.AccumulatorSettlement
 import az.simplesoft.footballintelligence.analytics.AccumulatorSettlementState
-import az.simplesoft.footballintelligence.analytics.EloForecast
+import az.simplesoft.footballintelligence.analytics.AdvancedPrediction
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.JointProbabilityBounds
 import az.simplesoft.footballintelligence.analytics.OutcomeProbabilities
@@ -188,7 +188,7 @@ class FootballRedesignInstrumentedTest {
             FootballTheme {
                 MatchAnalysisTab(
                     active = tomorrowMatch(),
-                    eloForecast = EloForecast(probabilities = null, matchesUsed = 8, homeTeamMatches = 2, awayTeamMatches = 1),
+                    activePrediction = AdvancedPrediction(probabilities = null, modelVersion = null, modelName = "Недостаточно истории", historyMatchCount = 8, homeTeamMatchCount = 2, awayTeamMatchCount = 1, fallbackReason = "Poisson недоступен: недостаточно предматчевой истории (лига 8/50, хозяева 2/5, гости 1/5). Для Elo также нужны минимум 10 результатов лиги и 3 матча каждой команды."),
                     activeMarketReference = null,
                     marketReferenceSyncState = null,
                     misliOdds = emptyList(),
@@ -198,9 +198,9 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Прогноз не рассчитан: недостаточно истории", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("лига 8/10, хозяева 2/3, гости 1/3", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("10 завершённых матчей лиги", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Poisson недоступен: недостаточно предматчевой истории", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("лига 8/50, хозяева 2/5, гости 1/5", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Для Elo также нужны минимум 10 результатов лиги", substring = true).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -209,15 +209,14 @@ class FootballRedesignInstrumentedTest {
             FootballTheme {
                 MatchAnalysisTab(
                     active = tomorrowMatch(),
-                    eloForecast = EloForecast(
+                    activePrediction = AdvancedPrediction(
                         probabilities = OutcomeProbabilities(.55, .25, .20),
-                        matchesUsed = 22,
-                        homeTeamMatches = 7,
-                        awayTeamMatches = 9,
-                        homeTeamRating = 1540.0,
-                        awayTeamRating = 1480.0,
-                        homeAdvantagePoints = 65.0,
-                        smoothedDrawProbability = .26,
+                        modelVersion = az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION,
+                        modelName = "Elo · резервная модель",
+                        historyMatchCount = 22,
+                        homeTeamMatchCount = 7,
+                        awayTeamMatchCount = 9,
+                        fallbackReason = "Poisson недоступен: недостаточно предматчевой истории (лига 22/50).",
                     ),
                     activeMarketReference = null,
                     marketReferenceSyncState = null,
@@ -230,9 +229,9 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Как читать эту оценку").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Самая высокая оценка: П1 (55.0%)", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Elo хозяев 1540, гостей 1480", substring = true).performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("22 результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("22 завершённых результатов лиги, доступных до начала", substring = true).performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Модель использует только результаты и фактор домашнего поля. Она экспериментальная, не учитывает составы и не подтверждает преимущество или прибыль.").performScrollTo().assertIsDisplayed()
+        composeRule.onNodeWithText("Используется резервная Elo-модель, потому что для основной Poisson не хватило истории. Составы и новости не используются; оценка остаётся экспериментальной.").performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -250,7 +249,7 @@ class FootballRedesignInstrumentedTest {
             FootballTheme {
                 MatchAnalysisTab(
                     active = match,
-                    eloForecast = null,
+                    activePrediction = null,
                     activeMarketReference = null,
                     marketReferenceSyncState = null,
                     misliOdds = listOf(latest),
@@ -294,11 +293,13 @@ class FootballRedesignInstrumentedTest {
             FootballTheme {
                 MatchAnalysisTab(
                     active = match,
-                    eloForecast = EloForecast(
+                    activePrediction = AdvancedPrediction(
                         probabilities = OutcomeProbabilities(.55, .25, .20),
-                        matchesUsed = 22,
-                        homeTeamMatches = 7,
-                        awayTeamMatches = 9,
+                        modelVersion = az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION,
+                        modelName = "Elo · резервная модель",
+                        historyMatchCount = 22,
+                        homeTeamMatchCount = 7,
+                        awayTeamMatchCount = 9,
                     ),
                     activeMarketReference = null,
                     marketReferenceSyncState = null,
@@ -327,7 +328,7 @@ class FootballRedesignInstrumentedTest {
             }
         }
 
-        composeRule.onNodeWithText("Оценка Elo пока недоступна · открой матч, чтобы увидеть причину").assertIsDisplayed()
+        composeRule.onNodeWithText("Расчёт модели пока недоступен · открой матч, чтобы увидеть причину").assertIsDisplayed()
     }
 
     @Test
@@ -483,7 +484,7 @@ class FootballRedesignInstrumentedTest {
 
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Ожидается · время начала не указано").performScrollTo().assertIsDisplayed()
-        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().isNotEmpty())
+        assertTrue(composeRule.onAllNodesWithText("Расчёт модели пока недоступен", substring = true).fetchSemanticsNodes().isNotEmpty())
         composeRule.onNodeWithText("Завтра").performClick()
         composeRule.onNodeWithText("Source Away FC").performScrollTo().performClick()
         assertEquals(match.id, selectedMatch)
@@ -516,7 +517,7 @@ class FootballRedesignInstrumentedTest {
         composeRule.onNodeWithText("предстоящих матчей").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("0 / 1").performScrollTo().assertIsDisplayed()
         composeRule.onNodeWithText("Source Home FC").performScrollTo().assertIsDisplayed()
-        assertTrue(composeRule.onAllNodesWithText("Оценка Elo пока недоступна", substring = true).fetchSemanticsNodes().size >= 2)
+        assertTrue(composeRule.onAllNodesWithText("Расчёт модели пока недоступен", substring = true).fetchSemanticsNodes().size >= 2)
     }
 
     private fun tomorrowMatch(): Match {

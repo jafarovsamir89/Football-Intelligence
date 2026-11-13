@@ -11,8 +11,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import az.simplesoft.footballintelligence.analytics.EloEngine
-import az.simplesoft.footballintelligence.analytics.EloForecast
+import az.simplesoft.footballintelligence.analytics.AdvancedPrediction
+import az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine
+import az.simplesoft.footballintelligence.analytics.CURRENT_ADVANCED_MODEL_VERSION
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.InternationalMarketConsensus
 import az.simplesoft.footballintelligence.analytics.InternationalMarketEngine
@@ -46,7 +47,7 @@ import java.util.Locale
 @Composable
 internal fun MatchAnalysisTab(
     active: Match?,
-    eloForecast: EloForecast?,
+    activePrediction: AdvancedPrediction?,
     activeMarketReference: MarketReferenceSnapshot?,
     marketReferenceSyncState: MarketReferenceSyncState?,
     misliOdds: List<BookmakerOddsSnapshot>,
@@ -56,7 +57,7 @@ internal fun MatchAnalysisTab(
     onOpenTipsAudit: () -> Unit,
 ) {
     var showDetails by remember(active?.id) { mutableStateOf(false) }
-    val activeForecast = eloForecast
+    val activeForecast = activePrediction
     val nowMillis = rememberClockMinute()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         if (active == null) {
@@ -68,7 +69,7 @@ internal fun MatchAnalysisTab(
 
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)) {
                 Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Вероятности исхода · Elo", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Вероятности · ${activeForecast?.modelName ?: "модель"}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     val probabilities = activeForecast?.probabilities
                     if (active.finished) {
                         Text("Предматчевая оценка для завершённой игры не показывается.", style = MaterialTheme.typography.bodySmall)
@@ -79,23 +80,30 @@ internal fun MatchAnalysisTab(
                             Text("Считаю оценку по истории, доступной до начала матча…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         } else {
                             val missing = buildList {
-                                if (activeForecast.matchesUsed < EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST) {
-                                    add("лига ${activeForecast.matchesUsed}/${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST}")
+                                if (activeForecast.historyMatchCount < AdvancedPredictionEngine.MINIMUM_LEAGUE_MATCHES) {
+                                    add("лига ${activeForecast.historyMatchCount}/${AdvancedPredictionEngine.MINIMUM_LEAGUE_MATCHES}")
                                 }
-                                if (activeForecast.homeTeamMatches < EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST) {
-                                    add("хозяева ${activeForecast.homeTeamMatches}/${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST}")
+                                if (activeForecast.homeTeamMatchCount < AdvancedPredictionEngine.MINIMUM_MATCHES_PER_TEAM) {
+                                    add("хозяева ${activeForecast.homeTeamMatchCount}/${AdvancedPredictionEngine.MINIMUM_MATCHES_PER_TEAM}")
                                 }
-                                if (activeForecast.awayTeamMatches < EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST) {
-                                    add("гости ${activeForecast.awayTeamMatches}/${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST}")
+                                if (activeForecast.awayTeamMatchCount < AdvancedPredictionEngine.MINIMUM_MATCHES_PER_TEAM) {
+                                    add("гости ${activeForecast.awayTeamMatchCount}/${AdvancedPredictionEngine.MINIMUM_MATCHES_PER_TEAM}")
                                 }
                             }
-                            Text("Прогноз не рассчитан: недостаточно истории (${missing.joinToString()}).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("Для Elo нужны минимум ${EloEngine.MIN_HISTORY_MATCHES_FOR_FORECAST} завершённых матчей лиги до начала и ${EloEngine.MIN_TEAM_MATCHES_FOR_FORECAST} предыдущих матчей у каждой команды.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(activeForecast.fallbackReason ?: "Прогноз недоступен: недостаточно истории (${missing.joinToString()}).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     } else {
-                        val forecast = ForecastedMatch(active.id, active.home, active.away, runCatching { Instant.parse(active.kickoff).toEpochMilli() }.getOrDefault(0L), probabilities, competition = active.league)
+                        val forecast = ForecastedMatch(
+                            matchId = active.id,
+                            homeTeam = active.home,
+                            awayTeam = active.away,
+                            kickoffMillis = runCatching { Instant.parse(active.kickoff).toEpochMilli() }.getOrDefault(0L),
+                            probabilities = probabilities,
+                            modelVersion = activeForecast.modelVersion ?: CURRENT_ADVANCED_MODEL_VERSION,
+                            competition = active.league,
+                        )
                         ProbabilityBar(forecast)
-                        EloExplanation(activeForecast)
+                        AdvancedPredictionExplanation(activeForecast)
                     }
                 }
             }
@@ -123,17 +131,17 @@ internal fun MatchAnalysisTab(
                     OddsRow("misli", misli, nowMillis)
                     if (model != null && misli != null && isFreshBookmakerQuote(misli, nowMillis)) {
                         val fair = fairProbabilities(Quote(0, active.id, "Misli", misli.home, misli.draw, misli.away, misli.capturedAtMillis))
-                        Text("Elo − Misli без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Модель − Misli без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         LocalModelMarketGapNote("Misli", model, misli.home, misli.draw, misli.away)
                     }
                     OddsRow("topaz", topaz, nowMillis)
                     if (model != null && topaz != null && isFreshBookmakerQuote(topaz, nowMillis)) {
                         val fair = fairProbabilities(Quote(0, active.id, "TOPAZ", topaz.home, topaz.draw, topaz.away, topaz.capturedAtMillis))
-                        Text("Elo − TOPAZ без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Модель − TOPAZ без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         LocalModelMarketGapNote("TOPAZ", model, topaz.home, topaz.draw, topaz.away)
                     }
                     if (model != null) {
-                        Text("«+» значит, что Elo оценивает исход выше вероятности рынка без маржи; «−» — ниже. Это расхождение для проверки, а не рекомендация: модель не откалибрована и не подтверждает преимущество или прибыль.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("«+» значит, что модель оценивает исход выше вероятности рынка без маржи; «−» — ниже. Это расхождение для проверки, а не рекомендация: модель ещё не прошла проспективную калибровку и не подтверждает преимущество или прибыль.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     val now = nowMillis
                     val international = internationalOdds.filter {
@@ -152,13 +160,13 @@ internal fun MatchAnalysisTab(
                             Text("Снимок ${bakuTime(quote.capturedAtMillis)}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             if (model != null) {
                                 val fair = fairProbabilities(Quote(0, active.id, quote.bookmakerId, quote.home, quote.draw, quote.away, quote.capturedAtMillis))
-                                Text("Elo − рынок без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Модель − рынок без маржи: ${marketPercentagePoints(model.home-fair.first)} / ${marketPercentagePoints(model.draw-fair.second)} / ${marketPercentagePoints(model.away-fair.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     }
                     val fairReference = activeMarketReference?.let { Triple(it.homeProbability, it.drawProbability, it.awayProbability) }
                     if (model != null && fairReference != null) {
-                        Text("Elo − рыночный ориентир: ${marketPercentagePoints(model.home - fairReference.first)} / ${marketPercentagePoints(model.draw - fairReference.second)} / ${marketPercentagePoints(model.away - fairReference.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Модель − рыночный ориентир: ${marketPercentagePoints(model.home - fairReference.first)} / ${marketPercentagePoints(model.draw - fairReference.second)} / ${marketPercentagePoints(model.away - fairReference.third)} п.п.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
@@ -175,7 +183,7 @@ internal fun MatchAnalysisTab(
                     }
                     TextButton(onClick = { showDetails = !showDetails }) { Text(if (showDetails) "Скрыть подробности" else "Источники и методика") }
                     if (showDetails) {
-                        Text("Elo использует сохранённые результаты лиги, доступные до времени начала. Модель экспериментальная и не калибрована.", style = MaterialTheme.typography.bodySmall)
+                        Text("Модель использует сохранённые результаты лиги, доступные до времени начала. Оценка экспериментальная и ещё не проспективно откалибрована.", style = MaterialTheme.typography.bodySmall)
                         Text("Свежесть Misli/TOPAZ — 30 минут. Международная линия показывается только при точной локальной связи и свежем сохранённом снимке.", style = MaterialTheme.typography.bodySmall)
                         Text("${activeMarketReference?.let { "TipsAudit · ${it.methodologyVersion} · рассчитано ${bakuTime(it.fairReadAtMillis)}" } ?: "TipsAudit ещё не связал свежую линию с этим матчем"}. Расхождение описывает данные, не прибыль.", style = MaterialTheme.typography.bodySmall)
                         Text("Последняя проверка TipsAudit: ${marketReferenceSyncState?.lastCheckedAtMillis?.let(::bakuTime) ?: "не выполнялась"}.", style = MaterialTheme.typography.bodySmall)
@@ -256,7 +264,7 @@ private fun LocalModelMarketGapNote(
     val market = ProbabilityEngine.removeMargin(homeOdds, drawOdds, awayOdds, MarginMethod.BASIC)
     val gap = ProbabilityEngine.largestPositiveModelMarketGap(model, market)
     val text = if (gap == null) {
-        "$bookmaker: нет положительного расхождения Elo с рынком без маржи."
+        "$bookmaker: нет положительного расхождения модели с рынком без маржи."
     } else {
         val outcome = when (gap.outcomeCode) {
             "H" -> "П1"
@@ -269,38 +277,37 @@ private fun LocalModelMarketGapNote(
 }
 
 @Composable
-private fun EloExplanation(forecast: EloForecast) {
+private fun AdvancedPredictionExplanation(forecast: AdvancedPrediction) {
     val probabilities = forecast.probabilities ?: return
+    val isPrimary = forecast.modelVersion == CURRENT_ADVANCED_MODEL_VERSION
     val highest = listOf("П1" to probabilities.home, "X" to probabilities.draw, "П2" to probabilities.away)
         .maxBy { it.second }
-    val homeRating = forecast.homeTeamRating
-    val awayRating = forecast.awayTeamRating
-    val homeAdvantage = forecast.homeAdvantagePoints
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         Text("Как читать эту оценку", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Text(
             "Самая высокая оценка: ${highest.first} (${"%.1f".format(Locale.US, highest.second * 100)}%). Это наиболее вероятный исход по модели, а не совет о ставке.",
             style = MaterialTheme.typography.bodySmall,
         )
-        if (homeRating != null && awayRating != null && homeAdvantage != null) {
-            val adjustedDifference = homeRating + homeAdvantage - awayRating
+        if (forecast.homeExpectedGoals != null && forecast.awayExpectedGoals != null) {
             Text(
-                "Почему: Elo хозяев ${"%.0f".format(Locale.US, homeRating)}, гостей ${"%.0f".format(Locale.US, awayRating)}; домашний фактор ${"%+.0f".format(Locale.US, homeAdvantage)}; разница с ним ${"%+.0f".format(Locale.US, adjustedDifference)} очков.",
+                "Poisson оценивает голы: хозяева ${"%.2f".format(Locale.US, forecast.homeExpectedGoals)}, гости ${"%.2f".format(Locale.US, forecast.awayExpectedGoals)}. Вероятности 1X2 получаются из распределения возможных счетов.",
                 style = MaterialTheme.typography.bodySmall,
             )
         }
         Text(
-            "Основа: ${forecast.matchesUsed} завершённых результатов лиги, доступных до начала; у команд ${forecast.homeTeamMatches} и ${forecast.awayTeamMatches} прошлых матчей.",
+            "Основа: ${forecast.historyMatchCount} результатов лиги, доступных до начала; у команд ${forecast.homeTeamMatchCount} и ${forecast.awayTeamMatchCount} прошлых матчей.",
             style = MaterialTheme.typography.bodySmall,
         )
-        forecast.smoothedDrawProbability?.let { drawRate ->
+        if (forecast.modelVersion == CURRENT_ADVANCED_MODEL_VERSION) {
             Text(
-                "Сглаженный исторический ориентир ничьих в лиге: ${"%.1f".format(Locale.US, drawRate * 100)}%.",
+                AdvancedPredictionEngine.HISTORICAL_EVIDENCE_SUMMARY,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+        forecast.fallbackReason?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
         Text(
-            "Модель использует только результаты и фактор домашнего поля. Она экспериментальная, не учитывает составы и не подтверждает преимущество или прибыль.",
+            if (isPrimary) "Основная модель Poisson использует голы и показатели атаки/обороны той же лиги; старые результаты теряют половину веса за 365 дней. Внешний xG, составы и новости не используются. Исторический тест не заменяет будущую проверку."
+            else "Используется резервная Elo-модель, потому что для основной Poisson не хватило истории. Составы и новости не используются; оценка остаётся экспериментальной.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -407,9 +414,9 @@ internal fun InternationalMarketTabContent(
         item {
             ElevatedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(10.dp),verticalArrangement=Arrangement.spacedBy(4.dp)) {
-                    Text("Предварительная проверка рынка и Elo",fontWeight=FontWeight.SemiBold)
+                    Text("Предварительная проверка рынка и модели",fontWeight=FontWeight.SemiBold)
                     Text(
-                        "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом Elo, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
+                        "Последняя сохранённая свежая 1X2-котировка до начала матча сравнивается с прогнозом модели, который уже существовал к моменту её получения. Счёт учитывается только после подтверждённого результата.",
                         style=MaterialTheme.typography.bodySmall,
                     )
                     if(analyticsUpdating) {
@@ -417,7 +424,7 @@ internal fun InternationalMarketTabContent(
                     } else {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricCard("Связано", internationalMarketEvaluation.quoteFixtureCount.toString(), "БК · матч", Modifier.weight(1f))
-                            MetricCard("С Elo", internationalMarketEvaluation.pairedFixtureCount.toString(), "сопоставимых пар", Modifier.weight(1f))
+                            MetricCard("С моделью", internationalMarketEvaluation.pairedFixtureCount.toString(), "сопоставимых пар", Modifier.weight(1f))
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             MetricCard("Проверено", internationalMarketEvaluation.settledFixtureCount.toString(), "результатов", Modifier.weight(1f))
@@ -434,7 +441,7 @@ internal fun InternationalMarketTabContent(
                                 val metricText = if(report.settledFixtureCount == 0) {
                                     "без проверенного исхода: ${report.pendingFixtureCount}/${report.pairedFixtureCount} пар"
                                 } else {
-                                    "Brier рынок/Elo ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/Elo ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/Elo ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
+                                    "Brier рынок/модель ${report.marketBrierScore!!.formatScore()} / ${report.modelBrierScore!!.formatScore()} · Log Loss рынок/модель ${report.marketLogLoss!!.formatScore()} / ${report.modelLogLoss!!.formatScore()} · top-1 рынок/модель ${report.marketTopOutcomeAccuracy!!.formatPercent()} / ${report.modelTopOutcomeAccuracy!!.formatPercent()} · n=${report.settledFixtureCount}/${report.pairedFixtureCount}"
                                 }
                                 val providers=report.sourceProviderIds.joinToString(" + ") { internationalProviderName(it) }
                                 ElevatedCard(Modifier.fillMaxWidth(), shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)) {
@@ -445,7 +452,7 @@ internal fun InternationalMarketTabContent(
                                     }
                                 }
                                 val confidenceText = if(report.settledFixtureCount >= InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS) {
-                                    "95% парный bootstrap, Δ Elo−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
+                                    "95% парный bootstrap, Δ модель−рынок: Brier ${report.eloMinusMarketBrier95!!.formatScoreInterval()} · Log Loss ${report.eloMinusMarketLogLoss95!!.formatScoreInterval()} · top-1 ${report.eloMinusMarketTopAccuracy95!!.formatPercentInterval()}"
                                 } else {
                                     "95% интервалы пока недоступны: нужно ≥${InternationalMarketEvaluationEngine.MIN_SETTLED_FIXTURES_FOR_INTERVALS} завершённых матчей, сейчас ${report.settledFixtureCount}."
                                 }
@@ -453,7 +460,7 @@ internal fun InternationalMarketTabContent(
                             }
                         }
                         Text(
-                            "Знак Δ Elo−рынок: для Brier и Log Loss отрицательное значение означает меньшую ошибку Elo; для top-1 положительное — больше правильных исходов Elo.",
+                            "Знак Δ модель−рынок: для Brier и Log Loss отрицательное значение означает меньшую ошибку модели; для top-1 положительное — больше правильных исходов модели.",
                             style=MaterialTheme.typography.bodySmall,
                         )
                         Text(
@@ -558,9 +565,9 @@ internal fun InternationalMarketTabContent(
                         Text("Изменение с предыдущим снимком той же стороны: 1 ${"%+.2f".format(it.homeDelta)} · X ${"%+.2f".format(it.drawDelta)} · 2 ${"%+.2f".format(it.awayDelta)} (дельта цены).",style=MaterialTheme.typography.bodySmall)
                     }
                     if(isLay) {
-                        Text(if(quote.matchId==null) "Нет единственного безопасного совпадения с локальным матчем." else "Сопоставлено с локальным матчем ID ${quote.matchId}; Lay-цены не используются для Elo-сравнения.",style=MaterialTheme.typography.bodySmall)
+                        Text(if(quote.matchId==null) "Нет единственного безопасного совпадения с локальным матчем." else "Сопоставлено с локальным матчем ID ${quote.matchId}; Lay-цены не используются для сравнения модели.",style=MaterialTheme.typography.bodySmall)
                     } else if(quote.matchId==null) {
-                        Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с Elo и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
+                        Text("Нет единственного безопасного совпадения с локальным матчем; сравнение с моделью и местными котировками скрыто.",style=MaterialTheme.typography.bodySmall)
                     } else {
                         val linkDescription=when(quote.matchLinkBasis) {
                             InternationalMatchLinkBasis.EXACT_KICKOFF -> "точное время kickoff и порядок команд"
@@ -569,12 +576,12 @@ internal fun InternationalMarketTabContent(
                         }
                         Text("Локальный матч ID ${quote.matchId} · $linkDescription.",style=MaterialTheme.typography.labelSmall)
                         if(model==null) {
-                            Text("Elo не рассчитан: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
+                            Text("Модель не рассчитана: для этого матча недостаточно доступной предматчевой истории.",style=MaterialTheme.typography.bodySmall)
                         } else {
                             val p=model.probabilities
                             val fair=requireNotNull(internationalFair)
                             val comparisonBasis=if(isBetfairExchange) "нормированным Back до комиссии" else "вероятностями без маржи"
-                            Text("Elo ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · Elo минус $bookmakerName $comparisonBasis: ${"%+.1f".format((p.home-fair.home)*100)} / ${"%+.1f".format((p.draw-fair.draw)*100)} / ${"%+.1f".format((p.away-fair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                            Text("${AdvancedPredictionEngine.displayName(model.modelVersion)} ${"%.1f".format(p.home*100)} / ${"%.1f".format(p.draw*100)} / ${"%.1f".format(p.away*100)}% · модель минус $bookmakerName $comparisonBasis: ${"%+.1f".format((p.home-fair.home)*100)} / ${"%+.1f".format((p.draw-fair.draw)*100)} / ${"%+.1f".format((p.away-fair.away)*100)} п.п. · модель экспериментальная, не откалибрована.",style=MaterialTheme.typography.bodySmall)
                         }
                         listOf("Misli" to localMisli,"TOPAZ" to localTopaz).forEach { (name,local) ->
                             if(local==null) Text("$name: нет свежей локальной линии по этому матчу.",style=MaterialTheme.typography.bodySmall)

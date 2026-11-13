@@ -1,0 +1,236 @@
+{
+  "experiment": "football-intelligence-4.0 / current Elo vs validation-selected exponentially weighted goal Poisson",
+  "data": {
+    "source": "openfootball/football.json",
+    "source_url": "https://github.com/openfootball/football.json",
+    "license": "CC0-1.0 / public domain (upstream README)",
+    "source_revision": "e6744429ee395bc86f247348c6184bb08d4eb361",
+    "source_commit_time": "2026-09-22T09:33:49+00:00",
+    "source_files_seen": 76,
+    "rows_seen": 27326,
+    "incomplete_or_invalid_rows_skipped": 1624,
+    "conflicting_duplicate_fixtures_removed": 0,
+    "completed_matches_by_league": {
+      "en.1": 6080,
+      "de.1": 4896,
+      "es.1": 5310,
+      "it.1": 4930,
+      "fr.1": 4236
+    },
+    "date_cutoff_rule": "forecast at 00:00 UTC on fixture date; source result assumed available 00:00 UTC on date+2; strict availability < forecast cutoff",
+    "source_vintage_limit": "one current repository snapshot; no per-match historical publication vintages"
+  },
+  "split": {
+    "validation_start_inclusive": "2022-07-01",
+    "holdout_start_inclusive": "2024-07-01",
+    "evaluation_end_exclusive": "2026-07-01",
+    "validation_target_rows": 3578,
+    "validation_common_rows": 3513,
+    "holdout_target_rows": 3483,
+    "holdout_common_rows": 3448
+  },
+  "selection": {
+    "metric": "validation Log Loss, Brier score tie-break",
+    "half_life_grid_days": [
+      null,
+      180,
+      365,
+      730
+    ],
+    "selected_half_life_days": 365,
+    "minimum_common_validation": 500,
+    "validation_candidates": [
+      {
+        "half_life_days": null,
+        "metrics_on_common_rows": {
+          "n": 3513.0,
+          "brier": 0.5910033135236998,
+          "log_loss": 0.9919028783636146,
+          "top1_accuracy": 0.5209222886421861,
+          "macro_one_vs_rest_ece_10_bins": 0.02127035565041062
+        }
+      },
+      {
+        "half_life_days": 180,
+        "metrics_on_common_rows": {
+          "n": 3513.0,
+          "brier": 0.5901125515522835,
+          "log_loss": 0.9899059254658444,
+          "top1_accuracy": 0.5277540563620837,
+          "macro_one_vs_rest_ece_10_bins": 0.023538905050341268
+        }
+      },
+      {
+        "half_life_days": 365,
+        "metrics_on_common_rows": {
+          "n": 3513.0,
+          "brier": 0.5884978445398249,
+          "log_loss": 0.9876903343525907,
+          "top1_accuracy": 0.524907486478793,
+          "macro_one_vs_rest_ece_10_bins": 0.02333927275577442
+        }
+      },
+      {
+        "half_life_days": 730,
+        "metrics_on_common_rows": {
+          "n": 3513.0,
+          "brier": 0.5884337076691193,
+          "log_loss": 0.9878360480692652,
+          "top1_accuracy": 0.5280387133504127,
+          "macro_one_vs_rest_ece_10_bins": 0.019831675902845586
+        }
+      }
+    ]
+  },
+  "holdout_common_cohort": {
+    "current_production_elo": {
+      "n": 3448.0,
+      "brier": 0.5954081814815786,
+      "log_loss": 1.0645157749498104,
+      "top1_accuracy": 0.5185614849187935,
+      "macro_one_vs_rest_ece_10_bins": 0.022869183448729347
+    },
+    "same_competition_frequency": {
+      "n": 3448.0,
+      "brier": 0.6502881829590008,
+      "log_loss": 1.0743842605763074,
+      "top1_accuracy": 0.4312645011600928,
+      "macro_one_vs_rest_ece_10_bins": 0.00982026737579668
+    },
+    "existing_cumulative_goal_poisson": {
+      "n": 3448.0,
+      "brier": 0.595996207704213,
+      "log_loss": 0.9977958064661194,
+      "top1_accuracy": 0.505800464037123,
+      "macro_one_vs_rest_ece_10_bins": 0.018597926919677234
+    },
+    "validation_selected_time_decay_poisson": {
+      "n": 3448.0,
+      "brier": 0.5905989415844614,
+      "log_loss": 0.990949643219933,
+      "top1_accuracy": 0.5229118329466357,
+      "macro_one_vs_rest_ece_10_bins": 0.02149211096664261
+    },
+    "selected_poisson_minus_elo_week_block_bootstrap": {
+      "clusters": 402,
+      "cluster_definition": "competition x 7-day UTC-date block; repeated-team dependence across blocks remains",
+      "replicates": 2000,
+      "candidate_minus_elo_brier": -0.0048092398971172345,
+      "candidate_minus_elo_log_loss": -0.07356613172987747,
+      "brier_delta_95_ci": [
+        -0.008152649162412137,
+        -0.0015895860908331269
+      ],
+      "log_loss_delta_95_ci": [
+        -0.1272382958304971,
+        -0.029497847653161626
+      ]
+    },
+    "by_league": {
+      "en.1": {
+        "name": "English Premier League",
+        "n": 755,
+        "elo": {
+          "n": 755.0,
+          "brier": 0.6073214927587745,
+          "log_loss": 1.056660314099012,
+          "top1_accuracy": 0.5072847682119205,
+          "macro_one_vs_rest_ece_10_bins": 0.03796841199405262
+        },
+        "selected_poisson": {
+          "n": 755.0,
+          "brier": 0.6045579353499567,
+          "log_loss": 1.0096956371962402,
+          "top1_accuracy": 0.5006622516556292,
+          "macro_one_vs_rest_ece_10_bins": 0.027330990452909154
+        }
+      },
+      "de.1": {
+        "name": "Bundesliga",
+        "n": 602,
+        "elo": {
+          "n": 602.0,
+          "brier": 0.5966548314998025,
+          "log_loss": 1.1072944143327996,
+          "top1_accuracy": 0.5116279069767442,
+          "macro_one_vs_rest_ece_10_bins": 0.03962697108420127
+        },
+        "selected_poisson": {
+          "n": 602.0,
+          "brier": 0.5936963436974415,
+          "log_loss": 0.9977556510520811,
+          "top1_accuracy": 0.521594684385382,
+          "macro_one_vs_rest_ece_10_bins": 0.0413316536178108
+        }
+      },
+      "es.1": {
+        "name": "La Liga",
+        "n": 745,
+        "elo": {
+          "n": 745.0,
+          "brier": 0.587700418528677,
+          "log_loss": 1.1232976602628888,
+          "top1_accuracy": 0.5288590604026846,
+          "macro_one_vs_rest_ece_10_bins": 0.037869399277088794
+        },
+        "selected_poisson": {
+          "n": 745.0,
+          "brier": 0.5817025022076459,
+          "log_loss": 0.9802005752898364,
+          "top1_accuracy": 0.5302013422818792,
+          "macro_one_vs_rest_ece_10_bins": 0.03814157213765443
+        }
+      },
+      "it.1": {
+        "name": "Serie A",
+        "n": 740,
+        "elo": {
+          "n": 740.0,
+          "brier": 0.5946830117545824,
+          "log_loss": 1.0347620510325628,
+          "top1_accuracy": 0.518918918918919,
+          "macro_one_vs_rest_ece_10_bins": 0.03606341669334221
+        },
+        "selected_poisson": {
+          "n": 740.0,
+          "brier": 0.5863339355542756,
+          "log_loss": 0.9828218905084415,
+          "top1_accuracy": 0.5283783783783784,
+          "macro_one_vs_rest_ece_10_bins": 0.03508483023811541
+        }
+      },
+      "fr.1": {
+        "name": "Ligue 1",
+        "n": 606,
+        "elo": {
+          "n": 606.0,
+          "brier": 0.589688504373723,
+          "log_loss": 0.9958744930592377,
+          "top1_accuracy": 0.5264026402640264,
+          "macro_one_vs_rest_ece_10_bins": 0.041114751053614416
+        },
+        "selected_poisson": {
+          "n": 606.0,
+          "brier": 0.5862759637513038,
+          "log_loss": 0.9839729937931315,
+          "top1_accuracy": 0.5363036303630363,
+          "macro_one_vs_rest_ece_10_bins": 0.026577893642035538
+        }
+      }
+    }
+  },
+  "promotion_gate": {
+    "minimum_common_holdout": 1000,
+    "enough_data": true,
+    "lower_brier_and_log_loss_than_elo": true,
+    "both_week_block_95_percent_intervals_below_zero": true,
+    "candidate_passes": true
+  },
+  "limitations": [
+    "This is a single current source snapshot, not an archive of what each source knew at each historical date.",
+    "Date-only results use a conservative +2-day availability proxy; it is a modeling assumption, not an observed publication timestamp.",
+    "OpenFootball coverage and team naming are uneven across leagues/seasons; results are not xG, lineups, or news.",
+    "Week-block intervals group same-league nearby fixtures but recurring-team dependence remains.",
+    "A historical holdout pass is not prospective validation or evidence of future betting profit."
+  ]
+}

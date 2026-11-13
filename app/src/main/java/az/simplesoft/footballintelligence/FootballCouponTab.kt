@@ -37,7 +37,7 @@ internal fun FootballCouponTabContent(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text("Автоматические модельные черновики",style=MaterialTheme.typography.titleLarge)
-                Text("Подбор наиболее вероятного исхода строится по локальному Elo для матчей с точным временем и достаточной историей. Черновики раздельны по операторам. Реальная цена показывается только для свежей линии того же букмекера и матча; модель экспериментальная и не откалибрована.",style=MaterialTheme.typography.bodySmall)
+                Text("Подбор наиболее вероятного исхода строится по Poisson с затуханием старых результатов; при короткой истории используется резервный Elo. Черновики раздельны по операторам. Цена показывается только для свежей линии того же букмекера и матча; модель не проверена на будущих матчах.",style=MaterialTheme.typography.bodySmall)
                 Text("Misli.az: ${visibleBookmakerStatus(misliSyncState?.status,misliSyncState?.lastCheckedAtMillis,misliOdds.size)} · свежих линий ${misliOdds.size}, точных матчей ${misliOdds.count { it.matchId!=null }}. TOPAZ/eTopaz: ${visibleBookmakerStatus(topazSyncState?.status,topazSyncState?.lastCheckedAtMillis,topazOdds.size)} · свежих линий ${topazOdds.size}, точных матчей ${topazOdds.count { it.matchId!=null }}.",style=MaterialTheme.typography.bodySmall)
                 TextButton(onClick=onToggleBookmakerQuotes) {
                     Text(if(showBookmakerQuotes) "Скрыть публичные линии" else "Показать публичные линии (${misliOdds.size+topazOdds.size})")
@@ -53,7 +53,7 @@ internal fun FootballCouponTabContent(
                             val comparison=forecast?.let { f ->
                                 val p=f.probabilities
                                 val market=fairProbabilities(Quote(0,quote.matchId ?: 0,"Misli",quote.home,quote.draw,quote.away,quote.capturedAtMillis))
-                                "Elo ${"%.1f".format(p.home*100)}/${"%.1f".format(p.draw*100)}/${"%.1f".format(p.away*100)}% · линия без маржи ${"%.1f".format(market.first*100)}/${"%.1f".format(market.second*100)}/${"%.1f".format(market.third*100)}%"
+                                "${AdvancedPredictionEngine.displayName(f.modelVersion)} ${"%.1f".format(p.home*100)}/${"%.1f".format(p.draw*100)}/${"%.1f".format(p.away*100)}% · линия без маржи ${"%.1f".format(market.first*100)}/${"%.1f".format(market.second*100)}/${"%.1f".format(market.third*100)}%"
                             } ?: "Проверенного матча с локальным прогнозом нет"
                             val captured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
                             Text("${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())} · ${quote.homeTeam} — ${quote.awayTeam} · 1 ${quote.home} / X ${quote.draw} / 2 ${quote.away} · снимок $captured",fontWeight=FontWeight.SemiBold)
@@ -72,7 +72,7 @@ internal fun FootballCouponTabContent(
                             val comparison=forecast?.let { f ->
                                 val p=f.probabilities
                                 val market=fairProbabilities(Quote(0,quote.matchId ?: 0,"TOPAZ",quote.home,quote.draw,quote.away,quote.capturedAtMillis))
-                                "Elo ${"%.1f".format(p.home*100)}/${"%.1f".format(p.draw*100)}/${"%.1f".format(p.away*100)}% · линия без маржи ${"%.1f".format(market.first*100)}/${"%.1f".format(market.second*100)}/${"%.1f".format(market.third*100)}%"
+                                "${AdvancedPredictionEngine.displayName(f.modelVersion)} ${"%.1f".format(p.home*100)}/${"%.1f".format(p.draw*100)}/${"%.1f".format(p.away*100)}% · линия без маржи ${"%.1f".format(market.first*100)}/${"%.1f".format(market.second*100)}/${"%.1f".format(market.third*100)}%"
                             } ?: "Нет точного локального матча с доступным прогнозом"
                             val captured=DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(quote.capturedAtMillis))
                             Text("${niceTime(Instant.ofEpochMilli(quote.kickoffMillis).toString())} · ${quote.homeTeam} — ${quote.awayTeam} · 1 ${quote.home} / X ${quote.draw} / 2 ${quote.away} · снимок $captured${if(quote.eventYearInferred) " · год по ближайшей будущей дате" else ""}",fontWeight=FontWeight.SemiBold)
@@ -84,7 +84,7 @@ internal fun FootballCouponTabContent(
                 }
                 Text("Виртуальные экспрессы",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)
                 Text("Размеры 2 / 3 / 5 / 8 / 10 доступны только при достаточном числе будущих матчей с точным kickoff и историей для модели. Отбираются исходы с наибольшими расчётными маргинальными вероятностями; более слабые матчи не добавляются ради размера.",style=MaterialTheme.typography.bodySmall)
-                Text("Исследовательские купоны по расхождению показывают только положительную разницу между Elo и вероятностью без маржи из полной свежей линии того же букмекера. Модель не калибрована: это не EV, не прибыль и не рекомендация; при отсутствии точной свежей линии такие исходы не строятся.",style=MaterialTheme.typography.labelSmall)
+                Text("Исследовательские купоны по расхождению показывают положительную разницу между активной моделью и вероятностью без маржи из полной свежей линии того же букмекера. Это не EV, не прибыль и не рекомендация: качество на будущих матчах пока проверяется.",style=MaterialTheme.typography.labelSmall)
                 if(accumulatorDrafts.isEmpty()) Text("Пока недостаточно прогнозируемых матчей для экспресса из двух исходов. Доступно матчей: ${forecastedMatches.size}.",style=MaterialTheme.typography.bodySmall)
                 accumulatorDrafts.forEach { draft ->
                     ElevatedCard {
@@ -112,13 +112,13 @@ internal fun FootballCouponTabContent(
                             draft.jointProbabilityBounds?.let { bounds ->
                                 Text("Совместная вероятность: только математические границы ${(bounds.lower*100).roundToInt()}–${(bounds.upper*100).roundToInt()}%; зависимость матчей не смоделирована.",style=MaterialTheme.typography.bodySmall)
                                 if(draft.combinedDecimalOdds!=null && draft.selectionBasis!=CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT) {
-                                    Text("Оценку выгодности купона не рассчитываем: Elo ещё не прошёл независимую проверку на будущих матчах. Коэффициент — только цена букмекера.",style=MaterialTheme.typography.bodySmall)
+                                    Text("Оценку выгодности купона не рассчитываем: активная модель ещё не прошла независимую проверку на будущих матчах. Коэффициент — только цена букмекера.",style=MaterialTheme.typography.bodySmall)
                                 }
                             }
                             if(draft.combinedDecimalOdds!=null) Text("Условный общий коэффициент ${"%.2f".format(draft.combinedDecimalOdds)} — произведение только свежих линий ${draft.providerName}.",fontWeight=FontWeight.SemiBold)
                             Text(when {
-                                draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "Положительное расхождение Elo с линией без маржи — только исследовательский фильтр. Модель не откалибрована; EV/ROI скрыты и прибыль не оценивается."
-                                draft.combinedDecimalOdds!=null -> "Снимки коэффициентов фиксируются вместе с виртуальным купоном до матчей. Это не прогнозируемая прибыль: Elo не откалиброван, а совместный шанс известен лишь в указанном диапазоне."
+                                draft.selectionBasis==CouponSelectionBasis.MODEL_MARKET_DISAGREEMENT -> "Положительное расхождение активной модели с линией без маржи — только исследовательский фильтр. EV/ROI скрыты и прибыль не оценивается."
+                                draft.combinedDecimalOdds!=null -> "Снимки коэффициентов фиксируются вместе с виртуальным купоном до матчей. Это не прогнозируемая прибыль: активная модель не откалибрована, а совместный шанс известен лишь в указанном диапазоне."
                                 else -> "Нет полной свежей линии ${draft.providerName} для каждого исхода; общий коэффициент и денежная доходность недоступны. Виртуальный черновик сохраняет только модельные вероятности."
                             },style=MaterialTheme.typography.labelSmall)
                         }
@@ -184,7 +184,7 @@ internal fun FootballCouponTabContent(
                 HorizontalDivider()
                 Text("Замороженные прогнозы модели",fontWeight=FontWeight.Bold)
                 Text(
-                    "Модель ${CURRENT_ELO_MODEL_VERSION}. Сохраняется один неизменяемый снимок на матч, версию и UTC-день до kickoff; итог записывается отдельно, когда результат стал доступен. Это будущая проверка без оценки прибыли.",
+                    "Сохраняются снимки Poisson и резервного Elo. Для каждой версии остаётся один прогноз на матч и UTC-день до kickoff; итог фиксируется отдельно после доступности результата. Это будущая проверка без оценки прибыли.",
                     style=MaterialTheme.typography.bodySmall,
                 )
                 if(analyticsUpdating) {

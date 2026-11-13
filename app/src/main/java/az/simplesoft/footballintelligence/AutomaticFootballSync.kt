@@ -489,7 +489,7 @@ class AutomaticFootballSyncWorker(context: Context, params: WorkerParameters) : 
         var prospectiveSnapshotsSaved = 0
         var prospectiveSnapshotsSettled = 0
         runCatching {
-            val forecasts = buildProspectiveEloForecasts(
+            val forecasts = buildProspectiveForecasts(
                 matches = store.matches(),
                 historicalByLeague = store.historicalResultsByLeague(),
                 forecastedAtMillis = forecastAtMillis,

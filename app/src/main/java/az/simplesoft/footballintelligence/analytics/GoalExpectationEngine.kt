@@ -1,11 +1,16 @@
 package az.simplesoft.footballintelligence.analytics
 
+import kotlin.math.exp
+import kotlin.math.ln
+
 data class GoalExpectationConfig(
     val smoothingMatches: Double = 8.0,
     val minimumLeagueMatches: Int = 50,
     val minimumMatchesPerTeam: Int = 5,
     val maxGoals: Int = 10,
     val dixonColesRho: Double? = null,
+    /** Optional exponential half-life for old results. Null preserves the cumulative research baseline. */
+    val timeDecayHalfLifeDays: Double? = null,
 ) {
     init {
         require(smoothingMatches.isFinite() && smoothingMatches > 0.0)
@@ -13,6 +18,7 @@ data class GoalExpectationConfig(
         require(minimumMatchesPerTeam >= 0)
         require(maxGoals in 4..20)
         require(dixonColesRho == null || dixonColesRho.isFinite())
+        require(timeDecayHalfLifeDays == null || timeDecayHalfLifeDays.isFinite() && timeDecayHalfLifeDays > 0.0)
     }
 }
 
@@ -48,17 +54,69 @@ data class GoalExpectationWalkForwardReport(
 )
 
 internal data class MutableTeamGoalTotals(
-    var matches: Int = 0,
-    var goalsFor: Long = 0L,
-    var goalsAgainst: Long = 0L,
+    var weightedMatches: Double = 0.0,
+    var goalsFor: Double = 0.0,
+    var goalsAgainst: Double = 0.0,
+    var actualMatches: Int = 0,
 )
 
-internal data class GoalModelState(
-    val matches: Int,
-    val homeGoals: Long,
-    val awayGoals: Long,
-    val teams: Map<String, MutableTeamGoalTotals>,
-)
+/** Mutable sufficient statistics. Decay affects evidence weights, never the sample-coverage counts. */
+internal class GoalModelState {
+    var matches: Int = 0
+        private set
+    var weightedMatches: Double = 0.0
+        private set
+    var homeGoals: Double = 0.0
+        private set
+    var awayGoals: Double = 0.0
+        private set
+    val teams = mutableMapOf<String, MutableTeamGoalTotals>()
+    private var lastAvailabilityMillis: Long? = null
+
+    fun decayTo(availabilityMillis: Long, halfLifeDays: Double?) {
+        val previous = lastAvailabilityMillis
+        if (previous != null) {
+            require(availabilityMillis >= previous) { "Goal-model state cannot move backward in time." }
+            if (halfLifeDays != null) {
+                val elapsedDays = (availabilityMillis - previous).toDouble() / MILLIS_PER_DAY
+                val factor = exp(-ln(2.0) * elapsedDays / halfLifeDays)
+                weightedMatches *= factor
+                homeGoals *= factor
+                awayGoals *= factor
+                teams.values.forEach { totals ->
+                    totals.weightedMatches *= factor
+                    totals.goalsFor *= factor
+                    totals.goalsAgainst *= factor
+                }
+            }
+        }
+        lastAvailabilityMillis = availabilityMillis
+    }
+
+    fun add(match: HistoricalMatch) {
+        GoalExpectationEngine.validate(match)
+        val home = teamKey(match.homeTeam)
+        val away = teamKey(match.awayTeam)
+        matches++
+        weightedMatches += 1.0
+        homeGoals += match.homeGoals
+        awayGoals += match.awayGoals
+        teams.getOrPut(home) { MutableTeamGoalTotals() }.apply {
+            weightedMatches += 1.0
+            actualMatches++
+            goalsFor += match.homeGoals
+            goalsAgainst += match.awayGoals
+        }
+        teams.getOrPut(away) { MutableTeamGoalTotals() }.apply {
+            weightedMatches += 1.0
+            actualMatches++
+            goalsFor += match.awayGoals
+            goalsAgainst += match.homeGoals
+        }
+    }
+}
+
+private const val MILLIS_PER_DAY = 86_400_000.0
 
 /** Estimates fixture lambdas from prior league goals with a league-average pseudo-count. */
 object GoalExpectationEngine {
@@ -77,32 +135,32 @@ object GoalExpectationEngine {
         val eligible = history.filter { match ->
             match.safeAvailabilityMillisOrNull()?.let { it < forecastCutoffMillis } == true
         }
-        val state = stateFrom(eligible)
+        val state = stateFromAsOf(eligible, forecastCutoffMillis, config.timeDecayHalfLifeDays)
         return predict(state, homeTeam, awayTeam, config)
     }
 
     internal fun stateFrom(history: Collection<HistoricalMatch>): GoalModelState {
-        var homeGoals = 0L
-        var awayGoals = 0L
-        val teams = mutableMapOf<String, MutableTeamGoalTotals>()
-        history.forEach { match ->
-            validate(match)
-            val home = teamKey(match.homeTeam)
-            val away = teamKey(match.awayTeam)
-            homeGoals += match.homeGoals
-            awayGoals += match.awayGoals
-            teams.getOrPut(home) { MutableTeamGoalTotals() }.apply {
-                matches++
-                goalsFor += match.homeGoals
-                goalsAgainst += match.awayGoals
+        return GoalModelState().apply { history.forEach(::add) }
+    }
+
+    private fun stateFromAsOf(
+        history: Collection<HistoricalMatch>,
+        forecastCutoffMillis: Long,
+        halfLifeDays: Double?,
+    ): GoalModelState {
+        val eligible = history.mapNotNull { match ->
+            match.safeAvailabilityMillisOrNull()?.takeIf { it < forecastCutoffMillis }?.let { it to match }
+        }.sortedWith(compareBy<Pair<Long, HistoricalMatch>> { it.first }
+            .thenBy { it.second.kickoffMillis }
+            .thenBy { teamKey(it.second.homeTeam) }
+            .thenBy { teamKey(it.second.awayTeam) })
+        return GoalModelState().apply {
+            eligible.forEach { (availableAt, match) ->
+                decayTo(availableAt, halfLifeDays)
+                add(match)
             }
-            teams.getOrPut(away) { MutableTeamGoalTotals() }.apply {
-                matches++
-                goalsFor += match.awayGoals
-                goalsAgainst += match.homeGoals
-            }
+            decayTo(forecastCutoffMillis, halfLifeDays)
         }
-        return GoalModelState(history.size, homeGoals, awayGoals, teams)
     }
 
     internal fun predict(
@@ -111,23 +169,23 @@ object GoalExpectationEngine {
         awayTeam: String,
         config: GoalExpectationConfig,
     ): GoalExpectationPrediction? {
-        if (state.matches < config.minimumLeagueMatches || state.matches == 0) return null
+        if (state.matches < config.minimumLeagueMatches || state.weightedMatches <= 0.0) return null
         val homeStats = state.teams[teamKey(homeTeam)] ?: return null
         val awayStats = state.teams[teamKey(awayTeam)] ?: return null
-        if (homeStats.matches < config.minimumMatchesPerTeam || awayStats.matches < config.minimumMatchesPerTeam) return null
+        if (homeStats.actualMatches < config.minimumMatchesPerTeam || awayStats.actualMatches < config.minimumMatchesPerTeam) return null
 
-        val leagueHome = state.homeGoals.toDouble() / state.matches
-        val leagueAway = state.awayGoals.toDouble() / state.matches
-        val leagueTeamAverage = (state.homeGoals + state.awayGoals).toDouble() / (2.0 * state.matches)
+        val leagueHome = state.homeGoals / state.weightedMatches
+        val leagueAway = state.awayGoals / state.weightedMatches
+        val leagueTeamAverage = (state.homeGoals + state.awayGoals) / (2.0 * state.weightedMatches)
         if (leagueHome <= 0.0 || leagueAway <= 0.0 || leagueTeamAverage <= 0.0) return null
 
         fun attack(totals: MutableTeamGoalTotals): Double =
             ((totals.goalsFor + leagueTeamAverage * config.smoothingMatches) /
-                (totals.matches + config.smoothingMatches)) / leagueTeamAverage
+                (totals.weightedMatches + config.smoothingMatches)) / leagueTeamAverage
 
         fun defense(totals: MutableTeamGoalTotals): Double =
             ((totals.goalsAgainst + leagueTeamAverage * config.smoothingMatches) /
-                (totals.matches + config.smoothingMatches)) / leagueTeamAverage
+                (totals.weightedMatches + config.smoothingMatches)) / leagueTeamAverage
 
         val homeLambda = (leagueHome * attack(homeStats) * defense(awayStats))
             .coerceIn(MIN_EXPECTED_GOALS, MAX_EXPECTED_GOALS)
@@ -144,8 +202,8 @@ object GoalExpectationEngine {
             homeLambda,
             awayLambda,
             state.matches,
-            homeStats.matches,
-            awayStats.matches,
+            homeStats.actualMatches,
+            awayStats.actualMatches,
         )
     }
 
@@ -177,10 +235,7 @@ object GoalExpectationWalkForwardEngine {
                 .thenBy { teamKey(it.awayTeam) },
         )
         val targetsByCutoff = targets.groupBy { it.forecastCutoffMillis }.toSortedMap()
-        val teams = mutableMapOf<String, MutableTeamGoalTotals>()
-        var homeGoals = 0L
-        var awayGoals = 0L
-        var matchesUsed = 0
+        val state = GoalModelState()
         var historyIndex = 0
         val forecasts = mutableListOf<GoalExpectationWalkForwardPrediction>()
 
@@ -189,28 +244,11 @@ object GoalExpectationWalkForwardEngine {
                 val availability = requireNotNull(orderedHistory[historyIndex].safeAvailabilityMillisOrNull())
                 var batchEnd = historyIndex + 1
                 while (batchEnd < orderedHistory.size && orderedHistory[batchEnd].safeAvailabilityMillisOrNull() == availability) batchEnd++
-                for (index in historyIndex until batchEnd) {
-                    val match = orderedHistory[index]
-                    GoalExpectationEngine.validate(match)
-                    val home = teamKey(match.homeTeam)
-                    val away = teamKey(match.awayTeam)
-                    homeGoals += match.homeGoals
-                    awayGoals += match.awayGoals
-                    teams.getOrPut(home) { MutableTeamGoalTotals() }.apply {
-                        matches++
-                        goalsFor += match.homeGoals
-                        goalsAgainst += match.awayGoals
-                    }
-                    teams.getOrPut(away) { MutableTeamGoalTotals() }.apply {
-                        matches++
-                        goalsFor += match.awayGoals
-                        goalsAgainst += match.homeGoals
-                    }
-                    matchesUsed++
-                }
+                state.decayTo(availability, config.timeDecayHalfLifeDays)
+                for (index in historyIndex until batchEnd) state.add(orderedHistory[index])
                 historyIndex = batchEnd
             }
-            val state = GoalModelState(matchesUsed, homeGoals, awayGoals, teams)
+            state.decayTo(cutoff, config.timeDecayHalfLifeDays)
             for (target in sameCutoffTargets.sortedWith(
                 compareBy<WalkForwardTarget> { teamKey(it.homeTeam) }.thenBy { teamKey(it.awayTeam) }.thenBy { it.id },
             )) {

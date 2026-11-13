@@ -209,7 +209,7 @@ internal fun FootballSettingsTabContent(
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text("О приложении",style=MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 Text("OpenFootball и OpenLigaDB автоматически загружают историю. Линии Misli/TOPAZ читаются с открытых страниц, пока приложение на экране. Доступные сохранённые данные работают офлайн.",style=MaterialTheme.typography.bodySmall)
-                Text("Вероятности Elo экспериментальные и не калиброваны. Все купоны виртуальные; приложение не выполняет ставки и не обещает доход.",style=MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Вероятности модели экспериментальные и не калиброваны на будущих матчах. Все купоны виртуальные; приложение не выполняет ставки и не обещает доход.",style=MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text("Версия приложения: ${BuildConfig.VERSION_NAME}", style=MaterialTheme.typography.labelSmall, color=MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }

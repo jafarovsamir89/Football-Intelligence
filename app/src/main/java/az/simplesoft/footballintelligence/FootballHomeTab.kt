@@ -108,7 +108,7 @@ internal fun FootballHomeTabContent(
                 ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {
                     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text("Что вы видите", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-                        Text("П1 / X / П2 — оценка модели по результатам, доступным до матча. Для неё нужны минимум 10 результатов лиги и по 3 матча каждой команды.", style = MaterialTheme.typography.bodySmall)
+                        Text("П1 / X / П2 — оценка модели по результатам, доступным до матча. Основной Poisson требует 50 результатов лиги и по 5 матчей каждой команды; при меньшем объёме включается резервный Elo (10 результатов лиги и по 3 матча команды).", style = MaterialTheme.typography.bodySmall)
                         Text("Цены Misli/TOPAZ показываются только при свежей полной линии и точной связи с тем же матчем. Если источники не дали цену, она остаётся пустой.", style = MaterialTheme.typography.bodySmall)
                         Text("Виртуальные купоны не делают ставок. После доступного итогового счёта приложение проверяет сохранённые исходы; это не доказательство будущей прибыли.", style = MaterialTheme.typography.bodySmall)
                     }
@@ -145,7 +145,7 @@ internal fun FootballHomeTabContent(
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Сегодня · Баку", todayCount.toString(), "предстоящих матчей", Modifier.weight(1f))
-            MetricCard("Прогноз Elo", "$modelReadyCount / ${upcoming.size}", "готовых оценок 1X2", Modifier.weight(1f))
+            MetricCard("Прогноз модели", "$modelReadyCount / ${upcoming.size}", "готовых оценок 1X2", Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MetricCard("Линия Misli", misliLinkedCount.toString(), "матчей со свежей ценой", Modifier.weight(1f))
@@ -176,7 +176,7 @@ internal fun FootballHomeTabContent(
             OutlinedButton(onClick = onOpenMatches) { Text("Все матчи") }
         }
         if (featuredIncludesForecast) {
-            Text("Сначала показаны игры с оценкой Elo, затем остальные ближайшие матчи.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Сначала показаны игры с расчётом модели, затем остальные ближайшие матчи.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (featured.isEmpty()) {
             ElevatedCard(shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)) {

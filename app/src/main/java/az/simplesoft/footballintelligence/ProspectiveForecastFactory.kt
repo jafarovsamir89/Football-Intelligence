@@ -1,7 +1,6 @@
 package az.simplesoft.footballintelligence
 
-import az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION
-import az.simplesoft.footballintelligence.analytics.EloEngine
+import az.simplesoft.footballintelligence.analytics.AdvancedPredictionEngine
 import az.simplesoft.footballintelligence.analytics.ForecastedMatch
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
 import az.simplesoft.footballintelligence.analytics.TeamDataQuality
@@ -12,8 +11,8 @@ import java.time.Instant
 
 internal const val MAX_AUTOMATIC_PROSPECTIVE_FORECASTS = 80
 
-/** Builds the same leakage-safe live Elo snapshots for the screen and background sync. */
-internal fun buildProspectiveEloForecasts(
+/** Builds the same leakage-safe production-model snapshots for the screen and background sync. */
+internal fun buildProspectiveForecasts(
     matches: Collection<Match>,
     historicalByLeague: Map<String, List<HistoricalMatch>>,
     forecastedAtMillis: Long,
@@ -39,8 +38,9 @@ internal fun buildProspectiveEloForecasts(
 
     return ordered.mapNotNull { match ->
         val history = historyAvailableAt(historicalByLeague[match.league].orEmpty(), forecastedAtMillis)
-        val forecast = EloEngine.forecast(history, forecastedAtMillis, match.home, match.away)
+        val forecast = AdvancedPredictionEngine.forecast(history, forecastedAtMillis, match.home, match.away)
         val probabilities = forecast.probabilities ?: return@mapNotNull null
+        val modelVersion = forecast.modelVersion ?: return@mapNotNull null
         ForecastedMatch(
             matchId = match.id,
             homeTeam = match.home,
@@ -48,8 +48,8 @@ internal fun buildProspectiveEloForecasts(
             kickoffMillis = Instant.parse(match.kickoff).toEpochMilli(),
             probabilities = probabilities,
             forecastedAtMillis = forecastedAtMillis,
-            historyMatchCount = forecast.matchesUsed,
-            modelVersion = CURRENT_ELO_MODEL_VERSION,
+            historyMatchCount = forecast.historyMatchCount,
+            modelVersion = modelVersion,
             competition = match.league,
             frequencyBaselineVersion = OUTCOME_FREQUENCY_BASELINE_VERSION,
             frequencyBaselineProbabilities = OutcomeFrequencyBaseline.fromHistory(history),

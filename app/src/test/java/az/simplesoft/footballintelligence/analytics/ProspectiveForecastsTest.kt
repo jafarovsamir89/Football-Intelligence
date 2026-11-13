@@ -61,12 +61,12 @@ class ProspectiveForecastsTest {
 
         assertEquals(2,comparison.fixtureCount)
         assertEquals(1,comparison.settledCount)
-        assertEquals(.26,comparison.eloMeanBrierScore!!,1e-12)
+        assertEquals(.26,comparison.modelMeanBrierScore!!,1e-12)
         assertEquals(.98,comparison.baselineMeanBrierScore!!,1e-12)
-        assertEquals(-.72,comparison.eloMinusBaselineBrierScore!!,1e-12)
-        assertEquals(-kotlin.math.ln(.6),comparison.eloMeanLogLoss!!,1e-12)
+        assertEquals(-.72,comparison.modelMinusBaselineBrierScore!!,1e-12)
+        assertEquals(-kotlin.math.ln(.6),comparison.modelMeanLogLoss!!,1e-12)
         assertEquals(-kotlin.math.ln(.2),comparison.baselineMeanLogLoss!!,1e-12)
-        assertEquals(-kotlin.math.ln(.6)+kotlin.math.ln(.2),comparison.eloMinusBaselineLogLoss!!,1e-12)
+        assertEquals(-kotlin.math.ln(.6)+kotlin.math.ln(.2),comparison.modelMinusBaselineLogLoss!!,1e-12)
     }
 
     @Test fun baselineComparisonDoesNotFallBackToAnOlderSnapshotWhenTheSelectedOneHasNoBaseline() {

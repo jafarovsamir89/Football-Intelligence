@@ -11,7 +11,7 @@ class InternationalMarketEvaluationTest {
     private val kickoff = 1_800_000_000_000L
     private val captured = kickoff - 60_000L
 
-    @Test fun comparesLatestFreshBookmakerQuoteWithOnlyEloKnownByCapture() {
+    @Test fun comparesLatestFreshBookmakerQuoteWithOnlyProductionModelKnownByCapture() {
         val oldQuote = quote("moviodds_bet365", "Bet365", captured - 30 * 60_000L)
         val latestQuote = quote("the_odds_api", "bet365", captured - 10_000L, home = 2.0, draw = 3.5, away = 4.0)
         val duplicateIntermediaryQuote = quote("other_feed", "BET365", captured - 5_000L, home = 4.0, draw = 3.5, away = 2.0)
@@ -202,7 +202,7 @@ class InternationalMarketEvaluationTest {
 
     private fun forecast(id: Long, matchId: Int = 42, at: Long, outcome: String?, kickoffAt: Long = kickoff) = ProspectiveForecastObservation(
         snapshotId = id,
-        modelVersion = CURRENT_ELO_MODEL_VERSION,
+        modelVersion = CURRENT_ADVANCED_MODEL_VERSION,
         matchId = matchId,
         competition = "Serie A",
         homeTeam = "Roma",

@@ -1,6 +1,7 @@
 package az.simplesoft.footballintelligence
 
 import az.simplesoft.footballintelligence.analytics.HistoricalMatch
+import az.simplesoft.footballintelligence.analytics.CURRENT_ADVANCED_MODEL_VERSION
 import java.time.Instant
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -10,7 +11,7 @@ class ProspectiveForecastFactoryTest {
     @Test fun createsOnlyFutureExactValidForecastsFromInformationAvailableAtCutoff() {
         val forecastAt = 2_000_000_000_000L
         val history = eligibleHistory(forecastAt)
-        val forecasts = buildProspectiveEloForecasts(
+        val forecasts = buildProspectiveForecasts(
             matches = listOf(
                 fixture(1, forecastAt + DAY),
                 fixture(2, forecastAt - DAY),
@@ -36,17 +37,39 @@ class ProspectiveForecastFactoryTest {
         assertEquals(1.0/13.0,baseline.draw,1e-12)
         assertEquals(8.0/13.0,baseline.away,1e-12)
         assertTrue(forecasts.all { it.frequencyBaselineProbabilities == baseline })
+        assertTrue(forecasts.all { it.modelVersion == az.simplesoft.footballintelligence.analytics.CURRENT_ELO_MODEL_VERSION })
     }
 
     @Test fun requiresTheModelHistoryFloorBeforeProducingAProspectiveSnapshot() {
         val forecastAt = 2_000_000_000_000L
-        val forecasts = buildProspectiveEloForecasts(
+        val forecasts = buildProspectiveForecasts(
             matches = listOf(fixture(1, forecastAt + DAY)),
             historicalByLeague = mapOf("league" to eligibleHistory(forecastAt).take(9)),
             forecastedAtMillis = forecastAt,
         )
 
         assertTrue(forecasts.isEmpty())
+    }
+
+    @Test fun prospectiveFactoryPersistsTheValidatedPoissonVersionWhenCoveragePasses() {
+        val forecastAt = 2_000_000_000_000L
+        val expandedHistory = (0 until 6).flatMap { seasonBlock ->
+            eligibleHistory(forecastAt - seasonBlock * 40 * DAY).mapIndexed { index, match ->
+                match.copy(
+                    kickoffMillis = match.kickoffMillis - seasonBlock * 40 * DAY,
+                    availableAtMillis = match.availableAtMillis - seasonBlock * 40 * DAY,
+                )
+            }
+        }
+
+        val forecasts = buildProspectiveForecasts(
+            matches = listOf(fixture(7, forecastAt + DAY)),
+            historicalByLeague = mapOf("league" to expandedHistory),
+            forecastedAtMillis = forecastAt,
+        )
+
+        assertEquals(CURRENT_ADVANCED_MODEL_VERSION, forecasts.single().modelVersion)
+        assertTrue(forecasts.single().historyMatchCount >= 50)
     }
 
     private fun eligibleHistory(forecastAt: Long): List<HistoricalMatch> {

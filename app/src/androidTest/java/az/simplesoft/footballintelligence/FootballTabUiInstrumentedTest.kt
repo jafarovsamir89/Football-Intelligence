@@ -54,7 +54,7 @@ class FootballTabUiInstrumentedTest {
     val composeRule = createComposeRule()
 
     @Test
-    fun modelStatsShowsProspectiveEloAndBaselineScoresOnTheSameSettledFixtures() {
+    fun modelStatsShowsProspectiveModelAndBaselineScoresOnTheSameSettledFixtures() {
         val model=ProspectiveModelForecastReport(
             modelVersion="elo-1x2-v1",
             snapshotCount=50,
@@ -69,12 +69,12 @@ class FootballTabUiInstrumentedTest {
                     baselineVersion="same-competition-frequency-dirichlet-1-v1",
                     fixtureCount=50,
                     settledCount=5,
-                    eloMeanBrierScore=.58,
+                    modelMeanBrierScore=.58,
                     baselineMeanBrierScore=.62,
-                    eloMinusBaselineBrierScore=-.04,
-                    eloMeanLogLoss=.96,
+                    modelMinusBaselineBrierScore=-.04,
+                    modelMeanLogLoss=.96,
                     baselineMeanLogLoss=1.02,
-                    eloMinusBaselineLogLoss=-.06,
+                    modelMinusBaselineLogLoss=-.06,
                 ),
             ),
         )
@@ -89,9 +89,9 @@ class FootballTabUiInstrumentedTest {
         }
 
         composeRule.onNodeWithText("Одинаковая выборка: проверено 5 / 50 матчей.").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Мало завершённых наблюдений: пока нельзя делать вывод, что Elo лучше базы.").assertExists()
-        composeRule.onNodeWithText("Δ Elo−база -0.0400 (ниже лучше)",substring=true).assertExists()
-        composeRule.onNodeWithText("Δ Elo−база -0.0600 (ниже лучше)",substring=true).assertExists()
+        composeRule.onNodeWithText("Мало завершённых наблюдений: пока нельзя делать вывод, что модель лучше базы.").assertExists()
+        composeRule.onNodeWithText("Δ модель−база -0.0400 (ниже лучше)",substring=true).assertExists()
+        composeRule.onNodeWithText("Δ модель−база -0.0600 (ниже лучше)",substring=true).assertExists()
     }
 
     @Test
@@ -415,13 +415,13 @@ class FootballTabUiInstrumentedTest {
 
         composeRule.onNodeWithText("The Odds API · EU · LIVE", substring = true).assertIsDisplayed()
         val marketList = composeRule.onNodeWithTag("internationalMarketList")
-        marketList.performScrollToNode(hasText("Предварительная проверка рынка и Elo"))
-        composeRule.onNodeWithText("Предварительная проверка рынка и Elo").assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Предварительная проверка рынка и модели"))
+        composeRule.onNodeWithText("Предварительная проверка рынка и модели").assertIsDisplayed()
         marketList.performScrollToNode(hasText("95% парный bootstrap", substring = true))
         composeRule.onNodeWithText("95% парный bootstrap", substring = true).assertIsDisplayed()
         composeRule.onNodeWithText("Brier [-0.200; -0.100]", substring = true).assertIsDisplayed()
-        marketList.performScrollToNode(hasText("Знак Δ Elo−рынок", substring = true))
-        composeRule.onNodeWithText("Знак Δ Elo−рынок", substring = true).assertIsDisplayed()
+        marketList.performScrollToNode(hasText("Знак Δ модель−рынок", substring = true))
+        composeRule.onNodeWithText("Знак Δ модель−рынок", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Интервалы — парная выборка", substring = true))
         composeRule.onNodeWithText("Интервалы — парная выборка", substring = true).assertIsDisplayed()
         marketList.performScrollToNode(hasText("Unibet Fr · Back (не сохранён в старой записи) · 1 1.27", substring = true))
